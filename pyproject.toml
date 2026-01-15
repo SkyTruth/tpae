@@ -19,3 +19,9 @@ package-mode = true
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ipykernel (>=7.1.0,<8.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)"
+]
