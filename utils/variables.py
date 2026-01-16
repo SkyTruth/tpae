@@ -1,0 +1,1 @@
+PROJECT = "skytruth-tech"

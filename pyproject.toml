@@ -7,7 +7,7 @@ authors = [
 ]
 license = {text = "Apache License, Version 2.0"}
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.14,<4.0.0"
 dependencies = [
     "earthengine-api>=1.7.4"
 ]
@@ -23,5 +23,6 @@ build-backend = "poetry.core.masonry.api"
 [dependency-groups]
 dev = [
     "ipykernel (>=7.1.0,<8.0.0)",
-    "jupyter (>=1.1.1,<2.0.0)"
+    "jupyter (>=1.1.1,<2.0.0)",
+    "geemap (>=0.36.6,<0.37.0)"
 ]
