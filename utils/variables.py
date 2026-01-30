@@ -31,3 +31,56 @@ TEST_SITE_IDs = [
   164,
   555784006
 ]
+ANALYSIS_START_YR = 2018
+ANALYSIS_END_YR = 2022
+
+GLC_CLASSES = [
+  10, 11, 12, 20, 51, 52, 61, 62, 71, 72, 81, 82, 91, 92, 120, 121, 122, 
+  130, 140, 150, 152, 153, 181, 182, 183, 184, 185, 186, 187, 190, 200, 
+  201, 202, 210, 220, 0
+]
+GLC_PALETTE = [
+  "#ffff64", "#ffff64", "#ffff00", "#aaf0f0", "#4c7300", "#006400", "#a8c800", "#00a000", 
+  "#005000", "#003c00", "#286400", "#285000", "#a0b432", "#788200", "#966400", "#964b00", 
+  "#966400", "#ffb432", "#ffdcd2", "#ffebaf", "#ffd278", "#ffebaf", "#00a884", "#73ffdf", 
+  "#9ebb3b", "#828282", "#f57ab6", "#66cdab", "#444f89", "#c31400", "#fff5d7", "#dcdcdc", 
+  "#fff5d7", "#0046c8", "#ffffff", "#ffffff"
+]
+GLC_LABELS = [
+  " (1) Rainfed cropland",
+  " (2) Herbaceous cover cropland",
+  " (3) Tree or shrub cover (Orchard) cropland",
+  " (4) Irrigated cropland",
+  " (5) Open evergreen broadleaved forest",
+  " (6) Closed evergreen broadleaved forest",
+  " (7) Open deciduous broadleaved forest (0.15<fc<0.4)",
+  " (8) Closed deciduous broadleaved forest (fc>0.4)",
+  " (9) Open evergreen needle-leaved forest (0.15< fc <0.4)",
+  " (10) Closed evergreen needle-leaved forest (fc >0.4)",
+  " (11) Open deciduous needle-leaved forest (0.15< fc <0.4)",
+  " (12) Closed deciduous needle-leaved forest (fc >0.4)",
+  " (13) Open mixed leaf forest (broadleaved and needle-leaved)",
+  " (14) Closed mixed leaf forest (broadleaved and needle-leaved)",
+  " (15) Shrubland",
+  " (16) Evergreen shrubland",
+  " (17) Deciduous shrubland",
+  " (18) Grassland",
+  " (19) Lichens and mosses",
+  " (20) Sparse vegetation (fc<0.15)",
+  " (21) Sparse shrubland (fc<0.15)",
+  " (22) Sparse herbaceous (fc<0.15)",
+  " (23) Swamp",
+  " (24) Marsh",
+  " (25) Flooded flat",
+  " (26) Saline",
+  " (27) Mangrove",
+  " (28) Salt marsh",
+  " (29) Tidal flat",
+  " (30) Impervious surfaces",
+  " (31) Bare areas",
+  " (32) Consolidated bare areas",
+  " (33) Unconsolidated bare areas",
+  " (34) Water body",
+  " (35) Permanent ice and snow",
+  " (36) Filled value"
+]
