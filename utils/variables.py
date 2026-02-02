@@ -84,3 +84,4 @@ GLC_LABELS = [
   " (35) Permanent ice and snow",
   " (36) Filled value"
 ]
+NFW_THRESHOLD = 0.5
