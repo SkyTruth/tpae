@@ -1,4 +1,6 @@
 PROJECT = "skytruth-tech"
+
+# WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDs = [
   555714961,
   1543,
@@ -31,14 +33,19 @@ TEST_SITE_IDs = [
   164,
   555784006
 ]
+
+# Habitat loss analysis period
 ANALYSIS_START_YR = 2018
 ANALYSIS_END_YR = 2022
 
+# Global Land Cover original class values
 GLC_CLASSES = [
   10, 11, 12, 20, 51, 52, 61, 62, 71, 72, 81, 82, 91, 92, 120, 121, 122, 
   130, 140, 150, 152, 153, 181, 182, 183, 184, 185, 186, 187, 190, 200, 
   201, 202, 210, 220, 0
 ]
+
+# Global Land Cover palette
 GLC_PALETTE = [
   "#ffff64", "#ffff64", "#ffff00", "#aaf0f0", "#4c7300", "#006400", "#a8c800", "#00a000", 
   "#005000", "#003c00", "#286400", "#285000", "#a0b432", "#788200", "#966400", "#964b00", 
@@ -46,6 +53,8 @@ GLC_PALETTE = [
   "#9ebb3b", "#828282", "#f57ab6", "#66cdab", "#444f89", "#c31400", "#fff5d7", "#dcdcdc", 
   "#fff5d7", "#0046c8", "#ffffff", "#ffffff"
 ]
+
+# Global Land Cover class labels
 GLC_LABELS = [
   " (1) Rainfed cropland",
   " (2) Herbaceous cover cropland",
@@ -84,8 +93,15 @@ GLC_LABELS = [
   " (35) Permanent ice and snow",
   " (36) Filled value"
 ]
+
+# Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
-EDGE_DIST_RADIUS = 500 # meters
+# Max edge distance for habitat intactness calculations
+MAX_EDGE_DIST = 500 # meters
+
+# Opening radius for edge distance calculations
 OPENING_RADIUS = 30 # meters
+
+# Max patch size for habitat intactness calculations
 MAX_PATCH_SIZE = 50 # square kilometers
