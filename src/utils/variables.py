@@ -165,7 +165,10 @@ NFW_THRESHOLD = 0.5
 MAX_EDGE_DIST = 500  # meters
 
 # Opening radius for edge distance calculations
-OPENING_RADIUS = 30  # meters
+OPENING_RADIUS_EDGE = 30  # meters
 
 # Max patch size for habitat intactness calculations
 MAX_PATCH_SIZE = 50  # square kilometers
+
+# Opening radius for habitat loss calculations
+OPENING_RADIUS_LOSS = 30  # meters
