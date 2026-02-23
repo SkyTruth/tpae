@@ -180,3 +180,8 @@ MAX_PATCH_SIZE = 50  # square kilometers
 
 # Opening radius for habitat loss calculations
 OPENING_RADIUS_LOSS = 30  # meters
+
+# Parameters for reduceRegion raster calculations
+CRS = "EPSG:3857"
+SCALE = 30
+MAX_PIXELS = 1e13
