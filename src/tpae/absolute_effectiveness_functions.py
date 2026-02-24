@@ -1,6 +1,6 @@
 import ee
 from math import sqrt
-from utils.variables import (
+from tpae.utils.variables import (
     PROJECT,
     TEST_SITE_IDs,
     ANALYSIS_START_YR,

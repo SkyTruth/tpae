@@ -1,5 +1,5 @@
 [project]
-name = "src"
+name = "tpae"
 version = "0.1.0"
 description = "Terrestrial Protected Area Effectiveness"
 authors = [

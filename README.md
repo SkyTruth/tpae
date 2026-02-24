@@ -2,8 +2,8 @@
 This repository contains preliminary code related to the development of a Terrestrial Protected Area Effectiveness (TPAE) model. TPAE is part of SkyTruth's 30x30 progress tracking initiative.
 
 ## Repository Contents
-- **src/absolute_effectiveness_functions.py:** Functions for evaluating the absolute effectiveness of a PA (measuring only within the boundaries of the PA, with no comparison to an unprotected spatial control).
-- **src/absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
+- **src/tpae/absolute_effectiveness_functions.py:** Functions for evaluating the absolute effectiveness of a PA (measuring only within the boundaries of the PA, with no comparison to an unprotected spatial control).
+- **notebooks/absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
 - **src/utils/variables.py:** Constants related to absolute effectiveness code.
 
 ## Working in this Repository
