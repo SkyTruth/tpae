@@ -1,3 +1,4 @@
+import logging
 import ee
 from utils.variables import (
     ANALYSIS_START_YR,
@@ -6,6 +7,8 @@ from utils.variables import (
     PAS_ASSET_ID,
     TEST_SITE_IDS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SiteSelector:
@@ -47,11 +50,11 @@ class SiteSelector:
     def check_start_yr(self, start_yr):
         """Check if start year is valid for analysis."""
         if start_yr > (self.analysis_end_yr - 1):
-            print(
+            msg = (
                 f"PA was designated too recently ({start_yr}) to analyze effectiveness."
             )
-        else:
-            print(f"Start year ({start_yr}) is valid.")
+            logger.error(msg)
+            raise ValueError(msg)
 
     def get_site_geom(self, test_sites, site_id):
         """Get geometry of a specific PA."""
