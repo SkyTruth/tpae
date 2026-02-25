@@ -1,7 +1,7 @@
 PROJECT = "skytruth-tech"
 
 # WDPAID numbers of selected test PAs and OECMs
-TEST_SITE_IDs = [
+TEST_SITE_IDS = [
     555714961,
     1543,
     555557937,

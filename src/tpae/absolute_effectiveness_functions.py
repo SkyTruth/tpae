@@ -2,7 +2,7 @@ import ee
 from math import sqrt
 from tpae.utils.variables import (
     PROJECT,
-    TEST_SITE_IDs,
+    TEST_SITE_IDS,
     ANALYSIS_START_YR,
     ANALYSIS_END_YR,
     GLC_CLASSES,
@@ -20,8 +20,8 @@ ee.Authenticate()
 ee.Initialize(project=PROJECT)
 
 # Data imports
-PAs = ee.FeatureCollection("WCMC/WDPA/current/polygons")
-OECMs = ee.FeatureCollection("WCMC/WDOECM/current/polygons")
+PAS = ee.FeatureCollection("WCMC/WDPA/current/polygons")
+OECMS = ee.FeatureCollection("WCMC/WDOECM/current/polygons")
 GLC = ee.ImageCollection("projects/sat-io/open-datasets/GLC-FCS30D/annual")
 HGFC = ee.Image("UMD/hansen/global_forest_change_2024_v1_12")
 GPW = ee.ImageCollection("projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c")
@@ -37,11 +37,11 @@ def get_test_sites():
         ee.FeatureCollection of selected test sites
     """
     all_sites = (
-        ee.FeatureCollection([PAs, OECMs])
+        ee.FeatureCollection([PAS, OECMS])
         .flatten()
         .filter(ee.Filter.eq("REALM", "Terrestrial"))
     )
-    test_sites = all_sites.filter(ee.Filter.inList("SITE_ID", TEST_SITE_IDs))
+    test_sites = all_sites.filter(ee.Filter.inList("SITE_ID", TEST_SITE_IDS))
     return test_sites
 
 
@@ -64,8 +64,8 @@ def set_start_yr(test_sites, site_id):
     return max(ANALYSIS_START_YR, designation_yr)
 
 
-def start_yr_check(start_yr):
-    """Check if start year is valid.
+def check_start_yr(start_yr):
+    """Check if start year is valid. (PA must have been designated at least one year before the end of the analysis period.)
 
     Args:
         start_yr: Integer year to start analysis
