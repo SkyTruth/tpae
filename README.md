@@ -2,7 +2,7 @@
 This repository contains preliminary code related to the development of a Terrestrial Protected Area Effectiveness (TPAE) model. TPAE is part of SkyTruth's 30x30 progress tracking initiative.
 
 ## Repository Contents
-- **src/tpae/absolute_effectiveness_functions.py:** Functions for evaluating the absolute effectiveness of a PA (measuring only within the boundaries of the PA, with no comparison to an unprotected spatial control).
+- **src/absolute_effectiveness_functions.py:** Functions for evaluating the absolute effectiveness of a PA (measuring only within the boundaries of the PA, with no comparison to an unprotected spatial control).
 - **notebooks/absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
 - **src/utils/variables.py:** Constants related to absolute effectiveness code.
 
@@ -49,14 +49,11 @@ To work in the poetry virtual environment, you just need to prepend all command 
 
 Alternatively, you can work work entirely in the environment (similar to `conda activate`) with the command `poetry shell`, and then you can just run `python hello_world.py`
 
-### Build lockfile and install environment
-Do this each time you pull the repo in case there have been changes to the lockfiles:
+### Install environment
+Do this each time you pull the repo in case there have been changes to the dependencies:
 ```shell
-poetry lock
 poetry install
 ```
-  - `poetry lock` builds the lockfile, which is the list of dependencies based on pyproject.toml (core dependencies)
-  - `poetry install` installs those dependencies
 
 ### Updating the environment
 Adding a new library:
