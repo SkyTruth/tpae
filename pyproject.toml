@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-package-mode = true
+package-mode = false
 
 
 [build-system]
