@@ -185,3 +185,13 @@ OPENING_RADIUS_LOSS = 30  # meters
 CRS = "EPSG:3857"
 SCALE = 30
 MAX_PIXELS = 1e13
+
+# Earth Engine asset IDs
+PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
+OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
+GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
+HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
+GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
+NFW_ASSET_ID = (
+    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
+)

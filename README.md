@@ -2,10 +2,15 @@
 This repository contains preliminary code related to the development of a Terrestrial Protected Area Effectiveness (TPAE) model. TPAE is part of SkyTruth's 30x30 progress tracking initiative.
 
 ## Repository Contents
-- **src/absolute_effectiveness_functions.py:** Functions for evaluating the absolute effectiveness of a PA (measuring only within the boundaries of the PA, with no comparison to an unprotected spatial control).
-- **notebooks/absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
+- **src/absolute_effectiveness/**: Class-based analysis components for evaluating absolute effectiveness.
+  - **`SiteSelector`**: Retrieves selected test sites and derives site-specific variables.
+  - **`DataProcessor`**: Loads and processes Earth Engine datasets (GLC, GPW, NFW, HGFC) for the selected sites and analysis period.
+  - **`HabitatConditionAnalyzer`**: Calculates habitat extent, intactness, and overall habitat condition score.
+  - **`HabitatLossAnalyzer`**: Calculates habitat loss score and summarizes the drivers and types of habitat loss.
+  - **`VisualizationService`**: Builds cloud-masked Sentinel-2 composites to aid map visualization.
+- **notebooks/run_absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
 - **src/utils/variables.py:** Constants related to absolute effectiveness code.
-
+s
 ## Working in this Repository
 - This repository uses [ruff](https://docs.astral.sh/ruff/) [pre-commit hooks](https://pre-commit.com/).
 - This repository uses [Poetry](https://python-poetry.org/) for package and dependency management (see below for installation and set-up).
