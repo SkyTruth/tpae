@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-package-mode = true
+package-mode = false
 
 
 [build-system]
@@ -24,5 +24,7 @@ build-backend = "poetry.core.masonry.api"
 dev = [
     "ipykernel (>=7.1.0,<8.0.0)",
     "jupyter (>=1.1.1,<2.0.0)",
-    "geemap (>=0.36.6,<0.37.0)"
+    "geemap (>=0.36.6,<0.37.0)",
+    "ruff (>=0.15.0)",
+    "pre-commit (>=4.5.1)"
 ]
