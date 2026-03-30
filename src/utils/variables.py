@@ -1,3 +1,5 @@
+import math
+
 PROJECT = "skytruth-tech"
 
 # WDPAID numbers of selected test PAs and OECMs
@@ -169,22 +171,23 @@ DRIVER_LABELS = {
 # Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
-# Max edge distance for habitat intactness calculations
-MAX_EDGE_DIST = 500  # meters
-
-# Opening radius for edge distance calculations
-OPENING_RADIUS_EDGE = 30  # meters
-
-# Max patch size for habitat intactness calculations
-MAX_PATCH_SIZE = 50  # square kilometers
-
-# Opening radius for habitat loss calculations
-OPENING_RADIUS_LOSS = 30  # meters
-
 # Parameters for reduceRegion raster calculations
 CRS = "EPSG:3857"
 SCALE = 30
 MAX_PIXELS = 1e13
+
+# Parameters for habitat intactness calculations
+INTERACTION_DISTANCE = 500  # meters
+BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
+KERNEL_RADIUS_METERS = (
+    5 * INTERACTION_DISTANCE
+)  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
+PIXEL_SIZE = 30  # meters
+KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / PIXEL_SIZE)
+KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
+
+# Parameters for habitat loss calculations
+OPENING_RADIUS_LOSS = 30  # meters
 
 # Earth Engine asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
