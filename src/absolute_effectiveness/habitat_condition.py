@@ -8,9 +8,10 @@ from utils.variables import (
     INTERACTION_DISTANCE,
     BETA,
     KERNEL_RADIUS_METERS,
-    PIXEL_SIZE,
+    INTACTNESS_SCALE,
     KERNEL_RADIUS_PIXELS,
     KERNEL_SIZE,
+    TILE_SCALE,
 )
 
 
@@ -26,9 +27,10 @@ class HabitatConditionAnalyzer:
         interaction_distance=INTERACTION_DISTANCE,
         beta=BETA,
         kernel_radius_meters=KERNEL_RADIUS_METERS,
-        pixel_size=PIXEL_SIZE,
+        intactness_scale=INTACTNESS_SCALE,
         kernel_radius_pixels=KERNEL_RADIUS_PIXELS,
         kernel_size=KERNEL_SIZE,
+        tile_scale=TILE_SCALE,
     ):
         self.analysis_end_yr = analysis_end_yr
         self.crs = crs
@@ -37,9 +39,10 @@ class HabitatConditionAnalyzer:
         self.interaction_distance = interaction_distance
         self.beta = beta
         self.kernel_radius_meters = kernel_radius_meters
-        self.pixel_size = pixel_size
+        self.intactness_scale = intactness_scale
         self.kernel_radius_pixels = kernel_radius_pixels
         self.kernel_size = kernel_size
+        self.tile_scale = tile_scale
 
     def get_habitat_raster(
         self, glc_processed, hgfc_processed, gpw_processed, nfw_processed
@@ -101,10 +104,10 @@ class HabitatConditionAnalyzer:
             for col in range(self.kernel_size):
                 dx = (
                     col - self.kernel_radius_pixels
-                ) * self.pixel_size  # horizontal distance from center pixel
+                ) * self.intactness_scale  # horizontal distance from center pixel
                 dy = (
                     row - self.kernel_radius_pixels
-                ) * self.pixel_size  # vertical distance from center pixel
+                ) * self.intactness_scale  # vertical distance from center pixel
                 d = math.sqrt(
                     dx * dx + dy * dy
                 )  # hypotenuse distance from center pixel
@@ -123,13 +126,16 @@ class HabitatConditionAnalyzer:
         )
         return exp_kernel
 
-    def get_intactness_raster(self, habitat_raster, exp_kernel):
+    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel):
         """Create continuous habitat intactness raster."""
         # Get habitat binary
         habitat_binary = habitat_raster.gt(0).unmask(0).toFloat()
+        habitat_binary_clipped = habitat_binary.clip(
+            site_geom.buffer(self.kernel_radius_meters)
+        )
         # Apply kernel to habitat binary to get intactness raster
         intactness_raster = (
-            habitat_binary.convolve(
+            habitat_binary_clipped.convolve(
                 exp_kernel
             )  # sum the weighted habitat binary values in the kernel
             .rename("intactness")
@@ -143,9 +149,10 @@ class HabitatConditionAnalyzer:
             intactness_raster.reduceRegion(
                 ee.Reducer.mean(),
                 site_geom,
-                scale=self.scale,
+                scale=self.intactness_scale,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
+                tileScale=self.tile_scale,
             )
             .get("intactness")
             .getInfo()

@@ -182,9 +182,10 @@ BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
 KERNEL_RADIUS_METERS = (
     5 * INTERACTION_DISTANCE
 )  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
-PIXEL_SIZE = 30  # meters
-KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / PIXEL_SIZE)
+INTACTNESS_SCALE = 60  # pixel size in meters
+KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / INTACTNESS_SCALE)
 KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
+TILE_SCALE = 4
 
 # Parameters for habitat loss calculations
 OPENING_RADIUS_LOSS = 30  # meters
