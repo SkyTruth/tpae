@@ -210,3 +210,6 @@ __marimo__/
 
 # Directories
 archive/**
+data/test_sites_TPA_PSM_GRID.parquet
+notebooks/jgengs.geojson
+notebooks/vrvbgk.geojson

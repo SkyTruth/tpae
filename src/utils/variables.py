@@ -204,7 +204,7 @@ NFW_ASSET_ID = (
 REPO_DATA_DIR = "data/"
 
 # PSM Variables
-PSM_CRS = 4087
+PSM_CRS = 6933
 
 WDPA_TEST_SITE_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
 WDPA_TEST_SITE_10M_BUFFER = REPO_DATA_DIR + "test_sites_10km_4087.parquet"

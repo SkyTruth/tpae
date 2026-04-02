@@ -35,7 +35,7 @@ def save_intermediate_gdf(gdf, output_path, save_intermediates):
         gdf.to_parquet(output_path)
 
 
-def create_psm_cells(save_intermediates: bool=False):
+def create_psm_cells(save_intermediates: bool = False):
     # Read in test_site file, convert to 4087
     pa_gdf = gpd.read_file(WDPA_TEST_SITE_GEOJSON)
     pa_gdf = pa_gdf.to_crs(epsg=PSM_CRS)
@@ -60,13 +60,12 @@ def create_psm_cells(save_intermediates: bool=False):
         save_intermediates,
     )
 
-
     # Define the exclusion zone and wider landscapes
     ex_zone = pa_gdf_10km_buff.copy()
     wider_landscape = pa_gdf_50km_buff.copy()
     ex_zone["geometry"] = ex_zone.difference(pa_gdf)
     wider_landscape["geometry"] = wider_landscape.difference(pa_gdf_10km_buff)
-    
+
     # Save intermediate files, if specified
     save_intermediate_gdf(
         ex_zone,
@@ -118,12 +117,12 @@ def create_psm_cells(save_intermediates: bool=False):
     )
 
     # Select the valid grid cells for the PA and it's wider landscape
-    in_out_grid_1km = grid_1km[grid_1km["exclude"] == False]
+    in_out_grid_1km = grid_1km[not grid_1km["exclude"]]
 
     pa_union = pa_gdf.union_all()
     in_out_grid_1km = in_out_grid_1km.copy()
-    in_out_grid_1km["site"] = np.where(
-        in_out_grid_1km.intersects(pa_union), 0, 1
+    in_out_grid_1km["protected"] = np.where(
+        in_out_grid_1km.intersects(pa_union), 1, 0
     ).astype("int8")
 
     in_out_grid_1km["geometry"] = in_out_grid_1km.geometry.set_precision(
