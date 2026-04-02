@@ -199,3 +199,18 @@ GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
 NFW_ASSET_ID = (
     "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
 )
+
+# Repository Based Filepaths
+REPO_DATA_DIR = "data/"
+
+# PSM Variables
+PSM_CRS = 4087
+
+WDPA_TEST_SITE_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
+WDPA_TEST_SITE_10M_BUFFER = REPO_DATA_DIR + "test_sites_10km_4087.parquet"
+WDPA_TEST_SITE_50M_BUFFER = REPO_DATA_DIR + "test_sites_50km_4087.parquet"
+WDPA_EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4087.parquet"
+WDPA_WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4087.parquet"
+
+WDPA_1KM_GRID = REPO_DATA_DIR + "test_sites_1km_grid_4087.parquet"
+WDPA_1KM_PSM_GRID = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"
