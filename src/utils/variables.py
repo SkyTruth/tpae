@@ -205,6 +205,11 @@ REPO_DATA_DIR = "data/"
 
 # PSM Variables
 PSM_CRS = 6933
+PSM_CELL_SIZE = 1000
+PSM_CONTROL_BUFFER = 10000
+PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
+PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
+PSM_TEST_GRID = REPO_DATA_DIR + "Ghana_PSM_GRID.parquet"
 
 WDPA_TEST_SITE_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
 WDPA_TEST_SITE_10M_BUFFER = REPO_DATA_DIR + "test_sites_10km_4087.parquet"

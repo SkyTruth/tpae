@@ -210,6 +210,11 @@ __marimo__/
 
 # Directories
 archive/**
+
+# Misc
+data/Ghana_PSM_GRID.parquet
+data/Ghana.geojson
+data/Ghana_PAs.geojson
 data/test_sites_TPA_PSM_GRID.parquet
 notebooks/jgengs.geojson
 notebooks/vrvbgk.geojson
