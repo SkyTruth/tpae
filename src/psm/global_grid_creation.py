@@ -9,7 +9,7 @@ from utils.variables import (
     PSM_CONTROL_BUFFER,
     PSM_TEST_AOI,
     PSM_TEST_PAS,
-    PSM_TEST_GRID,
+    PSM_TEST_CELLS,
 )
 
 
@@ -26,7 +26,6 @@ def read_pas(path: str, crs: int, aoi_union) -> gpd.GeoDataFrame:
     pa_gdf = pa_gdf.to_crs(epsg=crs)
     pa_gdf = pa_gdf[pa_gdf.geometry.notnull()].copy()
     pa_gdf = pa_gdf.explode(index_parts=False).reset_index(drop=True)
-    # Keep only PAs intersecting the AOI to reduce memory and avoid irrelevant geometries.
     pa_gdf = pa_gdf[pa_gdf.intersects(aoi_union)].copy()
     if pa_gdf.empty:
         raise ValueError("No protected areas intersect the selected AOI.")
@@ -102,7 +101,7 @@ def classify_cells(
 
 def main() -> None:
 
-    output_path = PSM_TEST_GRID
+    output_path = PSM_TEST_CELLS
 
     print("Reading AOI...")
     aoi_gdf = read_aoi(PSM_TEST_AOI, PSM_CRS)
