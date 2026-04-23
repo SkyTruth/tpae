@@ -2,6 +2,12 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import box
+
+from pathlib import Path
+import sys
+_SRC = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SRC))
+
 from utils.variables import (
     WDPA_TEST_SITE_GEOJSON,
     WDPA_TEST_SITE_10M_BUFFER,
@@ -117,7 +123,7 @@ def create_psm_cells(save_intermediates: bool = False):
     )
 
     # Select the valid grid cells for the PA and it's wider landscape
-    in_out_grid_1km = grid_1km[not grid_1km["exclude"]]
+    in_out_grid_1km = grid_1km[~grid_1km["exclude"]]
 
     pa_union = pa_gdf.union_all()
     in_out_grid_1km = in_out_grid_1km.copy()

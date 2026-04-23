@@ -204,8 +204,13 @@ COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
 # Repository Based Filepaths
 REPO_DATA_DIR = "data/"
 
-# Variables for psm_grid_creation.py
+# General PSM parameters
+PSM_CRS = 6933
+PSM_CELL_SIZE = 1000
+PSM_CONTROL_BUFFER = 10000
 WDPA_TEST_SITE_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
+
+# Variables for psm_grid_creation.py
 WDPA_TEST_SITE_10M_BUFFER = REPO_DATA_DIR + "test_sites_10km_4087.parquet"
 WDPA_TEST_SITE_50M_BUFFER = REPO_DATA_DIR + "test_sites_50km_4087.parquet"
 WDPA_EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4087.parquet"
@@ -213,23 +218,18 @@ WDPA_WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4087.parquet"
 WDPA_1KM_GRID = REPO_DATA_DIR + "test_sites_1km_grid_4087.parquet"
 WDPA_1KM_PSM_GRID = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"
 
+
 # Variables for global_grid_creation.py
 PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
 PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
 PSM_TEST_CELLS = REPO_DATA_DIR + "Ghana_PSM_CELLS.parquet"
 
-# Variables for sample_point_grid.py
-PSM_MIN_DISTANCE = 3000
-TREATMENT_N = 5000
-CONTROL_N = 10000
+# Variables for get_interior_cells.py
+INTERIOR_CELLS_TEST = REPO_DATA_DIR + "interior_cells_test.parquet"
 RAND_SEED = 42
-OVERSAMPLE_FACTOR = 5.0
-MAX_ROUNDS = 12
+PA_AREA_THRESHOLD = 500000000 # 500 km2
+SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
 
-# General PSM parameters
-PSM_CRS = 6933
-PSM_CELL_SIZE = 1000
-PSM_CONTROL_BUFFER = 10000
 
 WKT_6933 = """
     PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
