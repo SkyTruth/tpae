@@ -230,6 +230,9 @@ RAND_SEED = 42
 PA_AREA_THRESHOLD = 500000000 # 500 km2
 SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
 
+# Variables for get_exterior_cells.ipynb
+EXTERIOR_CELLS_TEST = REPO_DATA_DIR + "exterior_cells_test.parquet"
+
 
 WKT_6933 = """
     PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
