@@ -20,8 +20,6 @@ from utils.variables import (
     RAND_SEED,
 )
 
-
-
 def init_ee(project):
     """
     Initialize Earth Engine, authenticating if needed.
