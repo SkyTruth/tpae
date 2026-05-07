@@ -85,14 +85,14 @@ def sample_cells(pa_geom, n_samples, seed, cell_size):
 
 
 
-def get_interior_cells(pa_gdf):
+def get_interior_cells(test_sites):
     """
     Iterate through a set of PAs and return a set of valid interior cells for each.
     If the PA is less than 500 km2, return a grid of all valid interior cells.
     If the PA is greater than 500 km2, return a random sample of valid interior cells.
     """
     # Read in PAs and convert to 6933
-    pa_gdf = gpd.read_file(WDPA_TEST_SITE_GEOJSON)
+    pa_gdf = gpd.read_file(test_sites)
     pa_gdf = pa_gdf.to_crs(epsg=PSM_CRS)
 
     all_cells = []
