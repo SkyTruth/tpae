@@ -1,0 +1,142 @@
+import ee
+import geemap
+import pandas as pd
+
+FOLDERSET = {
+    '2025': "projects/glad/HLSDIST/DIST-ANN_v1_2025",
+    '2024': "projects/glad/HLSDIST/DIST-ANN_v1_2024",
+    '2023': "projects/glad/HLSDIST/DIST-ANN_v1",
+}
+
+
+def calculate_site_AC_dist_rate(year, ANOM_lower, CONF_lower, test_site_id, test_sites):
+    # import the appropriate DIST-ANN VEG-DIST-ANOM & CONF layers for the given year
+    folder = FOLDERSET[year]
+
+    VEGANOMMAX = ee.ImageCollection(folder+"/VEG-ANOM-MAX").mosaic()
+    VEGDISTCONF = ee.ImageCollection(folder+"/VEG-DIST-CONF").mosaic()
+    
+    combined = ee.Image.cat([
+        VEGANOMMAX.rename('anom'),
+        VEGDISTCONF.rename('conf')
+    ])
+
+    def maskAC(image):
+        mask = image.select('anom').gt(ANOM_lower).And(image.select('anom').lt(255)).And(image.select('conf').gt(CONF_lower)).selfMask()
+        masked = image.updateMask(mask)
+        return masked
+    
+    ac_masked = maskAC(combined)
+
+    # filter to site of interest and calculate disturbance rate
+    site = test_sites.filter(ee.Filter.eq("SITE_ID", test_site_id))
+    site_name = site.first().get("NAME").getInfo()
+    site_geom = site.geometry()
+
+    # ee reducer on 'anom' band
+    dist_pixels = ac_masked.reduceRegion(
+        reducer=ee.Reducer.count(), 
+        geometry=site_geom, 
+        scale=30, 
+        maxPixels=1e9
+    ).getInfo()['anom']
+
+    total_pixels = combined.reduceRegion(
+        reducer=ee.Reducer.count(), geometry=site_geom, scale=30, maxPixels=1e9
+    ).getInfo()['anom']
+
+    # calculate and print disturbance rate
+    dist_rate = dist_pixels / total_pixels
+    print(f"{site_name} ({year}) disturbance rate: {dist_rate:.4%}")
+    return dist_rate
+
+def calculate_all_sites_AC_dist_rate(year, ANOM_lower, CONF_lower, test_sites):
+    folder = FOLDERSET[year]
+
+    VEGANOMMAX = ee.ImageCollection(folder + "/VEG-ANOM-MAX").mosaic()
+    VEGDISTCONF = ee.ImageCollection(folder + "/VEG-DIST-CONF").mosaic()
+    combined = ee.Image.cat([
+        VEGANOMMAX.rename('anom'),
+        VEGDISTCONF.rename('conf')
+    ])
+
+    def maskAC(image):
+        mask = (
+            image.select('anom').gt(ANOM_lower)
+            .And(image.select('anom').lt(255))
+            .And(image.select('conf').gt(CONF_lower))
+            .selfMask()
+        )
+        return image.updateMask(mask)
+
+    ac_masked = maskAC(combined)
+
+    combined = ee.Image.cat([
+        ac_masked.select('anom').rename('dist'),
+        VEGANOMMAX.rename('total')
+    ])
+
+    stats = combined.reduceRegions(
+        collection=test_sites,
+        reducer=ee.Reducer.count(),
+        scale=30
+    )
+
+    def add_rate(feature):
+        dist  = ee.Number(feature.get('dist'))
+        total = ee.Number(feature.get('total'))
+        return feature.set('dist_rate', dist.divide(total))
+
+    stats = stats.map(add_rate)
+
+    features = stats.select(['NAME', 'SITE_ID', 'dist', 'total', 'dist_rate']).getInfo()['features']
+
+    df = pd.DataFrame([f['properties'] for f in features])
+    df['year'] = year
+    return df
+
+
+def visualize_AC_site_dist(year, test_site_id, test_sites, Map=None, ANOM_lower=30, CONF_lower=400):
+    folder = FOLDERSET[year]
+
+    VEGANOMMAX = ee.ImageCollection(folder + "/VEG-ANOM-MAX").mosaic()
+    VEGDISTCONF = ee.ImageCollection(folder + "/VEG-DIST-CONF").mosaic()
+
+    combined = ee.Image.cat([
+        VEGANOMMAX.rename('anom'),
+        VEGDISTCONF.rename('conf')
+    ])
+
+    def maskAC(image):
+        mask = (
+            image.select('anom').gt(ANOM_lower)
+            .And(image.select('anom').lt(255))
+            .And(image.select('conf').gt(CONF_lower))
+            .selfMask()
+        )
+        return image.updateMask(mask)
+
+    ac_masked = maskAC(combined)
+    ac_vis = ac_masked.where(ac_masked.mask().Not(), -9999)
+
+    site = test_sites.filter(ee.Filter.eq("SITE_ID", test_site_id))
+    site_name = site.first().get("NAME").getInfo()
+    site_geom = site.geometry()
+
+    site_DIST = ac_vis.clip(site_geom)
+    counts = site_DIST.select('anom').reduceRegion(
+        reducer=ee.Reducer.frequencyHistogram(), geometry=site, scale=30, maxPixels=1e13
+    ).getInfo()
+    print('Pixel counts:', counts)
+
+    palette = ['fee5d9', 'fcae91', 'fb6a4a', 'de2d26', '895c5e']
+
+    if Map is None:
+        Map = geemap.Map()
+        Map.add_basemap("Esri.WorldImagery")
+        Map.addLayer(site_geom, {"color": "red"}, f"{site_name} Boundary")
+        Map.centerObject(site)
+
+    Map.addLayer(site_DIST.select('anom'), {"min": 0, "max": 100, "palette": palette}, f"DIST {year} - {site_name}")
+
+    return Map
