@@ -1,29 +1,42 @@
+"""
+A rejected approach to PSM grid creation. Given an AOI (country, world, etc.), creates
+a globally aligned 1km grid. All cells that are fully within a PA are classified as protected
+and retained, and all cells that are fully beyond 10km from a PA are classified as unprotected
+and retained.
+"""
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 from shapely.geometry import box
 
+from pathlib import Path
+import sys
+_SRC = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SRC))
+
 from utils.variables import (
-    PSM_CRS,
+    GPD_CRS_METERS,
+    GPD_CRS_PARQUET,
     PSM_CELL_SIZE,
-    PSM_CONTROL_BUFFER,
+    CONTROL_INNER_BUFFER,
     PSM_TEST_AOI,
     PSM_TEST_PAS,
-    PSM_TEST_CELLS,
+    PSM_GLOBAL_GRID,
 )
 
 
-def read_aoi(path: str, crs: int) -> gpd.GeoDataFrame:
+def read_aoi(path: str) -> gpd.GeoDataFrame:
     aoi = gpd.read_file(path)
-    aoi = aoi.to_crs(epsg=crs)
+    aoi = aoi.to_crs(GPD_CRS_METERS)
     aoi = aoi[aoi.geometry.notnull()].copy()
     aoi = aoi.explode(index_parts=False).reset_index(drop=True)
     return aoi
 
 
-def read_pas(path: str, crs: int, aoi_union) -> gpd.GeoDataFrame:
+def read_pas(path: str, aoi_union) -> gpd.GeoDataFrame:
     pa_gdf = gpd.read_file(path)
-    pa_gdf = pa_gdf.to_crs(epsg=crs)
+    pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
     pa_gdf = pa_gdf[pa_gdf.geometry.notnull()].copy()
     pa_gdf = pa_gdf.explode(index_parts=False).reset_index(drop=True)
     pa_gdf = pa_gdf[pa_gdf.intersects(aoi_union)].copy()
@@ -32,7 +45,7 @@ def read_pas(path: str, crs: int, aoi_union) -> gpd.GeoDataFrame:
     return pa_gdf
 
 
-def make_grid(aoi_union, crs: int, cell_size: float) -> gpd.GeoDataFrame:
+def make_grid(aoi_union, cell_size: float) -> gpd.GeoDataFrame:
     """Create a globally aligned 1km square grid over the AOI extent.
 
     Alignment is anchored to the CRS origin (0, 0), not to the AOI bounds, so
@@ -49,7 +62,7 @@ def make_grid(aoi_union, crs: int, cell_size: float) -> gpd.GeoDataFrame:
     ys = np.arange(start_y, end_y, cell_size)
 
     cells = [box(x, y, x + cell_size, y + cell_size) for x in xs for y in ys]
-    grid = gpd.GeoDataFrame({"geometry": cells}, crs=crs)
+    grid = gpd.GeoDataFrame({"geometry": cells}, crs=GPD_CRS_METERS)
     grid = grid[grid.intersects(aoi_union)].copy()
     grid.reset_index(drop=True, inplace=True)
     return grid
@@ -73,16 +86,16 @@ def classify_cells(
     grid: gpd.GeoDataFrame,
     aoi_union,
     pa_union,
-    control_buffer_m: float,
+    inner_buffer_m: float,
 ) -> gpd.GeoDataFrame:
     """Identify valid grid cells. Classify cells as 'protected' or 'unprotected' and set protected=1/0.
 
     protected:   fully within PA union (protected=1)
-    unprotected: fully outside PA union buffered by control_buffer_m (protected=0)
+    unprotected: fully outside PA union buffered by inner_buffer_m (protected=0)
     """
     grid = grid.copy()
 
-    pa_buffer = pa_union.buffer(control_buffer_m)
+    pa_buffer = pa_union.buffer(inner_buffer_m)
 
     within_aoi = grid.within(aoi_union)
     is_protected = within_aoi & grid.within(pa_union)
@@ -101,22 +114,22 @@ def classify_cells(
 
 def main() -> None:
 
-    output_path = PSM_TEST_CELLS
+    output_path = PSM_GLOBAL_GRID
 
     print("Reading AOI...")
-    aoi_gdf = read_aoi(PSM_TEST_AOI, PSM_CRS)
+    aoi_gdf = read_aoi(PSM_TEST_AOI)
     aoi_union = aoi_gdf.union_all()
 
     print("Reading protected areas intersecting AOI...")
-    pa_gdf = read_pas(PSM_TEST_PAS, PSM_CRS, aoi_union)
+    pa_gdf = read_pas(PSM_TEST_PAS, aoi_union)
     pa_union = pa_gdf.union_all()
 
     print("Creating globally aligned 1 km grid over AOI extent...")
-    grid = make_grid(aoi_union, PSM_CRS, PSM_CELL_SIZE)
+    grid = make_grid(aoi_union, PSM_CELL_SIZE)
     grid = add_grid_metadata(grid)
 
     print("Classifying cells as protected / unprotected...")
-    grid = classify_cells(grid, aoi_union, pa_union, PSM_CONTROL_BUFFER)
+    grid = classify_cells(grid, aoi_union, pa_union, CONTROL_INNER_BUFFER)
 
     # 1 m precision
     grid["geometry"] = grid.geometry.set_precision(1.0)
@@ -134,6 +147,7 @@ def main() -> None:
     ]
 
     print(f"Exporting {len(grid):,} valid cells to {output_path}...")
+    grid = grid.to_crs(GPD_CRS_PARQUET)
     grid.to_parquet(output_path)
 
     protected_count = int((grid["protected"] == 1).sum())

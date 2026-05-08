@@ -1,3 +1,8 @@
+"""
+Creates a set of control cells for each PA.
+Control cells are 1km x 1km cells that are between 10km and 50km from the PA.
+"""
+
 from pathlib import Path
 import sys
 
@@ -13,11 +18,17 @@ from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
-    WDPA_TEST_SITE_GEOJSON,
-    EXTERIOR_CELLS_TEST,
-    PSM_CRS,
+    TEST_SITES_GEOJSON,
+    CONTROL_CELLS,
+    EE_CRS_METERS,
+    GPD_CRS_METERS,
+    GPD_CRS_PARQUET,
     PSM_CELL_SIZE,
     RAND_SEED,
+    CONTROL_INNER_BUFFER,
+    CONTROL_OUTER_BUFFER,
+    CONTROL_SAMPLE_SCALE,
+    CONTROL_N_SAMPLES,
 )
 
 def init_ee(project):
@@ -70,7 +81,7 @@ def sample_points(
         .byte()
         .paint(donut_pas, 1)
         .rename("protected")
-        .reproject(crs=ee.Projection("EPSG:4326"), scale=30)
+        .reproject(crs=EE_CRS_METERS, scale=30)
     )
     unprotected_mask = protected_img.unmask(0).eq(0).selfMask()
 
@@ -81,6 +92,7 @@ def sample_points(
         .sample(
             region=donut,
             scale=sample_scale_m,
+            projection=EE_CRS_METERS,
             numPixels=n_samples,
             seed=seed,
             geometries=True,
@@ -100,7 +112,7 @@ def points_to_cells(points_fc):
     points_gdf = gpd.GeoDataFrame.from_features(points_fc.getInfo()["features"], crs="EPSG:4326")
     
     # Reproject to meter-based CRS for cell construction
-    points_gdf = points_gdf.to_crs(epsg=PSM_CRS)
+    points_gdf = points_gdf.to_crs(GPD_CRS_METERS)
 
     # Draw a cell around each point
     cell_size = float(PSM_CELL_SIZE)
@@ -118,22 +130,21 @@ def points_to_cells(points_fc):
     cells_gdf["geometry"] = cells_gdf.geometry.set_precision(1.0)
     cells_gdf = cells_gdf.drop_duplicates(subset="geometry")
     cells_gdf["protected"] = 0
-    cells_gdf = cells_gdf.to_crs(epsg=4326)
     return cells_gdf
 
 
-def get_exterior_cells(
+def get_control_cells(
     test_sites: str,
     *,
-    output_parquet: str = EXTERIOR_CELLS_TEST,
-    n_samples: int = 100,
-    sample_scale_m: int = 3000,
+    output_parquet: str = CONTROL_CELLS,
+    n_samples: int = CONTROL_N_SAMPLES,
+    sample_scale_m: int = CONTROL_SAMPLE_SCALE,
     seed: int = RAND_SEED,
-    inner_buffer_m: int = 10000,
-    outer_buffer_m: int = 50000,
+    inner_buffer_m: int = CONTROL_INNER_BUFFER,
+    outer_buffer_m: int = CONTROL_OUTER_BUFFER,
 ):
     """
-    Iterate through sites and extract exterior cells for each.
+    Iterate through sites and extract control cells for each.
     """
     init_ee(PROJECT)
     pa_gdf = gpd.read_file(test_sites)
@@ -163,7 +174,7 @@ def get_exterior_cells(
         cells_gdf = points_to_cells(points_fc)
         
         if len(cells_gdf) == 0:
-            print(f"Warning: WDPA_PID {wdpa_pid}: no exterior cells")
+            print(f"Warning: WDPA_PID {wdpa_pid}: no control cells")
             continue
         
         print("Appending cells for PA: ", wdpa_pid)
@@ -175,15 +186,15 @@ def get_exterior_cells(
         print("--------------------------------")
 
     if not all_cells:
-        raise RuntimeError("No exterior cells generated for any site.")
+        raise RuntimeError("No control cells generated for any site.")
 
     print("Concatenating cells for all PAs")
-    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=PSM_CRS)
+    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS)
     all_cells = all_cells.drop_duplicates(subset="geometry")
-    all_cells = all_cells.to_crs(epsg=4326)
+    all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
     print("Saving cells to parquet: ", output_parquet)
     all_cells.to_parquet(output_parquet)
 
 
 if __name__ == "__main__":
-    get_exterior_cells(WDPA_TEST_SITE_GEOJSON)
+    get_control_cells(TEST_SITES_GEOJSON)
