@@ -233,6 +233,9 @@ SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
 # Variables for get_exterior_cells.ipynb
 EXTERIOR_CELLS_TEST = REPO_DATA_DIR + "exterior_cells_test.parquet"
 
+# Variables for ps_model.ipynb / run_relative_effectiveness.ipynb
+MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
+
 
 WKT_6933 = """
     PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
