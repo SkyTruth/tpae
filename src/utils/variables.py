@@ -171,8 +171,35 @@ DRIVER_LABELS = {
 # Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
+# WKT for EPSG:6933 (NSIDC EASE-Grid 2.0 Global projection)
+# Earth Engine is unable to parse "EPSG:6933" directly
+# Equal-area projection used for calculations in meters
+WKT_6933 = """
+    PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
+        GEOGCS["WGS 84",
+            DATUM["WGS_1984",
+                SPHEROID["WGS 84",6378137,298.257223563,
+                    AUTHORITY["EPSG","7030"]],
+                AUTHORITY["EPSG","6326"]],
+            PRIMEM["Greenwich",0,
+                AUTHORITY["EPSG","8901"]],
+            UNIT["degree",0.0174532925199433,
+                AUTHORITY["EPSG","9122"]],
+            AUTHORITY["EPSG","4326"]],
+        PROJECTION["Cylindrical_Equal_Area"],
+        PARAMETER["standard_parallel_1",30],
+        PARAMETER["central_meridian",0],
+        PARAMETER["false_easting",0],
+        PARAMETER["false_northing",0],
+        UNIT["metre",1,
+            AUTHORITY["EPSG","9001"]],
+        AXIS["Easting",EAST],
+        AXIS["Northing",NORTH],
+        AUTHORITY["EPSG","6933"]]
+    """
+
 # Parameters for reduceRegion raster calculations
-CRS = "EPSG:3857"
+CRS_METERS = WKT_6933
 SCALE = 30
 MAX_PIXELS = 1e13
 
@@ -235,28 +262,3 @@ EXTERIOR_CELLS_TEST = REPO_DATA_DIR + "exterior_cells_test.parquet"
 
 # Variables for ps_model.ipynb / run_relative_effectiveness.ipynb
 MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
-
-
-WKT_6933 = """
-    PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
-        GEOGCS["WGS 84",
-            DATUM["WGS_1984",
-                SPHEROID["WGS 84",6378137,298.257223563,
-                    AUTHORITY["EPSG","7030"]],
-                AUTHORITY["EPSG","6326"]],
-            PRIMEM["Greenwich",0,
-                AUTHORITY["EPSG","8901"]],
-            UNIT["degree",0.0174532925199433,
-                AUTHORITY["EPSG","9122"]],
-            AUTHORITY["EPSG","4326"]],
-        PROJECTION["Cylindrical_Equal_Area"],
-        PARAMETER["standard_parallel_1",30],
-        PARAMETER["central_meridian",0],
-        PARAMETER["false_easting",0],
-        PARAMETER["false_northing",0],
-        UNIT["metre",1,
-            AUTHORITY["EPSG","9001"]],
-        AXIS["Easting",EAST],
-        AXIS["Northing",NORTH],
-        AUTHORITY["EPSG","6933"]]
-    """

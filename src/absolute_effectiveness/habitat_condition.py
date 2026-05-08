@@ -2,7 +2,7 @@ import ee
 import math
 from utils.variables import (
     ANALYSIS_END_YR,
-    CRS,
+    CRS_METERS,
     MAX_PIXELS,
     SCALE,
     INTERACTION_DISTANCE,
@@ -21,7 +21,7 @@ class HabitatConditionAnalyzer:
     def __init__(
         self,
         analysis_end_yr=ANALYSIS_END_YR,
-        crs=CRS,
+        crs=CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
         interaction_distance=INTERACTION_DISTANCE,
@@ -130,6 +130,14 @@ class HabitatConditionAnalyzer:
         """Create continuous habitat intactness raster."""
         # Get habitat binary
         habitat_binary = habitat_raster.gt(0).unmask(0).toFloat()
+
+        # Reproject habitat binary to meters so that kernel is applied correctly
+        # Improves accuracy at higher latitudes, but increases computation time
+        habitat_binary = habitat_binary.reproject(
+            crs=self.crs,
+            scale=self.scale
+        )
+
         habitat_binary_clipped = habitat_binary.clip(
             site_geom.buffer(self.kernel_radius_meters)
         )
