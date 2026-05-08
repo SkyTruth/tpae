@@ -2,7 +2,7 @@ import ee
 import math
 from utils.variables import (
     ANALYSIS_END_YR,
-    CRS_METERS,
+    EE_CRS_METERS,
     MAX_PIXELS,
     SCALE,
     INTERACTION_DISTANCE,
@@ -21,7 +21,7 @@ class HabitatConditionAnalyzer:
     def __init__(
         self,
         analysis_end_yr=ANALYSIS_END_YR,
-        crs=CRS_METERS,
+        crs=EE_CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
         interaction_distance=INTERACTION_DISTANCE,

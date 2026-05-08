@@ -1,7 +1,7 @@
 import ee
 from utils.variables import (
     ANALYSIS_END_YR,
-    CRS_METERS,
+    EE_CRS_METERS,
     MAX_PIXELS,
     OPENING_RADIUS_LOSS,
     SCALE,
@@ -15,7 +15,7 @@ class HabitatLossAnalyzer:
         self,
         analysis_end_yr=ANALYSIS_END_YR,
         opening_radius_loss=OPENING_RADIUS_LOSS,
-        crs=CRS_METERS,
+        crs=EE_CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
     ):
