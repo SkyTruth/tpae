@@ -81,7 +81,6 @@ def sample_points(
         .byte()
         .paint(donut_pas, 1)
         .rename("protected")
-        .reproject(crs=EE_CRS_METERS, scale=30)
     )
     unprotected_mask = protected_img.unmask(0).eq(0).selfMask()
 
