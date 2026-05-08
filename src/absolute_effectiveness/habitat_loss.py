@@ -1,7 +1,7 @@
 import ee
 from utils.variables import (
     ANALYSIS_END_YR,
-    CRS,
+    CRS_METERS,
     MAX_PIXELS,
     OPENING_RADIUS_LOSS,
     SCALE,
@@ -15,7 +15,7 @@ class HabitatLossAnalyzer:
         self,
         analysis_end_yr=ANALYSIS_END_YR,
         opening_radius_loss=OPENING_RADIUS_LOSS,
-        crs=CRS,
+        crs=CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
     ):
@@ -122,7 +122,21 @@ class HabitatLossAnalyzer:
 
         new_keys = class_dict.keys().map(lambda key: ee.String(key).cat("_area"))
         class_dict = ee.Dictionary.fromLists(new_keys, class_dict.values())
-        site_area = site_geom.area().divide(1000000).getInfo()
+
+        # Calculate site area in the same projection as habitat loss
+        site_area = (
+            ee.Image.pixelArea()
+            .divide(1000000)
+            .reduceRegion(
+                ee.Reducer.sum(),
+                site_geom,
+                scale=self.scale,
+                crs=self.crs,
+                maxPixels=self.max_pixels,
+            )
+            .get("area")
+            .getInfo()
+        )
 
         def add_pct_area(key, value):
             pct_key = ee.String(key).slice(0, -5).cat("_pct")
