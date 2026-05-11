@@ -79,7 +79,7 @@ class HabitatConditionAnalyzer:
 
     def calc_habitat_extent_score(self, habitat_raster, site_geom):
         """Calculate Habitat Extent score for analysis_end_yr within a PA."""
-        site_area = site_geom.area().getInfo()
+
         habitat_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_raster)
@@ -93,6 +93,21 @@ class HabitatConditionAnalyzer:
             .get("area")
             .getInfo()
         )
+
+        # Calculate site area in the same projection as habitat area
+        site_area = (
+            ee.Image.pixelArea()
+            .reduceRegion(
+                ee.Reducer.sum(),
+                site_geom,
+                scale=self.scale,
+                crs=self.crs,
+                maxPixels=self.max_pixels,
+            )
+            .get("area")
+            .getInfo()
+        )
+
         return min(habitat_area / site_area, 1)
 
     def build_kernel(self):

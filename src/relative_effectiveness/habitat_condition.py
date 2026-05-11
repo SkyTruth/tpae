@@ -14,10 +14,15 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
 
     def calc_extent_score_per_cell(self, habitat_raster, matched_grids):
         """Score Habitat Extent within each cell of `matched_grids`."""
-        habitat_area_image = (
-            ee.Image.pixelArea().updateMask(habitat_raster).rename("habitat_area")
-        )
-        with_area = habitat_area_image.reduceRegions(
+
+        # Could just set cell area to 1000000 since that's what it should be,
+        # but this might be more accurate given the projection
+        
+        cell_area_image = ee.Image.pixelArea().rename("cell_area")
+        habitat_area_image = cell_area_image.updateMask(habitat_raster).rename("habitat_area")
+        combined = habitat_area_image.addBands(cell_area_image)
+        
+        with_area = combined.reduceRegions(
             collection=matched_grids,
             reducer=ee.Reducer.sum(),
             scale=self.scale,
@@ -25,8 +30,8 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
         )
 
         def add_score(feature):
-            cell_area = feature.geometry().area(maxError=1)
-            habitat_area = ee.Number(ee.Algorithms.If(feature.get("habitat_area"), feature.get("habitat_area"), 0))
+            habitat_area = ee.Number(feature.get("habitat_area"))
+            cell_area = ee.Number(feature.get("cell_area"))
             extent_score = habitat_area.divide(cell_area).min(1)
             return feature.set("extent_score", extent_score)
 
@@ -36,17 +41,13 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
         """Score Habitat Intactness within each cell as the mean of intactness."""
         with_intactness = intactness_raster.reduceRegions(
             collection=fc,
-            reducer=ee.Reducer.mean(),
+            reducer=ee.Reducer.mean().setOutputs(["intactness_score"]),
             scale=self.intactness_scale,
             crs=self.crs,
             tileScale=self.tile_scale,
         )
 
-        def rename_property(feature):
-            intactness = ee.Algorithms.If(feature.get("intactness"), feature.get("intactness"), 0)
-            return feature.set("intactness_score", intactness)
-
-        return with_intactness.map(rename_property)
+        return with_intactness
 
     def calc_condition_score_per_cell(self, fc):
         """Combine per-cell extent and intactness scores into a Condition score."""
