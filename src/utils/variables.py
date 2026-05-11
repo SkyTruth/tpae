@@ -268,6 +268,7 @@ TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
 CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
 # ps_model.ipynb / run_relative_effectiveness.ipynb
 MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
+MATCH_TABLE_TEST = REPO_DATA_DIR + "match_table_1543.parquet"
 # global_grid_creation.py
 PSM_GLOBAL_GRID = REPO_DATA_DIR + "Ghana_global_grid.parquet"
 # psm_grid_creation.py
