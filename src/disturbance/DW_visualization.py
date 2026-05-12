@@ -7,21 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-DW_CLASSES = {
-    0: 'Water', 1: 'Trees', 2: 'Grass', 3: 'Flooded Veg',
-    4: 'Crops', 5: 'Shrub/Scrub', 6: 'Built Area', 7: 'Bare Ground', 8: 'Snow/Ice'
-}
-DW_PALETTE = [
-    '#419BDF', '#397D49', '#88B053', '#7A87C6', '#E49635',
-    '#DFC35A', '#C4281B', '#A59B8F', '#B39FE1'
-]
-DW_VIS = {'min': 0, 'max': 8, 'palette': [c.lstrip('#') for c in DW_PALETTE]}
-
-FOLDERSET = {
-    '2025': "projects/glad/HLSDIST/DIST-ANN_v1_2025",
-    '2024': "projects/glad/HLSDIST/DIST-ANN_v1_2024",
-    '2023': "projects/glad/HLSDIST/DIST-ANN_v1",
-}
+from utils.dist_variables import DW_CLASSES, DW_PALETTE, DW_VIS, FOLDERSET
 
 def plot_lc_change(result):
     """Bar charts of pre/post class distributions + annotated transition heatmap."""
