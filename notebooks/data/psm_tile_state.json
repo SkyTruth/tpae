@@ -1,0 +1,884 @@
+{
+  "10_01": {
+    "tile_id": "10_01",
+    "task_id": null,
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_01.csv",
+    "error": null,
+    "n_requested": 1099
+  },
+  "05_00": {
+    "tile_id": "05_00",
+    "task_id": "GTNZT4Q4R5SOHOKL5QNKHJCY",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_00.csv",
+    "error": null,
+    "n_requested": 725
+  },
+  "06_00": {
+    "tile_id": "06_00",
+    "task_id": "LKLTOIRBURDGLG5SYOCAVSM6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/06_00.csv",
+    "error": null,
+    "n_requested": 4
+  },
+  "16_00": {
+    "tile_id": "16_00",
+    "task_id": "XP47FGG62DSXSBO7CGW7QGYJ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_00.csv",
+    "error": null,
+    "n_requested": 60
+  },
+  "17_00": {
+    "tile_id": "17_00",
+    "task_id": "FA37KT7NHDKGMIDKI3SPPRZZ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/17_00.csv",
+    "error": null,
+    "n_requested": 260
+  },
+  "05_01": {
+    "tile_id": "05_01",
+    "task_id": "SLKHSAD7LGNXRORZ6H4H4YB3",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_01.csv",
+    "error": null,
+    "n_requested": 2160
+  },
+  "06_01": {
+    "tile_id": "06_01",
+    "task_id": "M5EGAKYVLPWS3KS7AHPRDCKN",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/06_01.csv",
+    "error": null,
+    "n_requested": 1218
+  },
+  "09_01": {
+    "tile_id": "09_01",
+    "task_id": "YVL6FVW3NPGBMTJITTUFRDK7",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_01.csv",
+    "error": null,
+    "n_requested": 285
+  },
+  "11_01": {
+    "tile_id": "11_01",
+    "task_id": "MDCVK6CTRIJZU2YHRTZUQ76G",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_01.csv",
+    "error": null,
+    "n_requested": 154
+  },
+  "14_01": {
+    "tile_id": "14_01",
+    "task_id": "IIC7JHFRFKLIQAPRLEGCPZW3",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_01.csv",
+    "error": null,
+    "n_requested": 811
+  },
+  "15_01": {
+    "tile_id": "15_01",
+    "task_id": "DG5VXHXWUZXEHAYJDATNZEUM",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_01.csv",
+    "error": null,
+    "n_requested": 1588
+  },
+  "16_01": {
+    "tile_id": "16_01",
+    "task_id": "GLMJOKVKFSZMDJMCI3LUT2XX",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_01.csv",
+    "error": null,
+    "n_requested": 1390
+  },
+  "17_01": {
+    "tile_id": "17_01",
+    "task_id": "GU75YKDEMKLALHL6R3PV7ZX6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/17_01.csv",
+    "error": null,
+    "n_requested": 71
+  },
+  "04_02": {
+    "tile_id": "04_02",
+    "task_id": "TCK7P6DN6DS5TSNHCP2733HD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/04_02.csv",
+    "error": null,
+    "n_requested": 124
+  },
+  "05_02": {
+    "tile_id": "05_02",
+    "task_id": "KFKTSGULANXI4B5XTUBZ3X3D",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_02.csv",
+    "error": null,
+    "n_requested": 2457
+  },
+  "06_02": {
+    "tile_id": "06_02",
+    "task_id": "KRY6RVEXTORTBAIC5H447DNQ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/06_02.csv",
+    "error": null,
+    "n_requested": 4005
+  },
+  "07_02": {
+    "tile_id": "07_02",
+    "task_id": "MRG2NATBORMZP6WVQB5CKHY2",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/07_02.csv",
+    "error": null,
+    "n_requested": 758
+  },
+  "09_02": {
+    "tile_id": "09_02",
+    "task_id": "OHKND6OEY4BL3YBBI3CNWA74",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_02.csv",
+    "error": null,
+    "n_requested": 784
+  },
+  "10_02": {
+    "tile_id": "10_02",
+    "task_id": "5QGLW3TROXOHBFUA3E6JE65A",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_02.csv",
+    "error": null,
+    "n_requested": 3272
+  },
+  "11_02": {
+    "tile_id": "11_02",
+    "task_id": "XYBOLTZ6DWEJN4HTV3HCHBOO",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_02.csv",
+    "error": null,
+    "n_requested": 473
+  },
+  "13_02": {
+    "tile_id": "13_02",
+    "task_id": "APRF7NFRRDERQHAPJUQMTNUD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/13_02.csv",
+    "error": null,
+    "n_requested": 3
+  },
+  "14_02": {
+    "tile_id": "14_02",
+    "task_id": "NQ4T6KZ2MDO3HPNRF6WGUOKH",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_02.csv",
+    "error": null,
+    "n_requested": 664
+  },
+  "15_02": {
+    "tile_id": "15_02",
+    "task_id": "KYQ2XBIO57SW6YBYW3IF45Q7",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_02.csv",
+    "error": null,
+    "n_requested": 1278
+  },
+  "16_02": {
+    "tile_id": "16_02",
+    "task_id": "UKGLV3PLGOSRFSFRU5NNCR36",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_02.csv",
+    "error": null,
+    "n_requested": 431
+  },
+  "17_02": {
+    "tile_id": "17_02",
+    "task_id": "QLNNPZBRCRJGVAUG7JZDIOVV",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/17_02.csv",
+    "error": null,
+    "n_requested": 20
+  },
+  "01_03": {
+    "tile_id": "01_03",
+    "task_id": "TK4W7CMUI5AX3MGAOLNZ6CNP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/01_03.csv",
+    "error": null,
+    "n_requested": 12
+  },
+  "03_03": {
+    "tile_id": "03_03",
+    "task_id": "K4QNAMCWK5MTPU2E3QRI3I45",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_03.csv",
+    "error": null,
+    "n_requested": 653
+  },
+  "04_03": {
+    "tile_id": "04_03",
+    "task_id": "WAR7U3NI6DJJWFJNEDSTFAWP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/04_03.csv",
+    "error": null,
+    "n_requested": 3094
+  },
+  "05_03": {
+    "tile_id": "05_03",
+    "task_id": "T5R6ZBWIMAM6DBGQHHS3APON",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_03.csv",
+    "error": null,
+    "n_requested": 2499
+  },
+  "06_03": {
+    "tile_id": "06_03",
+    "task_id": "YRO55RADAKCEF25SEUWXV3NO",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/06_03.csv",
+    "error": null,
+    "n_requested": 526
+  },
+  "08_03": {
+    "tile_id": "08_03",
+    "task_id": "VUY5SYESFURS2XKR2DVK5EQP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/08_03.csv",
+    "error": null,
+    "n_requested": 1658
+  },
+  "09_03": {
+    "tile_id": "09_03",
+    "task_id": "DGKFFA46BMIV2LOPYWZKPBK5",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_03.csv",
+    "error": null,
+    "n_requested": 2169
+  },
+  "10_03": {
+    "tile_id": "10_03",
+    "task_id": "5G4VWKJQ32LJ763VCDDN4VBH",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_03.csv",
+    "error": null,
+    "n_requested": 2848
+  },
+  "11_03": {
+    "tile_id": "11_03",
+    "task_id": "GGMZKOZXOVWV2DWO7DCTSJSD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_03.csv",
+    "error": null,
+    "n_requested": 618
+  },
+  "12_03": {
+    "tile_id": "12_03",
+    "task_id": "UOQB4K3NHXL7XUE6HPYCPR5Q",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_03.csv",
+    "error": null,
+    "n_requested": 477
+  },
+  "13_03": {
+    "tile_id": "13_03",
+    "task_id": "3UXNJMZRAALCEBROPTHQBTVG",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/13_03.csv",
+    "error": null,
+    "n_requested": 919
+  },
+  "14_03": {
+    "tile_id": "14_03",
+    "task_id": "NREONNISTXLMXCD35D5SYEZJ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_03.csv",
+    "error": null,
+    "n_requested": 2182
+  },
+  "15_03": {
+    "tile_id": "15_03",
+    "task_id": "R2LXHEFFUUE3TDGO7TQVPR4J",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_03.csv",
+    "error": null,
+    "n_requested": 189
+  },
+  "01_04": {
+    "tile_id": "01_04",
+    "task_id": "HVAIBD3D6RAVOB3QJ7ZZBDGP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/01_04.csv",
+    "error": null,
+    "n_requested": 4
+  },
+  "02_04": {
+    "tile_id": "02_04",
+    "task_id": "UXBIVAB4K2E4ISNQAXCWNNRP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/02_04.csv",
+    "error": null,
+    "n_requested": 202
+  },
+  "03_04": {
+    "tile_id": "03_04",
+    "task_id": "6R557OE3RZBEREEHAB5RHIQF",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_04.csv",
+    "error": null,
+    "n_requested": 5002
+  },
+  "04_04": {
+    "tile_id": "04_04",
+    "task_id": "ESMSSWBMY7INMHLTTM7KOLN6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/04_04.csv",
+    "error": null,
+    "n_requested": 2310
+  },
+  "05_04": {
+    "tile_id": "05_04",
+    "task_id": "EECGF6NS3BW6A5E67FDLDHEP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_04.csv",
+    "error": null,
+    "n_requested": 526
+  },
+  "08_04": {
+    "tile_id": "08_04",
+    "task_id": "LTRKYROV5RICK77T3MQG66DD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/08_04.csv",
+    "error": null,
+    "n_requested": 2097
+  },
+  "09_04": {
+    "tile_id": "09_04",
+    "task_id": "QS3RHEEBH3QXV2JIINHOL6U3",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_04.csv",
+    "error": null,
+    "n_requested": 1959
+  },
+  "10_04": {
+    "tile_id": "10_04",
+    "task_id": "VVBBJASWWUNAGENER34C3DYA",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_04.csv",
+    "error": null,
+    "n_requested": 2043
+  },
+  "11_04": {
+    "tile_id": "11_04",
+    "task_id": "KL2C52JJ24KOHCYDEY2UZO5Y",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_04.csv",
+    "error": null,
+    "n_requested": 1665
+  },
+  "12_04": {
+    "tile_id": "12_04",
+    "task_id": "322S4JXHOR4K6NUWLV5FA2D6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_04.csv",
+    "error": null,
+    "n_requested": 2881
+  },
+  "13_04": {
+    "tile_id": "13_04",
+    "task_id": "YBBOO5QPCC3GPGCEKPPK6VN5",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/13_04.csv",
+    "error": null,
+    "n_requested": 4224
+  },
+  "14_04": {
+    "tile_id": "14_04",
+    "task_id": "IRB562OYH5RNVXQPDFG37NZQ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_04.csv",
+    "error": null,
+    "n_requested": 2128
+  },
+  "15_04": {
+    "tile_id": "15_04",
+    "task_id": "CA5KCZ37W7QHNPSGHFLTPYWO",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_04.csv",
+    "error": null,
+    "n_requested": 329
+  },
+  "16_04": {
+    "tile_id": "16_04",
+    "task_id": "XNX7XXKHZCP2KWTLWTAX7UZZ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_04.csv",
+    "error": null,
+    "n_requested": 37
+  },
+  "00_05": {
+    "tile_id": "00_05",
+    "task_id": "MUZLV2RQF5TVDUZYWFPFDRUD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/00_05.csv",
+    "error": null,
+    "n_requested": 37
+  },
+  "01_05": {
+    "tile_id": "01_05",
+    "task_id": "MEMBQSJ3ONO5QSQCACI7HM7E",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/01_05.csv",
+    "error": null,
+    "n_requested": 100
+  },
+  "02_05": {
+    "tile_id": "02_05",
+    "task_id": "FUAHL5KG3RWJETYTYX7JERYI",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/02_05.csv",
+    "error": null,
+    "n_requested": 1849
+  },
+  "03_05": {
+    "tile_id": "03_05",
+    "task_id": "GWW3GFDOHQNQG3JUIYFFRSBF",
+    "status": "FAILED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_05.csv",
+    "error": "User memory limit exceeded.",
+    "n_requested": 2581
+  },
+  "04_05": {
+    "tile_id": "04_05",
+    "task_id": "LLPN7CRYKIVFTXQNFGNUUC77",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/04_05.csv",
+    "error": null,
+    "n_requested": 1327
+  },
+  "05_05": {
+    "tile_id": "05_05",
+    "task_id": "4HY6PZF7GZW5YZ6F2HPYA36X",
+    "status": "FAILED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_05.csv",
+    "error": "User memory limit exceeded.",
+    "n_requested": 1186
+  },
+  "06_05": {
+    "tile_id": "06_05",
+    "task_id": "3NZHPLN33YO3ZLWU2A4E2Z5R",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/06_05.csv",
+    "error": null,
+    "n_requested": 95
+  },
+  "08_05": {
+    "tile_id": "08_05",
+    "task_id": "O6IU6YLY4HVJWU2B5JGGYLM6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/08_05.csv",
+    "error": null,
+    "n_requested": 800
+  },
+  "09_05": {
+    "tile_id": "09_05",
+    "task_id": "42BS3XJAS3TYE7MZKWF2QB3J",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_05.csv",
+    "error": null,
+    "n_requested": 2143
+  },
+  "10_05": {
+    "tile_id": "10_05",
+    "task_id": "4HOJZUAXSPEDALKIYTQWFEU4",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_05.csv",
+    "error": null,
+    "n_requested": 2051
+  },
+  "11_05": {
+    "tile_id": "11_05",
+    "task_id": "WJJU2EWHFNII7ZEETVYFCLK3",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_05.csv",
+    "error": null,
+    "n_requested": 1312
+  },
+  "12_05": {
+    "tile_id": "12_05",
+    "task_id": "LYMCNT5KFIHCPETCXC5GH624",
+    "status": "FAILED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_05.csv",
+    "error": "User memory limit exceeded.",
+    "n_requested": 1693
+  },
+  "13_05": {
+    "tile_id": "13_05",
+    "task_id": "KXTF7XI5ZRHOWFJTD42JYAI6",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/13_05.csv",
+    "error": null,
+    "n_requested": 2481
+  },
+  "14_05": {
+    "tile_id": "14_05",
+    "task_id": "XEPUD6XCFW6WGHD5HFDGZ5ES",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_05.csv",
+    "error": null,
+    "n_requested": 1821
+  },
+  "15_05": {
+    "tile_id": "15_05",
+    "task_id": "7VONPGT2Z4ARQTH6W3IB4H4P",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_05.csv",
+    "error": null,
+    "n_requested": 2590
+  },
+  "16_05": {
+    "tile_id": "16_05",
+    "task_id": "PGDE4BSVTIRD3CBDKR63XAM4",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_05.csv",
+    "error": null,
+    "n_requested": 319
+  },
+  "17_05": {
+    "tile_id": "17_05",
+    "task_id": "INKBUNTSGJLOW4FA6GJX5LOB",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/17_05.csv",
+    "error": null,
+    "n_requested": 64
+  },
+  "00_06": {
+    "tile_id": "00_06",
+    "task_id": "FZT4GB2KZWNBF5EAOXIPEG7O",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/00_06.csv",
+    "error": null,
+    "n_requested": 250
+  },
+  "01_06": {
+    "tile_id": "01_06",
+    "task_id": "VIX7OY2K2SM5OMZXVKHCQZRB",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/01_06.csv",
+    "error": null,
+    "n_requested": 860
+  },
+  "02_06": {
+    "tile_id": "02_06",
+    "task_id": "BWYBHE4NHCH5VF5767N4KVGJ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/02_06.csv",
+    "error": null,
+    "n_requested": 691
+  },
+  "03_06": {
+    "tile_id": "03_06",
+    "task_id": "ULCWNXOBUMJIHPSW3WGRPEZP",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_06.csv",
+    "error": null,
+    "n_requested": 781
+  },
+  "04_06": {
+    "tile_id": "04_06",
+    "task_id": "SI3SY3GRJT2FJKCZPYZTJH7E",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/04_06.csv",
+    "error": null,
+    "n_requested": 667
+  },
+  "05_06": {
+    "tile_id": "05_06",
+    "task_id": "TNPQRMWXQUUUGFM3XSTZRC3Q",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_06.csv",
+    "error": null,
+    "n_requested": 487
+  },
+  "07_06": {
+    "tile_id": "07_06",
+    "task_id": "2A67P6BOBN3XYOAMZ5M7LRTI",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/07_06.csv",
+    "error": null,
+    "n_requested": 821
+  },
+  "08_06": {
+    "tile_id": "08_06",
+    "task_id": "QF22SOJRAYV2AFPQXUC4FDLV",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/08_06.csv",
+    "error": null,
+    "n_requested": 58
+  },
+  "09_06": {
+    "tile_id": "09_06",
+    "task_id": "YQMG7LCRJZ7PF6LH5U66XLO2",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/09_06.csv",
+    "error": null,
+    "n_requested": 320
+  },
+  "10_06": {
+    "tile_id": "10_06",
+    "task_id": "K4RUN2CUXXVAEELVFXN4LY6U",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/10_06.csv",
+    "error": null,
+    "n_requested": 447
+  },
+  "11_06": {
+    "tile_id": "11_06",
+    "task_id": "2Z53O6EIVUOLPYVURFM37SUJ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/11_06.csv",
+    "error": null,
+    "n_requested": 475
+  },
+  "12_06": {
+    "tile_id": "12_06",
+    "task_id": "GYOQIJ2HZJBTQZIEZPXJQXE3",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_06.csv",
+    "error": null,
+    "n_requested": 599
+  },
+  "13_06": {
+    "tile_id": "13_06",
+    "task_id": "KBNOY4W2DXIBKA37N36PDVVJ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/13_06.csv",
+    "error": null,
+    "n_requested": 779
+  },
+  "14_06": {
+    "tile_id": "14_06",
+    "task_id": "VKU7XRPRNXX7TYNHM2J7WHAU",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/14_06.csv",
+    "error": null,
+    "n_requested": 853
+  },
+  "15_06": {
+    "tile_id": "15_06",
+    "task_id": "UYA4E66CQVZBTXKM62F45NL2",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/15_06.csv",
+    "error": null,
+    "n_requested": 798
+  },
+  "16_06": {
+    "tile_id": "16_06",
+    "task_id": "6CJZBXHBLGYMEOJWJEU7POPV",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/16_06.csv",
+    "error": null,
+    "n_requested": 723
+  },
+  "17_06": {
+    "tile_id": "17_06",
+    "task_id": "XPGRKMWYWZLPLGOFAEORELWQ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/17_06.csv",
+    "error": null,
+    "n_requested": 566
+  },
+  "03_05_sw": {
+    "tile_id": "03_05_sw",
+    "task_id": "AJ5AVDJ6HQK6AT6V3ETPQK6C",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_05_sw.csv",
+    "error": null,
+    "n_requested": 642
+  },
+  "03_05_se": {
+    "tile_id": "03_05_se",
+    "task_id": "L37ZDLIHDBJ6LYZLLQ7BYXSK",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_05_se.csv",
+    "error": null,
+    "n_requested": 642
+  },
+  "03_05_nw": {
+    "tile_id": "03_05_nw",
+    "task_id": "2MA4SWNWOCSP34JPCWBLROYZ",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_05_nw.csv",
+    "error": null,
+    "n_requested": 642
+  },
+  "03_05_ne": {
+    "tile_id": "03_05_ne",
+    "task_id": "WGBZP5XJAPZ5JQIVJSJ5R5AG",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/03_05_ne.csv",
+    "error": null,
+    "n_requested": 642
+  },
+  "05_05_sw": {
+    "tile_id": "05_05_sw",
+    "task_id": "GCFA4TK2REVGX2DUBZJOSB7Q",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_05_sw.csv",
+    "error": null,
+    "n_requested": 294
+  },
+  "05_05_se": {
+    "tile_id": "05_05_se",
+    "task_id": "SX2DJAPMWMSYRWGGCKBQESZ5",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_05_se.csv",
+    "error": null,
+    "n_requested": 294
+  },
+  "05_05_nw": {
+    "tile_id": "05_05_nw",
+    "task_id": "7LWVNDVVCQHJ6WXPMN4P36FT",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_05_nw.csv",
+    "error": null,
+    "n_requested": 294
+  },
+  "05_05_ne": {
+    "tile_id": "05_05_ne",
+    "task_id": "AGX34YGDAY6GIOINJ4CG6IKD",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/05_05_ne.csv",
+    "error": null,
+    "n_requested": 294
+  },
+  "12_05_sw": {
+    "tile_id": "12_05_sw",
+    "task_id": "SLTCX55OTV2Z56UISVA53RPE",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_05_sw.csv",
+    "error": null,
+    "n_requested": 419
+  },
+  "12_05_se": {
+    "tile_id": "12_05_se",
+    "task_id": "VI6T2HAU5UAKRWGNAHCTKWOC",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_05_se.csv",
+    "error": null,
+    "n_requested": 419
+  },
+  "12_05_nw": {
+    "tile_id": "12_05_nw",
+    "task_id": "KOBN3UYQXSO22SBR3HTU6JT2",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_05_nw.csv",
+    "error": null,
+    "n_requested": 419
+  },
+  "12_05_ne": {
+    "tile_id": "12_05_ne",
+    "task_id": "57UOJKGRILCEYZDJ4WEXJA7T",
+    "status": "COMPLETED",
+    "attempts": 1,
+    "gcs_path": "gs://tpae/psm_samples/12_05_ne.csv",
+    "error": null,
+    "n_requested": 419
+  }
+}

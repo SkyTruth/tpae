@@ -1,6 +1,7 @@
 import math
 
 PROJECT = "skytruth-tech"
+GCS_BUCKET = "tpae"
 
 # Earth Engine asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
