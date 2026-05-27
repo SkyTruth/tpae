@@ -1,3 +1,9 @@
+"""
+Computes relative effectiveness metrics per 1km2 cell.
+Reuses absolute effectiveness code, but uses reduceRegions to compute scores
+across a series of cells rather than within a single PA.
+"""
+
 import ee
 
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer

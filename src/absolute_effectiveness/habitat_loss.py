@@ -9,7 +9,9 @@ from utils.variables import (
 
 
 class HabitatLossAnalyzer:
-    """Computes habitat loss and loss-composition metrics."""
+    """
+    Computes amount, drivers, and types of habitat loss over the analysis period.
+    """
 
     def __init__(
         self,
@@ -28,7 +30,10 @@ class HabitatLossAnalyzer:
     def get_habitat_loss_raster(
         self, glc_processed, gpw_processed, hgfc_processed, start_yr
     ):
-        """Create habitat loss and start-year habitat rasters."""
+        """
+        Create start-year habitat and habitat loss rasters.
+        """
+        # Get start-year habitat raster
         glc_start = glc_processed.select(f"GLC_{start_yr}")
         gpw_start = gpw_processed.select(f"GPW_{start_yr}")
         lc_start = glc_start.where(gpw_start.eq(1), 37)
@@ -36,7 +41,7 @@ class HabitatLossAnalyzer:
         habitat_start = lc_start.remap(
             anthro_classes, ee.List.repeat(0, anthro_classes.size()), defaultValue=1
         )
-
+        # Get habitat loss raster
         forest_loss_binary = hgfc_processed.gt(0)
         glc_end = glc_processed.select(f"GLC_{self.analysis_end_yr}")
         gpw_end = gpw_processed.select(f"GPW_{self.analysis_end_yr}")
@@ -44,8 +49,8 @@ class HabitatLossAnalyzer:
         anthro_end = lc_end.remap(
             anthro_classes, ee.List.repeat(1, anthro_classes.size()), defaultValue=0
         ).where(forest_loss_binary, 1)
-
         habitat_loss_binary = habitat_start.And(anthro_end)
+        # Open habitat loss raster to reduce noise
         habitat_loss_opened = habitat_loss_binary.focalMin(
             radius=self.opening_radius_loss, kernelType="square", units="meters"
         ).focalMax(radius=self.opening_radius_loss, kernelType="square", units="meters")
@@ -54,7 +59,10 @@ class HabitatLossAnalyzer:
     def calc_habitat_loss_score(
         self, habitat_loss_raster, habitat_start_raster, site_geom
     ):
-        """Calculate habitat loss score where 1 = no habitat loss."""
+        """
+        Calculate habitat loss score on a scale of 0-1, where 1 = no habitat loss.
+        """
+        # Calculate area of habitat loss within PA
         habitat_loss_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_loss_raster)
@@ -68,6 +76,7 @@ class HabitatLossAnalyzer:
             .get("area")
             .getInfo()
         )
+        # Calculate area of habitat in PA at start of analysis period
         habitat_start_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_start_raster)
@@ -87,7 +96,10 @@ class HabitatLossAnalyzer:
         return 1 - habitat_loss_proportion
 
     def calc_class_area_and_pct(self, class_image, site_geom, top_n=4):
-        """Calculate area and percent area for each class in a classified image."""
+        """
+        Calculate area (km²) and percent area for each class in a classified image.
+        """
+        # Calculate area of each class
         class_name = class_image.bandNames().get(0)
         area_by_class = (
             ee.Image.pixelArea()
@@ -104,7 +116,7 @@ class HabitatLossAnalyzer:
                 maxPixels=self.max_pixels,
             )
         )
-
+        # Convert class areas to dictionary
         def dict_from_list(item, acc):
             item = ee.Dictionary(item)
             key = item.get(class_name)
@@ -116,14 +128,17 @@ class HabitatLossAnalyzer:
                 dict_from_list, ee.Dictionary({})
             )
         )
+        # Select top n classes by area
         class_dict = class_dict.select(
             class_dict.keys().sort(class_dict.values()).reverse().slice(0, top_n)
         )
-
+        # Add area suffix to class names
         new_keys = class_dict.keys().map(lambda key: ee.String(key).cat("_area"))
         class_dict = ee.Dictionary.fromLists(new_keys, class_dict.values())
+        
+        # Calculate percent area of each class
 
-        # Calculate site area in the same projection as habitat loss
+        # Calculate total PA area
         site_area = (
             ee.Image.pixelArea()
             .divide(1000000)
@@ -138,6 +153,8 @@ class HabitatLossAnalyzer:
             .getInfo()
         )
 
+        # Divide class area by total PA area to get percent area
+        # Add pct area values to class dictionary
         def add_pct_area(key, value):
             pct_key = ee.String(key).slice(0, -5).cat("_pct")
             pct_value = ee.Number(value).divide(site_area).multiply(100)
@@ -154,7 +171,13 @@ class HabitatLossAnalyzer:
         return result_dict.getInfo()
 
     def get_driver_class_image(self, glc_processed, gpw_processed, habitat_loss_raster):
-        """Create classified image of the 4 drivers of habitat loss."""
+        """
+        Create classified image of the 4 drivers of habitat loss:
+            1: Cropland
+            2: Built-up Land
+            3: Pasture
+            4: Deforestation without conversion
+        """
         glc_end = glc_processed.select(f"GLC_{self.analysis_end_yr}")
         gpw_end = gpw_processed.select(f"GPW_{self.analysis_end_yr}")
         lc_end = glc_end.where(gpw_end.eq(1), 37)
@@ -165,12 +188,16 @@ class HabitatLossAnalyzer:
         )
 
     def get_habitat_class_image(self, glc_processed, habitat_loss_raster, start_yr):
-        """Create classified image of habitat types that were lost."""
+        """
+        Create classified image of habitat types that were lost.
+        """
         glc_start = glc_processed.select(f"GLC_{start_yr}")
         return glc_start.updateMask(habitat_loss_raster).rename("habitat_class")
 
     def translate_results(self, results_dict, labels):
-        """Print class metrics with human-readable labels and metrics."""
+        """
+        Print class metrics with human-readable labels.
+        """
         normalized = {}
         for key, value in results_dict.items():
             if "_" not in key:

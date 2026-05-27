@@ -1,16 +1,14 @@
 """
-Propensity score prediction using the saved Option 3 model.
+Propensity score prediction using the saved propensity model.
 
-The Option 3 model is a logistic regression with biome × covariate interactions.
+This model is a logistic regression with biome × covariate interactions.
 Its design matrix has 83 features built in a specific order:
     [5 standardized covariates, 13 biome dummies, 65 interaction terms]
 
 This module reconstructs that exact feature ordering for new data and computes
-propensity scores. Getting the column order wrong silently produces garbage
+propensity scores. Getting the column order wrong silently produces meaningless
 predictions, so this is the only safe way to call the saved model.
 """
-
-from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
@@ -37,7 +35,7 @@ def build_design_matrix(
     artifacts: dict[str, Any],
 ) -> np.ndarray:
     """
-    Reconstruct the Option 3 design matrix for new pixels.
+    Reconstruct the design matrix for new pixels.
 
     Parameters
     ----------

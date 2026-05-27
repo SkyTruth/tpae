@@ -223,3 +223,6 @@ data/matched_grids_1543.parquet
 data/exterior_cells_test.parquet
 data/interior_cells_test.parquet
 data/match_table_1543.parquet
+data/psm/psm_tile_state.json
+
+models/*

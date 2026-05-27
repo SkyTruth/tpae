@@ -11,7 +11,9 @@ from utils.variables import (
 
 
 class DataProcessor:
-    """Processor for core source datasets used in the analysis."""
+    """
+    Imports and pre-processes core source datasets used in the analysis.
+    """
 
     def __init__(
         self,
@@ -33,7 +35,9 @@ class DataProcessor:
 
     @classmethod
     def from_gee_defaults(cls):
-        """Build a processor wired to Earth Engine assets from utils.variables."""
+        """
+        Use Earth Engine asset IDs from utils.variables.
+        """
         return cls(
             glc_collection=ee.ImageCollection(GLC_ASSET_ID),
             gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
@@ -42,14 +46,20 @@ class DataProcessor:
         )
 
     def process_glc(self, test_sites, start_yr):
-        """Process Global Land Cover Change data for the analysis period."""
+        """
+        Process Global Land Cover Change data for the analysis period.
+        """
         glc_mosaic = self.glc_collection.filterBounds(test_sites).mosaic()
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
+        # Rename bands for clarity
         band_names = [f"b{year - 2000 + 1}" for year in analysis_years]
         new_band_names = [f"GLC_{year}" for year in analysis_years]
         glc_selected = glc_mosaic.select(band_names, new_band_names)
 
         def remap_classes(band):
+            """
+            Remap GLC classes to 1-36.
+            """
             return (
                 glc_selected.select(band)
                 .remap(
@@ -64,7 +74,9 @@ class DataProcessor:
         return ee.Image.cat(remapped_bands)
 
     def process_gpw(self, start_yr):
-        """Process Global Pasture Watch data for the analysis period."""
+        """
+        Process Global Pasture Watch data for the analysis period.
+        """
         year_strings = [str(year) for year in range(start_yr, self.analysis_end_yr + 1)]
         gpw_filtered = self.gpw_collection.filter(
             ee.Filter.inList("system:index", year_strings)
@@ -73,12 +85,16 @@ class DataProcessor:
         return gpw_renamed.unmask()
 
     def process_nfw(self, test_sites):
-        """Process Natural Forests of the World (2020) data."""
+        """
+        Process Natural Forests of the World (2020) data.
+        """
         nfw_mosaic = self.nfw_collection.filterBounds(test_sites).mosaic()
         return nfw_mosaic.gte(self.nfw_threshold)
 
     def process_hgfc(self, start_yr):
-        """Process Hansen Global Forest Change data for the analysis period."""
+        """
+        Process Hansen Global Forest Change data for the analysis period.
+        """
         hgfc_selected = self.hgfc_image.select("lossyear")
         analysis_mask = hgfc_selected.gte(start_yr - 2000).And(
             hgfc_selected.lte(self.analysis_end_yr - 2000)
