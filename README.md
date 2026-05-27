@@ -2,15 +2,35 @@
 This repository contains preliminary code related to the development of a Terrestrial Protected Area Effectiveness (TPAE) model. TPAE is part of SkyTruth's 30x30 progress tracking initiative.
 
 ## Repository Contents
-- **src/absolute_effectiveness/**: Class-based analysis components for evaluating absolute effectiveness.
+- **data/**: Input and output datasets.
+- **models/**: Saved propensity score models.
+- **notebooks/**: Notebooks currently used for developing and testing methods on individual PAs; will later be converted into scripts.
+- **src/absolute_effectiveness/**: Functions for evaluating absolute effectiveness.
   - **`SiteSelector`**: Retrieves selected test sites and derives site-specific variables.
   - **`DataProcessor`**: Loads and processes Earth Engine datasets (GLC, GPW, NFW, HGFC) for the selected sites and analysis period.
   - **`HabitatConditionAnalyzer`**: Calculates habitat extent, intactness, and overall habitat condition score.
   - **`HabitatLossAnalyzer`**: Calculates habitat loss score and summarizes the drivers and types of habitat loss.
   - **`VisualizationService`**: Builds cloud-masked Sentinel-2 composites to aid map visualization.
-- **notebooks/run_absolute_effectiveness.ipynb:** Notebook for testing absolute effectiveness code individually on various test sites and visualizing results.
-- **src/utils/variables.py:** Constants related to absolute effectiveness code.
-s
+- **src/psm/**: Functions to aid in propensity score matching.
+  - **`tiling.py`**: Divides the globe into tiles for sampling efficiency.
+  - **`allocation.py`**: Stratified sample allocation.
+  - **`sampling.py`**: Samples covariates by tile based on the stratified sample allocation.
+  - **`get_treatment_cells.py`**: Generate a set of candidate treatment (interior, protected) cells for each PA.
+  - **`get_control_cells.py`**: Generate a set of candidate control (nearby unprotected) cells for each PA.
+  - **`predict.py`**: Predicts propensity scores using the saved propensity model.
+- **src/relative_effectiveness/**: Functions for evaluating relative effectiveness.
+  - **`metrics_per_cell.py`**: Reuses absolute effectiveness code, but computes scores across a series of cells rather than within a single PA.
+- **src/utils/variables.py:** Constant variables.
+
+## Script Order
+
+Scripts should be run in this order:
+1. **`notebooks/run_absolute_effectiveness.ipynb`**: Generate habitat condition and loss metrics within a given PA.
+2. **`notebooks/global_psm.ipynb`**: Fit a global propensity score model that predicts the likelihood of a location of being protected given a set of covariates. Model is saved to **`models/propensity_model_{timestamp}.pkl`**
+3. **`src/psm/get_treatment_cells.py`** and **`src/psm/get_control_cells.py`**: Generate a set of candidate treatment (protected) and control (nearby unprotected) 1km2 cells for each PA. Outputs are saved to **`data/treatment_cells.parquet`** and **`data/control_cells.parquet`**.
+4. **`notebooks/match_cells.ipynb`**: Use the global propensity model to predict a propensity score for each of the candidate treatment and control cells, and match each treatment cell to a set of control cells with similar propensity scores.
+5. **`notebooks/run_relative_effectiveness.ipynb`**: Generate habitat condition and loss metrics within each cell, and calculate relative effectiveness metrics by comparing scores for matched treatment and control cells.
+
 ## Working in this Repository
 - This repository uses [ruff](https://docs.astral.sh/ruff/) [pre-commit hooks](https://pre-commit.com/).
 - This repository uses [Poetry](https://python-poetry.org/) for package and dependency management (see below for installation and set-up).

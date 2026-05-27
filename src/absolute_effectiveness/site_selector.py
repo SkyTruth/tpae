@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class SiteSelector:
-    """Selects analysis site and derives site-specific context."""
+    """
+    Selects PA for analysis and gets site-specific variables.
+    """
 
     def __init__(
         self,
@@ -29,7 +31,9 @@ class SiteSelector:
         self.oecms = ee.FeatureCollection(oecms_collection_id)
 
     def get_test_sites(self):
-        """Get a set of selected terrestrial PAs and OECMs for testing."""
+        """
+        Get a set of selected terrestrial PAs and OECMs for testing.
+        """
         all_sites = (
             ee.FeatureCollection([self.pas, self.oecms])
             .flatten()
@@ -38,7 +42,9 @@ class SiteSelector:
         return all_sites.filter(ee.Filter.inList("SITE_ID", self.test_site_ids))
 
     def set_start_yr(self, test_sites, site_id):
-        """Set analysis start year, constrained by designation and global start year."""
+        """
+        Set start year to designation year if it is later than the analysis start year.
+        """
         designation_yr = (
             test_sites.filter(ee.Filter.eq("SITE_ID", site_id))
             .first()
@@ -48,7 +54,9 @@ class SiteSelector:
         return max(self.analysis_start_yr, designation_yr)
 
     def check_start_yr(self, start_yr):
-        """Check if start year is valid for analysis."""
+        """
+        Check if start year is valid for analysis.
+        """
         if start_yr > (self.analysis_end_yr - 1):
             msg = (
                 f"PA was designated too recently ({start_yr}) to analyze effectiveness."
@@ -57,5 +65,7 @@ class SiteSelector:
             raise ValueError(msg)
 
     def get_site_geom(self, test_sites, site_id):
-        """Get geometry of a specific PA."""
+        """
+        Get geometry of a specific PA.
+        """
         return test_sites.filter(ee.Filter.eq("SITE_ID", site_id)).geometry()

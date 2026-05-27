@@ -27,7 +27,7 @@ from utils.variables import (
     RAND_SEED,
     CONTROL_INNER_BUFFER,
     CONTROL_OUTER_BUFFER,
-    CONTROL_SAMPLE_SCALE,
+    CONTROL_SPACING,
     CONTROL_N_SAMPLES,
 )
 
@@ -137,7 +137,7 @@ def get_control_cells(
     *,
     output_parquet: str = CONTROL_CELLS,
     n_samples: int = CONTROL_N_SAMPLES,
-    sample_scale_m: int = CONTROL_SAMPLE_SCALE,
+    sample_scale_m: int = CONTROL_SPACING,
     seed: int = RAND_SEED,
     inner_buffer_m: int = CONTROL_INNER_BUFFER,
     outer_buffer_m: int = CONTROL_OUTER_BUFFER,

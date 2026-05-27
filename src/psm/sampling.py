@@ -1,5 +1,5 @@
 """
-Per-tile sample export and task management for global propensity sampling.
+Global covariate sampling, one tile at a time.
 
 Each tile is exported as one CSV to GCS. Task state is persisted to a JSON
 file so the pipeline can resume after crashes or rate-limit pauses.
@@ -16,8 +16,6 @@ State file schema:
   }
 }
 """
-
-from __future__ import annotations
 
 import json
 import time
@@ -55,7 +53,7 @@ def build_sample_export_task(
     """
     Build (but do not start) an EE export task for one tile.
 
-    Uses the same two-stage pattern as the original notebook:
+    Uses a two-stage pattern:
       1. stratifiedSample on the strata band to get pixel locations
       2. sampleRegions on the covariate stack to extract values
 
