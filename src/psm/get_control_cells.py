@@ -81,8 +81,11 @@ def sample_points(
         .byte()
         .paint(donut_pas, 1)
         .rename("protected")
+        .unmask(0)
+        # Dilate protected areas so control cells are at least 10km from any PA
+        .focalMax(radius=10000, kernelType="circle", units="meters")
     )
-    unprotected_mask = protected_img.unmask(0).eq(0).selfMask()
+    unprotected_mask = protected_img.eq(0).selfMask()
 
     # Sample random unprotected points within the donut
     points = (
