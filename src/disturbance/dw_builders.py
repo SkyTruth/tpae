@@ -203,3 +203,36 @@ def _build_post_dw_serverside(year, geometry, dist_month_img, post_window=4):
         post_col = post_col.merge(next_year_col)
 
     return post_col.reduce(ee.Reducer.mode()).rename('label_mode')
+
+
+def build_dw_habitat_raster(year, geometry, anom_lower=30, conf_lower=400, post_window=4):
+    """
+    Binary habitat raster for a given year, disturbance-aware.
+
+    Undisturbed pixels use the annual DW mode; disturbed pixels use the
+    post-disturbance DW mode (falling back to annual mode where no valid
+    disturbance date exists). The result is remapped to 1 (habitat:
+    trees / grass / flooded veg) and selfMasked, so non-habitat pixels
+    are masked out.
+    """
+    dist_mask = build_dist_mask(year, anom_lower, conf_lower)
+
+    yr = int(year)
+    annual_dw = build_dw_mode_composite(
+        f'{yr}-01-01', f'{yr + 1}-01-01', geometry
+    )
+
+    dist_month_img = build_dist_month_image(year, dist_mask)
+    post_dw = _build_post_dw_serverside(year, geometry, dist_month_img, post_window)
+
+    # post_dw only has values at disturbed pixels with a valid disturbance date;
+    # annual_dw fills in everything else (including disturbed pixels without a date)
+    combined = ee.ImageCollection([post_dw, annual_dw]).mosaic()
+
+    return (
+        combined
+        .remap([0, 1, 2, 3, 4, 5, 6, 7, 8],
+               [0, 1, 1, 1, 0, 0, 0, 0, 0])
+        .selfMask()
+        .rename('habitat')
+    )
