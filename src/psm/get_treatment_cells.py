@@ -120,7 +120,6 @@ def get_treatment_cells(test_sites):
         # Warning for PAs with few or 0 valid cells
         if len(cells) < 50 and len(cells) > 0:
             print(f"Warning: WDPA_PID {row['WDPA_PID']}: only {len(cells)} valid cells")
-            continue
         if len(cells) == 0:
             print(f"Warning: WDPA_PID {row['WDPA_PID']}: no valid cells")
             continue

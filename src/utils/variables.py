@@ -286,13 +286,13 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000 # 500 km2
-SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
+SAMPLE_AREA_PCT = 0.03 # sample this percentage of the PA's area
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER = 10000 # minimum distance (m) from PA
-CONTROL_OUTER_BUFFER = 50000 # maximum distance (m) from PA
+CONTROL_OUTER_BUFFER = 75000 # maximum distance (m) from PA
 CONTROL_SPACING = 3000 # minimum distance (m) between control cells
-CONTROL_N_SAMPLES = 100 # number of control cells to sample for each PA
+CONTROL_N_SAMPLES = 2000 # number of control cells to sample for each PA
 
 #------------------------------------------------------------------------------------------------
 # FILE PATHS
@@ -314,9 +314,6 @@ STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
 TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
 # get_control_cells.ipynb
 CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
-# run_relative_effectiveness.ipynb
-MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
-MATCH_TABLE_TEST = REPO_DATA_DIR + "match_table_1543.parquet"
 
 # Archived:
 #----------
