@@ -4,7 +4,25 @@ import pandas as pd
 
 from utils.dist_variables import(FOLDERSET)
 
-def calculate_site_disturbance_rate(year, test_site_id, test_sites):
+def calculate_site_disturbance_rate(year, test_site_id, sites):
+    """
+    Calculate the disturbance rate for a single PA site
+
+    Disturbed pixels = pixels with > 50% disturbance and high confidence
+
+    Parameters
+    ----------
+    year : str
+        Disturbance year ('2023', '2024', or '2025').
+    site_id : int
+        SITE_ID of the target protected area.
+    sites : ee.FeatureCollection
+        Feature collection containing the PA sites (test or full list).
+    
+    Returns
+    -------
+    dist_rate: number of disturbed pixels / total pixels
+    """
     VEGDISTSTATUS = ee.ImageCollection(FOLDERSET[year] + "/VEG-DIST-STATUS").mosaic()
 
     mask_from = [0, 3, 6, 7, 8, 9, 10]
@@ -12,7 +30,7 @@ def calculate_site_disturbance_rate(year, test_site_id, test_sites):
     dist_mask = VEGDISTSTATUS.remap(mask_from, mask_to, 0).eq(1)
     masked_dist = VEGDISTSTATUS.updateMask(dist_mask)
 
-    site = test_sites.filter(ee.Filter.eq("SITE_ID", test_site_id))
+    site = sites.filter(ee.Filter.eq("SITE_ID", test_site_id))
     site_name = site.first().get("NAME").getInfo()
     site_geom = site.geometry()
 
@@ -29,7 +47,22 @@ def calculate_site_disturbance_rate(year, test_site_id, test_sites):
     return dist_rate
 
 
-def calculate_all_sites_disturbance_rate(year, test_sites):
+def calculate_FeatureCollection_disturbance_rate(year, features):
+    """
+    Calculate the disturbance rate for each feature in a Feature Collection
+
+    Disturbed pixels = pixels with > 50% disturbance and high confidence
+    Parameters
+    ----------
+    year : str
+        Disturbance year ('2023', '2024', or '2025').
+    features : ee.FeatureCollection
+        Feature collection containing the PA sites, PSM grid, or other geometries.
+    
+    Returns
+    -------
+    dist_rate: number of disturbed pixels / total pixels
+    """
     VEGDISTSTATUS = ee.ImageCollection(FOLDERSET[year] + "/VEG-DIST-STATUS").mosaic()
 
     mask_from = [0, 3, 6, 7, 8, 9, 10]
@@ -43,7 +76,7 @@ def calculate_all_sites_disturbance_rate(year, test_sites):
     ])
 
     stats = combined.reduceRegions(
-        collection=test_sites,
+        collection=features,
         reducer=ee.Reducer.count(),
         scale=30
     )
@@ -55,8 +88,8 @@ def calculate_all_sites_disturbance_rate(year, test_sites):
 
     stats = stats.map(add_rate)
 
-    features = stats.select(['NAME', 'SITE_ID', 'dist', 'total', 'dist_rate']).getInfo()['features']
+    stat_features = stats.getInfo()['features']
 
-    df = pd.DataFrame([f['properties'] for f in features])
+    df = pd.DataFrame([f['properties'] for f in stat_features])
     df['year'] = year
     return df
