@@ -29,6 +29,7 @@ from utils.variables import (
     CONTROL_OUTER_BUFFER,
     CONTROL_SPACING,
     CONTROL_N_SAMPLES,
+    HGFC_ASSET_ID,
 )
 
 def init_ee(project):
@@ -86,6 +87,14 @@ def sample_points(
         .focalMax(radius=10000, kernelType="circle", units="meters")
     )
     unprotected_mask = protected_img.eq(0).selfMask()
+
+    # Apply land mask
+    land_mask = (
+        ee.Image(HGFC_ASSET_ID)
+        .select("datamask")
+        .eq(1)  # 1 = land, 2 = permanent water/ocean, 0 = no data
+    )
+    unprotected_mask = unprotected_mask.updateMask(land_mask)
 
     # Sample random unprotected points within the donut
     points = (

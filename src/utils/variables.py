@@ -289,8 +289,8 @@ PA_AREA_THRESHOLD = 500000000 # 500 km2
 SAMPLE_AREA_PCT = 0.03 # sample this percentage of the PA's area
 
 # Parameters for control cell sampling
-CONTROL_INNER_BUFFER = 10000 # minimum distance (m) from PA
-CONTROL_OUTER_BUFFER = 75000 # maximum distance (m) from PA
+CONTROL_INNER_BUFFER = 10_000 # minimum distance (m) from PA
+CONTROL_OUTER_BUFFER = 200_000 # maximum distance (m) from PA
 CONTROL_SPACING = 3000 # minimum distance (m) between control cells
 CONTROL_N_SAMPLES = 2000 # number of control cells to sample for each PA
 
