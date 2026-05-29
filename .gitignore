@@ -219,11 +219,11 @@ data/test_sites_TPA_PSM_GRID.parquet
 data/treatment_cells.parquet
 data/control_cells.parquet
 data/exterior_cells_1543.parquet
-data/matched_grids_1543.parquet
 data/exterior_cells_test.parquet
 data/interior_cells_test.parquet
-data/match_table_1543.parquet
 data/psm/psm_tile_state.json
 data/samples_thinned.parquet
+data/matched_grids_*.parquet
+data/match_table_*.parquet
 
 models/*

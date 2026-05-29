@@ -198,6 +198,15 @@ class HabitatConditionAnalyzer:
             .get("intactness")
             .getInfo()
         )
+        # Return 0 if score is invalid
+        if intactness_score is None:
+            return 0
+        try:
+            # Check for NaN or non-numeric results
+            if isinstance(intactness_score, float) and math.isnan(intactness_score):
+                return 0
+        except Exception:
+            return 0
         return intactness_score
 
     def calc_habitat_condition_score(
