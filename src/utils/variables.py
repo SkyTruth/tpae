@@ -302,7 +302,7 @@ REPO_DATA_DIR = "data/"
 # Inputs:
 #----------
 # Geojson of 30 test PAs
-TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
+TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites_cleaned.geojson"
 
 # Outputs:
 #----------

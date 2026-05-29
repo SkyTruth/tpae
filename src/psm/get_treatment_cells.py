@@ -115,13 +115,13 @@ def get_treatment_cells(test_sites):
         else:
             cells = sample_cells(pa_geom, (area/1000000) * SAMPLE_AREA_PCT, RAND_SEED, PSM_CELL_SIZE)
         # Add attributes to cells
-        cells["WDPA_PID"] = row["WDPA_PID"]
+        cells["WDPAID"] = row["WDPAID"]
         cells["protected"] = 1
         # Warning for PAs with few or 0 valid cells
         if len(cells) < 50 and len(cells) > 0:
-            print(f"Warning: WDPA_PID {row['WDPA_PID']}: only {len(cells)} valid cells")
+            print(f"Warning: WDPAID {row['WDPAID']}: only {len(cells)} valid cells")
         if len(cells) == 0:
-            print(f"Warning: WDPA_PID {row['WDPA_PID']}: no valid cells")
+            print(f"Warning: WDPAID {row['WDPAID']}: no valid cells")
             continue
         all_cells.append(cells)
 

@@ -59,7 +59,7 @@ def get_all_pas():
 def sample_points(
     all_pas: ee.FeatureCollection,
     site_geom: ee.Geometry,
-    wdpa_pid: str,
+    wdpaid: str,
     *,
     n_samples: int,
     sample_scale_m: int,
@@ -110,8 +110,8 @@ def sample_points(
         )
     )
 
-    # Set WDPA_PID as a property of each point
-    points = points.map(lambda f: f.set("WDPA_PID", wdpa_pid))
+    # Set WDPAID as a property of each point
+    points = points.map(lambda f: f.set("WDPAID", wdpaid))
     return points.limit(n_samples)
 
 
@@ -130,14 +130,14 @@ def points_to_cells(points_fc):
     half = cell_size / 2.0
 
     cells = []
-    wdpa_pids = []
+    wdpaids = []
     for _, row in points_gdf.iterrows():
         x, y = float(row.geometry.x), float(row.geometry.y)
         cell_geom = box(x - half, y - half, x + half, y + half)
         cells.append(cell_geom)
-        wdpa_pids.append(str(row.get("WDPA_PID")))
+        wdpaids.append(str(row.get("WDPAID")))
 
-    cells_gdf = gpd.GeoDataFrame({"geometry": cells, "WDPA_PID": wdpa_pids}, crs=points_gdf.crs)
+    cells_gdf = gpd.GeoDataFrame({"geometry": cells, "WDPAID": wdpaids}, crs=points_gdf.crs)
     cells_gdf["geometry"] = cells_gdf.geometry.set_precision(1.0)
     cells_gdf = cells_gdf.drop_duplicates(subset="geometry")
     cells_gdf["protected"] = 0
@@ -165,33 +165,33 @@ def get_control_cells(
     pa_count = 0
     total_pas = len(pa_gdf)
     for _, row in pa_gdf.iterrows():
-        wdpa_pid = int(row["WDPAID"])
-        print("Starting PA: ", wdpa_pid)
+        wdpaid = int(row["WDPAID"])
+        print("Starting PA: ", wdpaid)
         
-        pa_geom = all_pas.filter(ee.Filter.eq("SITE_ID", wdpa_pid)).geometry()
+        pa_geom = all_pas.filter(ee.Filter.eq("SITE_ID", wdpaid)).geometry()
         
-        print("Sampling points for PA: ", wdpa_pid)
+        print("Sampling points for PA: ", wdpaid)
         points_fc = sample_points(
             all_pas,
             pa_geom,
-            wdpa_pid,
+            wdpaid,
             n_samples=n_samples,
             sample_scale_m=sample_scale_m,
             seed=seed,
             inner_buffer_m=inner_buffer_m,
             outer_buffer_m=outer_buffer_m,
         )
-        print("Drawing cells for PA: ", wdpa_pid)
+        print("Drawing cells for PA: ", wdpaid)
         cells_gdf = points_to_cells(points_fc)
         
         if len(cells_gdf) == 0:
-            print(f"Warning: WDPA_PID {wdpa_pid}: no control cells")
+            print(f"Warning: WDPAID {wdpaid}: no control cells")
             continue
         
-        print("Appending cells for PA: ", wdpa_pid)
+        print("Appending cells for PA: ", wdpaid)
         all_cells.append(cells_gdf)
         
-        print("Completed PA: ", wdpa_pid)
+        print("Completed PA: ", wdpaid)
         pa_count += 1
         print(f"Progress: {pa_count}/{total_pas} PAs processed")
         print("--------------------------------")
