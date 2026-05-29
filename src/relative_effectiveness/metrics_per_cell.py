@@ -105,7 +105,12 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
             tileScale=self.tile_scale,
         )
 
-        return with_intactness
+        def add_score(feature):
+            intactness = feature.get("intactness_score")
+            intactness_score = ee.Algorithms.If(intactness, ee.Number(intactness), 0)
+            return feature.set("intactness_score", intactness_score)
+
+        return with_intactness.map(add_score)
 
     def calc_condition_score_per_cell(self, fc):
         """Combine per-cell extent and intactness scores into a Condition score."""
