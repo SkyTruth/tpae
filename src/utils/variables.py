@@ -18,6 +18,13 @@ GLO30_ASSET_ID = "COPERNICUS/DEM/GLO30"
 ATC_ASSET_ID = "projects/malariaatlasproject/assets/accessibility/accessibility_to_cities/2015_v1_0"
 POP_ASSET_ID = "JRC/GHSL/P2023A/GHS_POP/2000"
 
+TPAE_ASSET_FOLDER = "projects/skytruth-tech/assets/TPAE/"
+GAEZ_WHEAT_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_wheat"
+GAEZ_RICE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_dryland_rice"
+GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
+GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
+HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
+
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
     555714961,
@@ -276,10 +283,11 @@ CALIPER = 0.2
 N_NEIGHBORS = 4 # number of control cells for every treatment cell
 
 # Parameters for global propensity score model
+COVARIATES = ["elevation", "slope", "treecover2000", "travel_time", "log_pop_density", "human_footprint", "ag_suitability"]
 TOTAL_POINTS = 100000 # total number of samples to collect globally
 TREAT_CONTROL = (1, 2) # ratio of protected to unprotected samples
 MIN_PER_STRATUM = 50 # minimum number of samples per stratum
-PSM_SAMPLES_PREFIX = "psm_samples/" # prefix for PSM samples in GCS bucket
+PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/" # prefix for PSM samples in GCS bucket
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for treatment cell sampling
