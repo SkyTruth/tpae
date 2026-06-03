@@ -9,14 +9,10 @@ from utils.variables import (
     COUNTRIES_ASSET_ID,
     BIOME_ASSET_ID,
     PSM_CELL_SIZE,
+    COVARIATES
 )
 
-REQUIRED_COLS = [
-    "elevation",
-    "slope",
-    "treecover2000",
-    "travel_time",
-    "log_pop_density",
+REQUIRED_COLS = COVARIATES + [
     "country",
     "ecoregion",
     "biome",
@@ -34,11 +30,7 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         )
         .select(
             "cell_ID",
-            "elevation",
-            "slope",
-            "treecover2000",
-            "travel_time",
-            "log_pop_density",
+            *COVARIATES,
             "protected",
         )
     )

@@ -2,8 +2,11 @@
 Propensity score prediction using the saved propensity model.
 
 This model is a logistic regression with biome × covariate interactions.
-Its design matrix has 83 features built in a specific order:
-    [5 standardized covariates, 13 biome dummies, 65 interaction terms]
+The design matrix is structured as:
+    [N standardized covariates, M biome dummies, N × M interaction terms]
+
+where N and M are determined by the saved artifacts. The current 7-covariate
+model with 13 non-reference biomes has 7 + 13 + 91 = 111 features.
 
 This module reconstructs that exact feature ordering for new data and computes
 propensity scores. Getting the column order wrong silently produces meaningless

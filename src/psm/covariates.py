@@ -9,6 +9,11 @@ from utils.variables import (
     ATC_ASSET_ID,
     POP_ASSET_ID,
     HGFC_ASSET_ID,
+    GAEZ_WHEAT_ASSET_ID,
+    GAEZ_RICE_ASSET_ID,
+    GAEZ_MAIZE_ASSET_ID,
+    GAEZ_SOYBEAN_ASSET_ID,
+    HUMAN_FOOTPRINT_ASSET_ID,
 )
 
 
@@ -30,6 +35,17 @@ def build_resampled_covariates(ee_crs_1km):
         .log()
         .rename("log_pop_density")
     )
+    human_footprint = ee.Image(HUMAN_FOOTPRINT_ASSET_ID).rename("human_footprint")
+    
+    wheat = ee.Image(GAEZ_WHEAT_ASSET_ID).rename("wheat")
+    rice = ee.Image(GAEZ_RICE_ASSET_ID).rename("rice")
+    maize = ee.Image(GAEZ_MAIZE_ASSET_ID).rename("maize")
+    soybean = ee.Image(GAEZ_SOYBEAN_ASSET_ID).rename("soybean")
+    
+    ag_suitability = (wheat.addBands([rice, maize, soybean])
+        .reduce(ee.Reducer.max())
+        .rename("ag_suitability")
+        )
 
     def resample(img):
         return (
@@ -43,10 +59,14 @@ def build_resampled_covariates(ee_crs_1km):
     treecover2000 = resample(treecover2000)
     travel_time = resample(travel_time)
     log_pop_density = resample(log_pop_density)
+    human_footprint = resample(human_footprint)
+    ag_suitability = resample(ag_suitability)
 
     return (
         elevation.addBands(slope)
         .addBands(treecover2000)
         .addBands(travel_time)
         .addBands(log_pop_density)
+        .addBands(human_footprint)
+        .addBands(ag_suitability)
     )
