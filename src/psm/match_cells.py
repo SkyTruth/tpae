@@ -18,7 +18,6 @@ def add_propensity_scores(cells_df, models_dir="models"):
     model_files = sorted(Path(models_dir).glob("propensity_model_*.pkl"))
     artifacts = load_propensity_artifacts(model_files[-1])
     print(f"Loaded {model_files[-1].name}")
-    print(f"Training AUC: {artifacts['training_metadata']['auc']:.4f}")
 
     cells_df = cells_df.copy()
     cells_df["propensity_score"] = predict_propensity(cells_df, artifacts)
@@ -26,14 +25,10 @@ def add_propensity_scores(cells_df, models_dir="models"):
     print(f"\nCells: {len(cells_df)}")
     print(f"Treatment (protected=1): {(cells_df['protected'] == 1).sum()}")
     print(f"Control (protected=0): {(cells_df['protected'] == 0).sum()}")
-    print(f"\nPropensity score distribution:")
-    print(cells_df["propensity_score"].describe())
-    print(f"\nFirst 5 rows:")
-    print(
-        cells_df[
-            ["cell_ID", "protected", "biome", "country", "ecoregion", "propensity_score"]
-        ].head()
-    )
+    # print(f"\nPropensity score distribution:")
+    # print(cells_df["propensity_score"].describe())
+    # print(f"\nFirst 5 rows:")
+    print(cells_df.head())
 
     return cells_df
 
