@@ -22,24 +22,16 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
     loss within each cell using a single reduceRegions pass.
     """
 
-    def calc_loss_score_per_cell(self, habitat_loss_raster, habitat_start_raster, fc):
-        """Score Habitat Loss within each cell as `1 - (loss_area / start_area)`.
-
-        Cells with zero start-year habitat get a score of 0, mirroring the
-        absolute pipeline's guard in `calc_habitat_loss_score`.
+    def calc_loss_score_per_cell(self, habitat_loss_raster, fc):
+        """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`.
         """
-        loss_and_start = (
-            ee.Image.pixelArea()
-            .updateMask(habitat_loss_raster)
-            .rename("loss_area")
-            .addBands(
-                ee.Image.pixelArea()
-                .updateMask(habitat_start_raster)
-                .rename("start_area")
-            )
+        cell_area_image = ee.Image.pixelArea().rename("cell_area")
+        loss_area_image = (
+            cell_area_image.updateMask(habitat_loss_raster).rename("loss_area")
         )
+        combined = loss_area_image.addBands(cell_area_image)
 
-        with_areas = loss_and_start.reduceRegions(
+        with_areas = combined.reduceRegions(
             collection=fc,
             reducer=ee.Reducer.sum(),
             scale=self.scale,
@@ -47,14 +39,12 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
         )
 
         def add_score(feature):
-            habitat_loss_area = ee.Number(feature.get("loss_area"))
-            habitat_start_area = ee.Number(feature.get("start_area"))
-            if not habitat_start_area:
-                return feature.set("loss_score", 0)
-            habitat_loss_proportion = habitat_loss_area.divide(habitat_start_area).min(1)
-            return feature.set(
-                "loss_score", ee.Number(1).subtract(habitat_loss_proportion)
+            loss_area = ee.Number(
+                ee.Algorithms.If(feature.get("loss_area"), feature.get("loss_area"), 0)
             )
+            cell_area = ee.Number(feature.get("cell_area"))
+            loss_score = ee.Number(1).subtract(loss_area.divide(cell_area).min(1))
+            return feature.set("loss_score", loss_score)
 
         return with_areas.map(add_score)
 

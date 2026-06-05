@@ -68,7 +68,7 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
 
     cells_list = centroids.getInfo()["features"]
     cells_df = pd.DataFrame([feature["properties"] for feature in cells_list])
-    print(cells_df.head())
+    # print(cells_df.head())
 
     n_before = len(cells_df)
     n_missing_by_col = cells_df[REQUIRED_COLS].isna().sum()
