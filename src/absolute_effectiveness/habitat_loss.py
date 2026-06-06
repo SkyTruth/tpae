@@ -66,7 +66,7 @@ class HabitatLossAnalyzer:
         return self.open_binary_raster(habitat_loss), habitat_start
 
     def calc_overall_habitat_loss(
-        self, habitat_loss_raster, habitat_start_raster, site_geom
+        self, habitat_loss_raster, habitat_start_raster, site_geom, land_mask=None
     ):
         """
         Calculate overall habitat loss metrics and habitat loss score.
@@ -78,7 +78,7 @@ class HabitatLossAnalyzer:
         """
         habitat_loss_area = self.sum_area_km2(site_geom, habitat_loss_raster)
         habitat_start_area = self.sum_area_km2(site_geom, habitat_start_raster)
-        site_area = self.sum_area_km2(site_geom)
+        site_area = self.sum_area_km2(site_geom, land_mask)
 
         if not habitat_start_area:
             return 0, 0, 0, 0, 0, 0

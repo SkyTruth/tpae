@@ -45,7 +45,17 @@ class DataProcessor:
             hgfc_image=ee.Image(HGFC_ASSET_ID),
         )
 
-    def process_glc(self, test_sites, start_yr):
+    def get_land_mask(self):
+        """
+        Land mask from Hansen datamask to exclude oceans and permanent water.
+        1 = land, 2 = permanent water/ocean, 0 = no data.
+        """
+        return self.hgfc_image.select("datamask").eq(1)
+
+    def _apply_land_mask(self, image):
+        return image.updateMask(self.get_land_mask())
+
+    def process_glc(self, test_sites, start_yr, land_masked=True):
         """
         Process Global Land Cover Change data for the analysis period.
         """
@@ -71,9 +81,10 @@ class DataProcessor:
             )
 
         remapped_bands = [remap_classes(band) for band in new_band_names]
-        return ee.Image.cat(remapped_bands)
+        glc = ee.Image.cat(remapped_bands)
+        return self._apply_land_mask(glc) if land_masked else glc
 
-    def process_gpw(self, start_yr):
+    def process_gpw(self, start_yr, land_masked=True):
         """
         Process Global Pasture Watch data for the analysis period.
         """
@@ -82,16 +93,18 @@ class DataProcessor:
             ee.Filter.inList("system:index", year_strings)
         ).toBands()
         gpw_renamed = gpw_filtered.rename([f"GPW_{year}" for year in year_strings])
-        return gpw_renamed.unmask()
+        gpw = gpw_renamed.unmask()
+        return self._apply_land_mask(gpw) if land_masked else gpw
 
-    def process_nfw(self, test_sites):
+    def process_nfw(self, test_sites, land_masked=True):
         """
         Process Natural Forests of the World (2020) data.
         """
         nfw_mosaic = self.nfw_collection.filterBounds(test_sites).mosaic()
-        return nfw_mosaic.gte(self.nfw_threshold)
+        nfw = nfw_mosaic.gte(self.nfw_threshold)
+        return self._apply_land_mask(nfw) if land_masked else nfw
 
-    def process_hgfc(self, start_yr):
+    def process_hgfc(self, start_yr, land_masked=True):
         """
         Process Hansen Global Forest Change data for the analysis period.
         """
@@ -100,4 +113,5 @@ class DataProcessor:
             hgfc_selected.lte(self.analysis_end_yr - 2000)
         )
         hgfc_masked = hgfc_selected.updateMask(analysis_mask)
-        return hgfc_masked.unmask()
+        hgfc = hgfc_masked.unmask()
+        return self._apply_land_mask(hgfc) if land_masked else hgfc
