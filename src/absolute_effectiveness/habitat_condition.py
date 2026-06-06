@@ -89,7 +89,7 @@ class HabitatConditionAnalyzer:
         habitat_mask = non_habitat_mask.eq(0).Or(grassland_override)
         return glc_current.where(grassland_override, 18).updateMask(habitat_mask)
 
-    def calc_habitat_extent_score(self, habitat_raster, site_geom):
+    def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
         """
         Calculate Habitat Extent score for analysis_end_yr within a PA.
         Extent score = habitat area / site area
@@ -108,10 +108,12 @@ class HabitatConditionAnalyzer:
             .get("area")
             .getInfo()
         )
-        # Calculate total PA area
+        # Calculate total PA area (land only when land_mask is provided)
+        site_area_img = ee.Image.pixelArea()
+        if land_mask is not None:
+            site_area_img = site_area_img.updateMask(land_mask)
         site_area = (
-            ee.Image.pixelArea()
-            .reduceRegion(
+            site_area_img.reduceRegion(
                 ee.Reducer.sum(),
                 site_geom,
                 scale=self.scale,
@@ -156,29 +158,35 @@ class HabitatConditionAnalyzer:
         )
         return exp_kernel
 
-    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel):
+    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel, land_mask):
         """
         Create continuous habitat intactness raster.
+
+        Uses a three-class kernel input:
+          1 — habitat pixels
+          0 — anthropogenic / non-habitat on land (penalize adjacent habitat)
+          masked — permanent water and ocean (excluded from kernel entirely)
         """
-        # Get habitat binary
-        habitat_binary = habitat_raster.gt(0).unmask(0).toFloat()
-        # Reproject habitat binary to meters
-        habitat_binary = habitat_binary.reproject(
-            crs=self.crs,
-            scale=self.scale
+        # 1=habitat, 0=anthro on land, null=water (masked out of kernel)
+        habitat_binary = (
+            ee.Image(0)
+            .where(habitat_raster.gt(0), 1)
+            .updateMask(land_mask)
+            .toFloat()
         )
-        # Clip habitat binary to PA
-        habitat_binary_clipped = habitat_binary.clip(
+        habitat_binary_reproj = habitat_binary.reproject(
+            crs=self.crs,
+            scale=self.scale,
+        )
+        habitat_binary_clipped = habitat_binary_reproj.clip(
             site_geom.buffer(self.kernel_radius_meters)
         )
-        # Apply kernel to habitat binary to get intactness raster
+        habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
-            habitat_binary_clipped.convolve(
-                exp_kernel
-            )  # sum the weighted habitat binary values in the kernel
+            habitat_binary_clipped.convolve(exp_kernel)
             .rename("intactness")
-            .updateMask(habitat_binary)
-        )  # only habitat pixels get intactness values
+            .updateMask(habitat_output_mask)
+        )
         return intactness_raster
 
     def calc_intactness_score(self, intactness_raster, site_geom):
