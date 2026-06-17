@@ -225,5 +225,7 @@ data/psm/psm_tile_state.json
 data/samples_thinned.parquet
 data/matched_grids_*.parquet
 data/match_table_*.parquet
+data/mdm/matched_grids_mdm_*.parquet
+data/mdm/match_table_mdm_*.parquet
 
 models/*
