@@ -134,5 +134,5 @@ def filter_matched_grids(grid_fc, match_df):
 def save_matching_outputs(matched_grids, match_df, pa_id, data_dir="data"):
     """Write matched grids and match pairs to parquet."""
     matched_grids_gdf = geemap.ee_to_gdf(matched_grids)
-    matched_grids_gdf.to_parquet(f"{data_dir}/matched_grids_{pa_id}.parquet")
-    match_df.to_parquet(f"{data_dir}/match_table_{pa_id}.parquet", index=False)
+    matched_grids_gdf.to_parquet(f"{data_dir}/mdm/matched_grids_mdm_{pa_id}.parquet")
+    match_df.to_parquet(f"{data_dir}/mdm/match_table_mdm_{pa_id}.parquet", index=False)
