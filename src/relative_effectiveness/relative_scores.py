@@ -21,7 +21,7 @@ __all__ = [
 
 def load_match_table(site_id: int, data_dir: str | Path = "data") -> pd.DataFrame:
     """Load the PSM match table for a site."""
-    path = Path(data_dir) / f"match_table_{site_id}.parquet"
+    path = Path(data_dir) / f"mdm/match_table_mdm_{site_id}.parquet"
     mt = pd.read_parquet(path)
     mt["treat_cell_id"] = mt["treat_cell_id"].astype(int)
     mt["control_cell_id"] = mt["control_cell_id"].astype(int)
