@@ -26,7 +26,7 @@ class DataProcessor:
         gpw_collection,
         nfw_collection,
         hgfc_image,
-        afcd_collection=None,
+        afcd_image=None,
         analysis_end_yr=ANALYSIS_END_YR,
         glc_classes=GLC_CLASSES,
         nfw_threshold=NFW_THRESHOLD,
@@ -37,7 +37,7 @@ class DataProcessor:
         self.hgfc_image = hgfc_image
         # Optional region-specific cropland override (African PAs only).
         # None for the global workflow, which leaves the analysis unchanged.
-        self.afcd_collection = afcd_collection
+        self.afcd_image = afcd_image
         self.analysis_end_yr = analysis_end_yr
         self.glc_classes = glc_classes
         self.nfw_threshold = nfw_threshold
@@ -132,6 +132,18 @@ class DataProcessor:
         nfw = nfw_mosaic.gte(self.nfw_threshold)
         return self._apply_land_mask(nfw) if land_masked else nfw
 
+    def process_hgfc(self, start_yr, land_masked=True):
+        """
+        Process Hansen Global Forest Change data for the analysis period.
+        """
+        hgfc_selected = self.hgfc_image.select("lossyear")
+        analysis_mask = hgfc_selected.gte(start_yr - 2000).And(
+            hgfc_selected.lte(self.analysis_end_yr - 2000)
+        )
+        hgfc_masked = hgfc_selected.updateMask(analysis_mask)
+        hgfc = hgfc_masked.unmask()
+        return self._apply_land_mask(hgfc) if land_masked else hgfc
+
     def process_afcd(self, start_yr, land_masked=True):
         """
         Process African Cropland Dataset (AFCD) data for the analysis
@@ -144,15 +156,3 @@ class DataProcessor:
         afcd_selected = self.afcd_image.select(band_names)
         
         return self._apply_land_mask(afcd_selected) if land_masked else afcd_selected
-
-    def process_hgfc(self, start_yr, land_masked=True):
-        """
-        Process Hansen Global Forest Change data for the analysis period.
-        """
-        hgfc_selected = self.hgfc_image.select("lossyear")
-        analysis_mask = hgfc_selected.gte(start_yr - 2000).And(
-            hgfc_selected.lte(self.analysis_end_yr - 2000)
-        )
-        hgfc_masked = hgfc_selected.updateMask(analysis_mask)
-        hgfc = hgfc_masked.unmask()
-        return self._apply_land_mask(hgfc) if land_masked else hgfc

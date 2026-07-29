@@ -89,6 +89,58 @@ class HabitatConditionAnalyzer:
         habitat_mask = non_habitat_mask.eq(0).Or(grassland_override)
         return glc_current.where(grassland_override, 18).updateMask(habitat_mask)
 
+    def get_habitat_raster_africa(
+        self, glc_processed, hgfc_processed, gpw_processed, nfw_processed, afcd_processed
+    ):
+        """
+        Africa-specific variant of get_habitat_raster for analysis_end_yr.
+
+        Identical to get_habitat_raster except cropland is detected from the
+        African Cropland Dataset (AFCD) rather than from GLC classes 1-4.
+        Built-up land (GLC class 30) is handled separately as built_mask.
+        """
+        # Get GLC raster for analysis_end_yr
+        glc_current = glc_processed.select(f"GLC_{self.analysis_end_yr}")
+        # Mask built-up land (impervious surfaces)
+        built_mask = glc_current.remap(ee.List([30]), ee.List([1]), defaultValue=0)
+        # Mask cropland (AFCD cropland that GLC also classifies as cropland, classes 1-4)
+        glc_cropland = glc_current.gte(1).And(glc_current.lte(4))
+        afcd_current = afcd_processed.select(f"AFCD_{self.analysis_end_yr}")
+        cropland_mask = afcd_current.And(glc_cropland)
+        # Mask areas of forest loss
+        forest_loss_mask = hgfc_processed.gt(0)
+        # Mask areas of pasture
+        gpw_current = gpw_processed.select(f"GPW_{self.analysis_end_yr}")
+        pasture_mask = gpw_current.eq(1)
+        # Mask areas of planted forests
+        # (closed forests that were not classified as natural forest in 2020)
+        closed_forest_classes = ee.List([6, 8, 10, 12, 14])
+        planted_forest_mask = (
+            glc_current.remap(
+                closed_forest_classes,
+                ee.List.repeat(1, closed_forest_classes.size()),
+                defaultValue=0,
+            ).updateMask(nfw_processed.eq(0))
+        ).unmask(0)
+        # Remove natural grasslands from built-up, cropland, and planted forest masks
+        grassland_mask = gpw_current.eq(2)
+        grassland_override = grassland_mask.And(
+            built_mask.add(planted_forest_mask).add(cropland_mask).gt(0)
+        )
+        built_mask = built_mask.where(grassland_override, 0)
+        planted_forest_mask = planted_forest_mask.where(grassland_override, 0)
+        cropland_mask = cropland_mask.where(grassland_override, 0)
+        # Combine masks into a single non-habitat mask
+        non_habitat_mask = (
+            built_mask.add(forest_loss_mask)
+            .add(pasture_mask)
+            .add(planted_forest_mask)
+            .add(cropland_mask)
+        )
+        # Invert non-habitat mask to get habitat extent layer
+        habitat_mask = non_habitat_mask.eq(0).Or(grassland_override)
+        return glc_current.where(grassland_override, 18).updateMask(habitat_mask)
+
     def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
         """
         Calculate Habitat Extent score for analysis_end_yr within a PA.

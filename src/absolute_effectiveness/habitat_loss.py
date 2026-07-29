@@ -47,6 +47,20 @@ class HabitatLossAnalyzer:
             defaultValue=1,
         )
 
+    def get_habitat_start_raster_africa(
+        self, glc_processed, gpw_processed, afcd_processed, start_yr
+    ):
+        """
+        Africa variant of get_habitat_start_raster: cropland is detected from
+        the African Cropland Dataset (AFCD) rather than GLC classes 1-4.
+        """
+        lc_start = self.get_lc_at_year(glc_processed, gpw_processed, start_yr)
+        anthro_start = self._get_anthro_mask_africa(
+            lc_start, afcd_processed, start_yr
+        )
+        # 1 = habitat, 0 = anthropogenic (matches the remap default above)
+        return anthro_start.Not()
+
     def get_habitat_loss_raster(
         self, glc_processed, gpw_processed, hgfc_processed, start_yr
     ):
@@ -61,6 +75,25 @@ class HabitatLossAnalyzer:
             ANTHRO_CLASSES,
             ee.List.repeat(1, ANTHRO_CLASSES.size()),
             defaultValue=0,
+        ).where(hgfc_processed.gt(0), 1)
+        habitat_loss = habitat_start.And(anthro_end)
+        return self.open_binary_raster(habitat_loss), habitat_start
+
+    def get_habitat_loss_raster_africa(
+        self, glc_processed, gpw_processed, hgfc_processed, afcd_processed, start_yr
+    ):
+        """
+        Africa variant of get_habitat_loss_raster: cropland is detected from
+        the African Cropland Dataset (AFCD) rather than GLC classes 1-4.
+        """
+        habitat_start = self.get_habitat_start_raster_africa(
+            glc_processed, gpw_processed, afcd_processed, start_yr
+        )
+        lc_end = self.get_lc_at_year(
+            glc_processed, gpw_processed, self.analysis_end_yr
+        )
+        anthro_end = self._get_anthro_mask_africa(
+            lc_end, afcd_processed, self.analysis_end_yr
         ).where(hgfc_processed.gt(0), 1)
         habitat_loss = habitat_start.And(anthro_end)
         return self.open_binary_raster(habitat_loss), habitat_start
@@ -173,6 +206,31 @@ class HabitatLossAnalyzer:
             .rename("driver_class")
         )
 
+    def get_driver_class_image_africa(
+        self, glc_processed, gpw_processed, afcd_processed, habitat_loss_raster
+    ):
+        """
+        Africa variant of get_driver_class_image: the cropland driver (1) is
+        detected from the African Cropland Dataset (AFCD) rather than GLC
+        classes 1-4.
+            1: Cropland
+            2: Built-up Land
+            3: Pasture
+            4: Deforestation without conversion
+        """
+        lc_end = self.get_lc_at_year(
+            glc_processed, gpw_processed, self.analysis_end_yr
+        )
+        # Built-up (2) and pasture (3) from land cover; all else defaults to
+        # deforestation without conversion (4).
+        driver = lc_end.remap([30, 37], [2, 3], defaultValue=4)
+        # Cropland (1): GLC cropland classes (1-4) confirmed by AFCD.
+        cropland = self._get_cropland_mask_africa(
+            lc_end, afcd_processed, self.analysis_end_yr
+        )
+        driver = driver.where(cropland, 1)
+        return driver.updateMask(habitat_loss_raster).rename("driver_class")
+
     def get_habitat_class_image(self, glc_processed, habitat_loss_raster, start_yr):
         """Create classified image of habitat types that were lost."""
         glc_start = glc_processed.select(f"GLC_{start_yr}")
@@ -234,6 +292,27 @@ class HabitatLossAnalyzer:
         glc = glc_processed.select(f"GLC_{year}")
         gpw = gpw_processed.select(f"GPW_{year}")
         return glc.where(gpw.eq(1), 37)
+
+    def _get_cropland_mask_africa(self, lc, afcd_processed, year):
+        """
+        Cropland detected from AFCD for the given year: GLC cropland classes
+        (1-4) confirmed by the African Cropland Dataset. Mirrors the logic in
+        HabitatConditionAnalyzer.get_habitat_raster_africa.
+        """
+        glc_cropland = lc.gte(1).And(lc.lte(4))
+        afcd_current = afcd_processed.select(f"AFCD_{year}")
+        return afcd_current.And(glc_cropland)
+
+    def _get_anthro_mask_africa(self, lc, afcd_processed, year):
+        """
+        Anthropogenic mask (1 = anthropogenic) using AFCD for cropland
+        detection. Built-up land (30) and pasture (37) are unchanged from the
+        global ANTHRO_CLASSES; only cropland detection differs.
+        """
+        built_up = lc.eq(30)
+        pasture = lc.eq(37)
+        cropland = self._get_cropland_mask_africa(lc, afcd_processed, year)
+        return built_up.Or(pasture).Or(cropland)
 
     def open_binary_raster(self, binary):
         kwargs = {
