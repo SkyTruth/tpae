@@ -294,6 +294,7 @@ TREAT_CONTROL = (1, 2) # ratio of protected to unprotected samples
 MIN_PER_STRATUM = 50 # minimum number of samples per stratum
 PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/" # prefix for PSM samples in GCS bucket
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
+RELATIVE_SCORES_PREFIX = "relative_scores/" # prefix for per-cell relative score exports in GCS bucket
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000 # 500 km2
