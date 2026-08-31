@@ -2,6 +2,12 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import box
+
+from pathlib import Path
+import sys
+_SRC = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SRC))
+
 from utils.variables import (
     WDPA_TEST_SITE_GEOJSON,
     WDPA_TEST_SITE_10M_BUFFER,

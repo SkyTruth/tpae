@@ -216,5 +216,6 @@ data/Ghana_PSM_GRID.parquet
 data/Ghana.geojson
 data/Ghana_PAs.geojson
 data/test_sites_TPA_PSM_GRID.parquet
-notebooks/jgengs.geojson
-notebooks/vrvbgk.geojson
+data/interior_cells_test.parquet
+data/exterior_cells_test.parquet
+data/exterior_cells_1543.parquet
