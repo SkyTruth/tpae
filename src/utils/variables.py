@@ -179,6 +179,42 @@ DRIVER_LABELS = {
     4: "Deforestation without conversion",
 }
 
+# RESOLVE Ecoregions biome palette
+BIOME_PALETTE = [
+    "#38A700",
+    "#CCCD65",
+    "#88CE66",
+    "#00734C",
+    "#458970",
+    "#7AB6F5",
+    "#FEAA01",
+    "#FEFF73",
+    "#BEE7FF",
+    "#D6C39D",
+    "#FFEAAF",
+    "#FE0000",
+    "#CC6767",
+    "#FE01C4",
+]
+
+# RESOLVE Ecoregions biome labels
+BIOME_LABELS = {
+    1: "Tropical & Subtropical Moist Broadleaf Forests",
+    2: "Tropical & Subtropical Dry Broadleaf Forests",
+    3: "Tropical & Subtropical Coniferous Forests",
+    4: "Temperate Broadleaf & Mixed Forests",
+    5: "Temperate Conifer Forests",
+    6: "Boreal Forests/Taiga",
+    7: "Tropical & Subtropical Grasslands, Savannas & Shrublands",
+    8: "Temperate Grasslands, Savannas & Shrublands",
+    9: "Flooded Grasslands & Savannas",
+    10: "Montane Grasslands & Shrublands",
+    11: "N/A",
+    12: "Mediterranean Forests, Woodlands & Scrub",
+    13: "Deserts & Xeric Shrublands",
+    14: "Mangroves",
+}
+
 # Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
