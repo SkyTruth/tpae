@@ -1,3 +1,10 @@
+"""
+Creates a set of treatment cells for each PA.
+Treatment cells are 1km x 1km cells that are fully within the PA's geometry.
+If the PA is small, a grid of all valid interior cells is returned.
+If the PA is large, a random sample of valid interior cells is returned.
+"""
+
 from pathlib import Path
 import sys
 _SRC = Path(__file__).resolve().parent.parent
@@ -8,18 +15,19 @@ import geopandas as gpd
 import numpy as np
 from shapely.geometry import box, Point
 from utils.variables import (
-    WDPA_TEST_SITE_GEOJSON,
-    INTERIOR_CELLS_TEST,
-    PSM_CRS,
+    TEST_SITES_GEOJSON,
+    TREATMENT_CELLS,
+    GPD_CRS_METERS,
+    GPD_CRS_PARQUET,
     PSM_CELL_SIZE,
     RAND_SEED,
     PA_AREA_THRESHOLD,
     SAMPLE_AREA_PCT,
 )
 
-def draw_grid(pa_geom, crs, cell_size):
+def draw_grid(pa_geom, cell_size):
     """
-    Create a grid of all valid interior cells within a PA geometry.
+    Create a grid of all valid treatment cells within a PA geometry.
     Used for small PAs.
     """
     # Draw a grid from the PA's bounding box
@@ -29,7 +37,7 @@ def draw_grid(pa_geom, crs, cell_size):
     ys = np.arange(miny, maxy, cell_size)
 
     cells = [box(x, y, x + cell_size, y + cell_size) for x in xs for y in ys]
-    grid = gpd.GeoDataFrame(geometry=cells, crs=crs)
+    grid = gpd.GeoDataFrame(geometry=cells, crs=GPD_CRS_METERS)
     grid = grid.drop_duplicates(subset="geometry")
 
     # Exclude cells that are not fully within the PA
@@ -48,7 +56,7 @@ def draw_grid(pa_geom, crs, cell_size):
 
 def sample_cells(pa_geom, n_samples, seed, cell_size):
     """
-    Randomly sample valid interior cells within a PA geometry.
+    Randomly sample valid treatment cells within a PA geometry.
     Used for large PAs.
     """
     half = cell_size / 2.0
@@ -79,31 +87,31 @@ def sample_cells(pa_geom, n_samples, seed, cell_size):
             continue
         cells.append(cell)
 
-    cells = gpd.GeoDataFrame({"geometry": cells}, crs=PSM_CRS)
+    cells = gpd.GeoDataFrame({"geometry": cells}, crs=GPD_CRS_METERS)
 
     return cells
 
 
 
-def get_interior_cells(test_sites):
+def get_treatment_cells(test_sites):
     """
-    Iterate through a set of PAs and return a set of valid interior cells for each.
+    Iterate through a set of PAs and return a set of valid treatment cells for each.
     If the PA is less than 500 km2, return a grid of all valid interior cells.
     If the PA is greater than 500 km2, return a random sample of valid interior cells.
     """
     # Read in PAs and convert to 6933
     pa_gdf = gpd.read_file(test_sites)
-    pa_gdf = pa_gdf.to_crs(epsg=PSM_CRS)
+    pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
 
     all_cells = []
 
-    # Iterate through PAs and get a set of valid interior cells for each
+    # Iterate through PAs and get a set of valid treatment cells for each
     for _, row in pa_gdf.iterrows():
         pa_geom = row.geometry
         area = pa_geom.area
         # Apply the appropriate function based on the PA's size
         if area < PA_AREA_THRESHOLD:
-            cells = draw_grid(pa_geom, PSM_CRS, PSM_CELL_SIZE)
+            cells = draw_grid(pa_geom, PSM_CELL_SIZE)
         else:
             cells = sample_cells(pa_geom, (area/1000000) * SAMPLE_AREA_PCT, RAND_SEED, PSM_CELL_SIZE)
         # Add attributes to cells
@@ -118,12 +126,12 @@ def get_interior_cells(test_sites):
             continue
         all_cells.append(cells)
 
-    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=PSM_CRS)
+    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS)
     all_cells = all_cells.drop_duplicates(subset="geometry")
     all_cells["geometry"] = all_cells.geometry.set_precision(1.0)
-    all_cells = all_cells.to_crs(epsg=4326)
-    all_cells.to_parquet(INTERIOR_CELLS_TEST)
+    all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
+    all_cells.to_parquet(TREATMENT_CELLS)
 
 
 if __name__ == "__main__":
-    get_interior_cells(WDPA_TEST_SITE_GEOJSON)
+    get_treatment_cells(TEST_SITES_GEOJSON)

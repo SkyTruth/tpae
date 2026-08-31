@@ -2,7 +2,7 @@ import ee
 import math
 from utils.variables import (
     ANALYSIS_END_YR,
-    CRS,
+    EE_CRS_METERS,
     MAX_PIXELS,
     SCALE,
     INTERACTION_DISTANCE,
@@ -21,7 +21,7 @@ class HabitatConditionAnalyzer:
     def __init__(
         self,
         analysis_end_yr=ANALYSIS_END_YR,
-        crs=CRS,
+        crs=EE_CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
         interaction_distance=INTERACTION_DISTANCE,
@@ -79,7 +79,7 @@ class HabitatConditionAnalyzer:
 
     def calc_habitat_extent_score(self, habitat_raster, site_geom):
         """Calculate Habitat Extent score for analysis_end_yr within a PA."""
-        site_area = site_geom.area().getInfo()
+
         habitat_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_raster)
@@ -93,6 +93,21 @@ class HabitatConditionAnalyzer:
             .get("area")
             .getInfo()
         )
+
+        # Calculate site area in the same projection as habitat area
+        site_area = (
+            ee.Image.pixelArea()
+            .reduceRegion(
+                ee.Reducer.sum(),
+                site_geom,
+                scale=self.scale,
+                crs=self.crs,
+                maxPixels=self.max_pixels,
+            )
+            .get("area")
+            .getInfo()
+        )
+
         return min(habitat_area / site_area, 1)
 
     def build_kernel(self):
@@ -130,6 +145,14 @@ class HabitatConditionAnalyzer:
         """Create continuous habitat intactness raster."""
         # Get habitat binary
         habitat_binary = habitat_raster.gt(0).unmask(0).toFloat()
+
+        # Reproject habitat binary to meters so that kernel is applied correctly
+        # Improves accuracy at higher latitudes, but increases computation time
+        habitat_binary = habitat_binary.reproject(
+            crs=self.crs,
+            scale=self.scale
+        )
+
         habitat_binary_clipped = habitat_binary.clip(
             site_geom.buffer(self.kernel_radius_meters)
         )

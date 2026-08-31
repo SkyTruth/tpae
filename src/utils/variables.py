@@ -2,6 +2,17 @@ import math
 
 PROJECT = "skytruth-tech"
 
+# Earth Engine asset IDs
+PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
+OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
+GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
+HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
+GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
+NFW_ASSET_ID = (
+    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
+)
+COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
+
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
     555714961,
@@ -171,69 +182,9 @@ DRIVER_LABELS = {
 # Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
-# Parameters for reduceRegion raster calculations
-CRS = "EPSG:3857"
-SCALE = 30
-MAX_PIXELS = 1e13
-
-# Parameters for habitat intactness calculations
-INTERACTION_DISTANCE = 500  # meters
-BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
-KERNEL_RADIUS_METERS = (
-    5 * INTERACTION_DISTANCE
-)  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
-INTACTNESS_SCALE = 60  # pixel size in meters
-KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / INTACTNESS_SCALE)
-KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
-TILE_SCALE = 4
-
-# Parameters for habitat loss calculations
-OPENING_RADIUS_LOSS = 30  # meters
-
-# Earth Engine asset IDs
-PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
-OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
-GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
-HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
-GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
-NFW_ASSET_ID = (
-    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
-)
-COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
-
-# Repository Based Filepaths
-REPO_DATA_DIR = "data/"
-
-# General PSM parameters
-PSM_CRS = 6933
-PSM_CELL_SIZE = 1000
-PSM_CONTROL_BUFFER = 10000
-WDPA_TEST_SITE_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
-
-# Variables for psm_grid_creation.py
-WDPA_TEST_SITE_10M_BUFFER = REPO_DATA_DIR + "test_sites_10km_4087.parquet"
-WDPA_TEST_SITE_50M_BUFFER = REPO_DATA_DIR + "test_sites_50km_4087.parquet"
-WDPA_EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4087.parquet"
-WDPA_WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4087.parquet"
-WDPA_1KM_GRID = REPO_DATA_DIR + "test_sites_1km_grid_4087.parquet"
-WDPA_1KM_PSM_GRID = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"
-
-
-# Variables for global_grid_creation.py
-PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
-PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
-PSM_TEST_CELLS = REPO_DATA_DIR + "Ghana_PSM_CELLS.parquet"
-
-# Variables for get_interior_cells.py
-INTERIOR_CELLS_TEST = REPO_DATA_DIR + "interior_cells_test.parquet"
-RAND_SEED = 42
-PA_AREA_THRESHOLD = 500000000 # 500 km2
-SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
-
-# Variables for get_exterior_cells.ipynb
-EXTERIOR_CELLS_TEST = REPO_DATA_DIR + "exterior_cells_test.parquet"
-
-
+# WKT for EPSG:6933 (NSIDC EASE-Grid 2.0 Global projection)
+# Earth Engine is unable to parse "EPSG:6933" directly
+# Equal-area projection used for calculations in meters
 WKT_6933 = """
     PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
         GEOGCS["WGS 84",
@@ -257,3 +208,73 @@ WKT_6933 = """
         AXIS["Northing",NORTH],
         AUTHORITY["EPSG","6933"]]
     """
+
+# Parameters for reduceRegion raster calculations
+EE_CRS_METERS = WKT_6933
+SCALE = 30
+MAX_PIXELS = 1e13
+
+# Parameters for habitat intactness calculations
+INTERACTION_DISTANCE = 500  # meters
+BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
+KERNEL_RADIUS_METERS = (
+    5 * INTERACTION_DISTANCE
+)  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
+INTACTNESS_SCALE = 60  # pixel size in meters
+KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / INTACTNESS_SCALE)
+KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
+TILE_SCALE = 4
+
+# Parameters for habitat loss calculations
+OPENING_RADIUS_LOSS = 30  # meters
+
+# General PSM parameters
+PSM_CELL_SIZE = 1000
+GPD_CRS_PARQUET = "EPSG:4326"
+GPD_CRS_METERS = "EPSG:6933"
+RAND_SEED = 42
+
+# Parameters for treatment cell sampling
+PA_AREA_THRESHOLD = 500000000 # 500 km2
+SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
+
+# Parameters for control cell sampling
+CONTROL_INNER_BUFFER = 10000 # 10km
+CONTROL_OUTER_BUFFER = 50000 # 50km
+CONTROL_SAMPLE_SCALE = 3000 # 3km
+CONTROL_N_SAMPLES = 100
+
+#------------------------------------------------------------------------------------------------
+# FILE PATHS
+#------------------------------------------------------------------------------------------------
+
+# Data directory
+REPO_DATA_DIR = "data/"
+
+# Inputs:
+#----------
+# Geojson of 30 test PAs
+TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
+# Test country boundary
+PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
+# PAs within test country
+PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
+
+# Outputs:
+#----------
+# get_treatment_cells.py
+TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
+# get_control_cells.ipynb
+CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
+# ps_model.ipynb / run_relative_effectiveness.ipynb
+MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
+MATCH_TABLE_TEST = REPO_DATA_DIR + "match_table_1543.parquet"
+# global_grid_creation.py
+PSM_GLOBAL_GRID = REPO_DATA_DIR + "Ghana_global_grid.parquet"
+# psm_grid_creation.py
+BUFFER_10KM = REPO_DATA_DIR + "test_sites_10km_4326.parquet"
+BUFFER_50KM = REPO_DATA_DIR + "test_sites_50km_4326.parquet"
+EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4326.parquet"
+WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4326.parquet"
+GRID_1KM = REPO_DATA_DIR + "test_sites_1km_grid_4326.parquet"
+PSM_GRID_1KM = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"

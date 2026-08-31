@@ -1,3 +1,8 @@
+"""
+Original grid creation script. Creates a grid of all valid 1km x 1km cells fully within a PA
+and fully within the PA's 10-50km buffer zone. Iterates over all 30 test PAs.
+"""
+
 import pandas as pd
 import geopandas as gpd
 import numpy as np
@@ -9,14 +14,15 @@ _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
 from utils.variables import (
-    WDPA_TEST_SITE_GEOJSON,
-    WDPA_TEST_SITE_10M_BUFFER,
-    WDPA_TEST_SITE_50M_BUFFER,
-    WDPA_EXCLUSION_ZONE,
-    WDPA_WIDER_LANDSCAPE,
-    WDPA_1KM_GRID,
-    WDPA_1KM_PSM_GRID,
-    PSM_CRS,
+    TEST_SITES_GEOJSON,
+    BUFFER_10KM,
+    BUFFER_50KM,
+    EXCLUSION_ZONE,
+    WIDER_LANDSCAPE,
+    GRID_1KM,
+    PSM_GRID_1KM,
+    GPD_CRS_METERS,
+    GPD_CRS_PARQUET,
 )
 
 
@@ -38,17 +44,18 @@ def make_grids(geom, crs, cell_size=1000, buffer_dist=5000):
 
 def save_intermediate_gdf(gdf, output_path, save_intermediates):
     if save_intermediates:
+        gdf = gdf.to_crs(GPD_CRS_PARQUET)
         gdf.to_parquet(output_path)
 
 
 def create_psm_cells(save_intermediates: bool = False):
     # Read in test_site file, convert to 4087
-    pa_gdf = gpd.read_file(WDPA_TEST_SITE_GEOJSON)
-    pa_gdf = pa_gdf.to_crs(epsg=PSM_CRS)
+    pa_gdf = gpd.read_file(TEST_SITES_GEOJSON)
+    pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
 
     # Make Copies for Buffering, to maintain attributes
-    pa_gdf_10km_buff = pa_gdf.to_crs(epsg=PSM_CRS).copy()
-    pa_gdf_50km_buff = pa_gdf.to_crs(epsg=PSM_CRS).copy()
+    pa_gdf_10km_buff = pa_gdf.to_crs(GPD_CRS_METERS).copy()
+    pa_gdf_50km_buff = pa_gdf.to_crs(GPD_CRS_METERS).copy()
 
     # Run the Buffers
     pa_gdf_10km_buff["geometry"] = pa_gdf_10km_buff.buffer(distance=10000)
@@ -57,12 +64,12 @@ def create_psm_cells(save_intermediates: bool = False):
     # Save intermediate files, if specified
     save_intermediate_gdf(
         pa_gdf_10km_buff,
-        WDPA_TEST_SITE_10M_BUFFER,
+        BUFFER_10KM,
         save_intermediates,
     )
     save_intermediate_gdf(
         pa_gdf_50km_buff,
-        WDPA_TEST_SITE_50M_BUFFER,
+        BUFFER_50KM,
         save_intermediates,
     )
 
@@ -75,12 +82,12 @@ def create_psm_cells(save_intermediates: bool = False):
     # Save intermediate files, if specified
     save_intermediate_gdf(
         ex_zone,
-        WDPA_EXCLUSION_ZONE,
+        EXCLUSION_ZONE,
         save_intermediates,
     )
     save_intermediate_gdf(
         wider_landscape,
-        WDPA_WIDER_LANDSCAPE,
+        WIDER_LANDSCAPE,
         save_intermediates,
     )
 
@@ -91,20 +98,20 @@ def create_psm_cells(save_intermediates: bool = False):
     for idx, row in poly.iterrows():
         grid = make_grids(
             row.geometry,
-            crs=poly.crs,
+            crs=GPD_CRS_METERS,
             cell_size=1000,  # 1 km cell sizes
             buffer_dist=1000,  # 1 km around each polygon
         )
         grid["WDPA_PID"] = row["WDPA_PID"]  # keep WDPA_PID
         grids.append(grid)
 
-    grid_1km = gpd.GeoDataFrame(pd.concat(grids, ignore_index=True), crs=poly.crs)
+    grid_1km = gpd.GeoDataFrame(pd.concat(grids, ignore_index=True), crs=GPD_CRS_METERS)
     grid_1km = grid_1km.drop_duplicates(subset="geometry")
 
     # Save intermediate file, if specified
     save_intermediate_gdf(
         grid_1km,
-        WDPA_1KM_GRID,
+        GRID_1KM,
         save_intermediates,
     )
 
@@ -134,8 +141,8 @@ def create_psm_cells(save_intermediates: bool = False):
     in_out_grid_1km["geometry"] = in_out_grid_1km.geometry.set_precision(
         1.0
     )  # 1 meter precision
-    in_out_grid_1km = in_out_grid_1km.drop("exclude", axis=1).to_crs(epsg=4326)
-    in_out_grid_1km.to_parquet(WDPA_1KM_PSM_GRID)
+    in_out_grid_1km = in_out_grid_1km.drop("exclude", axis=1).to_crs(GPD_CRS_PARQUET)
+    in_out_grid_1km.to_parquet(PSM_GRID_1KM)
 
 
 if __name__ == "__main__":

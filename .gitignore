@@ -212,10 +212,14 @@ __marimo__/
 archive/**
 
 # Misc
-data/Ghana_PSM_GRID.parquet
+data/Ghana_global_grid.parquet
 data/Ghana.geojson
 data/Ghana_PAs.geojson
 data/test_sites_TPA_PSM_GRID.parquet
-data/interior_cells_test.parquet
-data/exterior_cells_test.parquet
+data/treatment_cells.parquet
+data/control_cells.parquet
 data/exterior_cells_1543.parquet
+data/matched_grids_1543.parquet
+data/exterior_cells_test.parquet
+data/interior_cells_test.parquet
+data/match_table_1543.parquet
