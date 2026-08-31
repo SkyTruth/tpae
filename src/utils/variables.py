@@ -13,6 +13,7 @@ NFW_ASSET_ID = (
     "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
 )
 COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
+BIOME_ASSET_ID = "RESOLVE/ECOREGIONS/2017"
 
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
@@ -270,6 +271,8 @@ PSM_CELL_SIZE = 1000
 GPD_CRS_PARQUET = "EPSG:4326"
 GPD_CRS_METERS = "EPSG:6933"
 RAND_SEED = 42
+CALIPER = 0.2
+N_NEIGHBORS = 4 # number of control cells for every treatment cell
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000 # 500 km2
