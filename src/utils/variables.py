@@ -179,6 +179,7 @@ DRIVER_LABELS = {
     4: "Deforestation without conversion",
 }
 
+# RESOLVE Ecoregions biome palette
 BIOME_PALETTE = [
     "#38A700",
     "#CCCD65",
@@ -196,6 +197,7 @@ BIOME_PALETTE = [
     "#FE01C4",
 ]
 
+# RESOLVE Ecoregions biome labels
 BIOME_LABELS = {
     1: "Tropical & Subtropical Moist Broadleaf Forests",
     2: "Tropical & Subtropical Dry Broadleaf Forests",
