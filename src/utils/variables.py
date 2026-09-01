@@ -1,4 +1,19 @@
+import math
+
 PROJECT = "skytruth-tech"
+GCS_BUCKET = "code_name_capybara"
+
+# Earth Engine asset IDs
+PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
+OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
+GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
+HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
+GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
+NFW_ASSET_ID = (
+    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
+)
+COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
+BIOME_ASSET_ID = "RESOLVE/ECOREGIONS/2017"
 
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
@@ -166,32 +181,140 @@ DRIVER_LABELS = {
     4: "Deforestation without conversion",
 }
 
+# RESOLVE Ecoregions biome palette
+BIOME_PALETTE = [
+    "#38A700",
+    "#CCCD65",
+    "#88CE66",
+    "#00734C",
+    "#458970",
+    "#7AB6F5",
+    "#FEAA01",
+    "#FEFF73",
+    "#BEE7FF",
+    "#D6C39D",
+    "#FFEAAF",
+    "#FE0000",
+    "#CC6767",
+    "#FE01C4",
+]
+
+# RESOLVE Ecoregions biome labels
+BIOME_LABELS = {
+    1: "Tropical & Subtropical Moist Broadleaf Forests",
+    2: "Tropical & Subtropical Dry Broadleaf Forests",
+    3: "Tropical & Subtropical Coniferous Forests",
+    4: "Temperate Broadleaf & Mixed Forests",
+    5: "Temperate Conifer Forests",
+    6: "Boreal Forests/Taiga",
+    7: "Tropical & Subtropical Grasslands, Savannas & Shrublands",
+    8: "Temperate Grasslands, Savannas & Shrublands",
+    9: "Flooded Grasslands & Savannas",
+    10: "Montane Grasslands & Shrublands",
+    11: "N/A",
+    12: "Mediterranean Forests, Woodlands & Scrub",
+    13: "Deserts & Xeric Shrublands",
+    14: "Mangroves",
+}
+
 # Natural Forests of the World probability threshold
 NFW_THRESHOLD = 0.5
 
-# Max edge distance for habitat intactness calculations
-MAX_EDGE_DIST = 500  # meters
-
-# Opening radius for edge distance calculations
-OPENING_RADIUS_EDGE = 30  # meters
-
-# Max patch size for habitat intactness calculations
-MAX_PATCH_SIZE = 50  # square kilometers
-
-# Opening radius for habitat loss calculations
-OPENING_RADIUS_LOSS = 30  # meters
+# WKT for EPSG:6933 (NSIDC EASE-Grid 2.0 Global projection)
+# Earth Engine is unable to parse "EPSG:6933" directly
+# Equal-area projection used for calculations in meters
+WKT_6933 = """
+    PROJCS["WGS 84 / NSIDC EASE-Grid 2.0 Global",
+        GEOGCS["WGS 84",
+            DATUM["WGS_1984",
+                SPHEROID["WGS 84",6378137,298.257223563,
+                    AUTHORITY["EPSG","7030"]],
+                AUTHORITY["EPSG","6326"]],
+            PRIMEM["Greenwich",0,
+                AUTHORITY["EPSG","8901"]],
+            UNIT["degree",0.0174532925199433,
+                AUTHORITY["EPSG","9122"]],
+            AUTHORITY["EPSG","4326"]],
+        PROJECTION["Cylindrical_Equal_Area"],
+        PARAMETER["standard_parallel_1",30],
+        PARAMETER["central_meridian",0],
+        PARAMETER["false_easting",0],
+        PARAMETER["false_northing",0],
+        UNIT["metre",1,
+            AUTHORITY["EPSG","9001"]],
+        AXIS["Easting",EAST],
+        AXIS["Northing",NORTH],
+        AUTHORITY["EPSG","6933"]]
+    """
 
 # Parameters for reduceRegion raster calculations
-CRS = "EPSG:3857"
+EE_CRS_METERS = WKT_6933
 SCALE = 30
 MAX_PIXELS = 1e13
 
-# Earth Engine asset IDs
-PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
-OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
-GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
-HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
-GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
-NFW_ASSET_ID = (
-    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
-)
+# Parameters for habitat intactness calculations
+INTERACTION_DISTANCE = 500  # meters
+BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
+KERNEL_RADIUS_METERS = (
+    5 * INTERACTION_DISTANCE
+)  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
+INTACTNESS_SCALE = 60  # pixel size in meters
+KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / INTACTNESS_SCALE)
+KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
+TILE_SCALE = 4
+
+# Parameters for habitat loss calculations
+OPENING_RADIUS_LOSS = 30  # meters
+
+# General PSM parameters
+PSM_CELL_SIZE = 1000
+GPD_CRS_PARQUET = "EPSG:4326"
+GPD_CRS_METERS = "EPSG:6933"
+RAND_SEED = 42
+CALIPER = 0.2
+N_NEIGHBORS = 4 # number of control cells for every treatment cell
+
+# Parameters for treatment cell sampling
+PA_AREA_THRESHOLD = 500000000 # 500 km2
+SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
+
+# Parameters for control cell sampling
+CONTROL_INNER_BUFFER = 10000 # 10km
+CONTROL_OUTER_BUFFER = 50000 # 50km
+CONTROL_SAMPLE_SCALE = 3000 # 3km
+CONTROL_N_SAMPLES = 100
+
+#------------------------------------------------------------------------------------------------
+# FILE PATHS
+#------------------------------------------------------------------------------------------------
+
+# Data directory
+REPO_DATA_DIR = "data/"
+
+# Inputs:
+#----------
+# Geojson of 30 test PAs
+TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
+# Test country boundary
+PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
+# PAs within test country
+PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
+
+# Outputs:
+#----------
+# get_treatment_cells.py
+TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
+# get_control_cells.ipynb
+CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
+# ps_model.ipynb / run_relative_effectiveness.ipynb
+MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
+MATCH_TABLE_TEST = REPO_DATA_DIR + "match_table_1543.parquet"
+# global_grid_creation.py
+PSM_GLOBAL_GRID = REPO_DATA_DIR + "Ghana_global_grid.parquet"
+# psm_grid_creation.py
+BUFFER_10KM = REPO_DATA_DIR + "test_sites_10km_4326.parquet"
+BUFFER_50KM = REPO_DATA_DIR + "test_sites_50km_4326.parquet"
+EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4326.parquet"
+WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4326.parquet"
+GRID_1KM = REPO_DATA_DIR + "test_sites_1km_grid_4326.parquet"
+PSM_GRID_1KM = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"
