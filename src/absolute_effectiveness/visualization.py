@@ -2,7 +2,9 @@ import ee
 
 
 class VisualizationService:
-    """Builds helper visualization products for map display (not used in analysis)."""
+    """
+    Builds helper visualization products for map display (not used in analysis).
+    """
 
     def __init__(
         self,
@@ -13,7 +15,9 @@ class VisualizationService:
         self.max_cloud_pct = max_cloud_pct
 
     def mask_s2_clouds(self, image):
-        """Mask clouds in a Sentinel-2 image."""
+        """
+        Mask clouds in a Sentinel-2 image.
+        """
         qa = image.select("QA60")
         cloud_bit_mask = 1 << 10
         cirrus_bit_mask = 1 << 11
@@ -25,7 +29,9 @@ class VisualizationService:
         return image.updateMask(mask).divide(10000)
 
     def get_s2_med_composite(self, site_geom, year):
-        """Create median Sentinel-2 composite for a given year and site."""
+        """
+        Create median Sentinel-2 composite for a given year and site.
+        """
         return (
             ee.ImageCollection(self.s2_collection_id)
             .filterBounds(site_geom)

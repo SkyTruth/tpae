@@ -1,19 +1,17 @@
 """
-Sample budget allocation for global propensity sampling.
+Stratified sample allocation for global propensity sampling.
 
-Two-stage allocation:
-  1. Global: how many samples per stratum (protected × biome) globally?
-     Computed once from biome areas + treatment/control ratio.
-  2. Per-tile: given a tile and the global per-stratum budget, how many
-     samples of each stratum should come from this tile? Proportional to
-     the stratum's pixel count within the tile.
-
-Strata convention (matches existing notebook):
+Strata are biome and protection status.
     stratum_id = protected * 20 + biome_num
     where protected in {0, 1} and biome_num in {1, ..., 14}.
-"""
 
-from __future__ import annotations
+Two-stage allocation:
+  1. Global: How many samples per stratum (protected × biome) globally?
+     Equal number of samples for each biome, with a 2:1 ratio of unprotected to protected.
+  2. Per-tile: Given a tile and the global per-stratum allocation, how many
+     samples of each stratum should come from this tile?
+     Proportional to the stratum's area within the tile.
+"""
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,9 +20,6 @@ from pathlib import Path
 import ee
 import pandas as pd
 
-from utils.variables import EE_CRS_METERS
-
-BIOME_FC_ASSET = "RESOLVE/ECOREGIONS/2017"
 N_BIOMES = 14  # RESOLVE biomes 1-14 (terrestrial)
 
 
@@ -34,19 +29,10 @@ def compute_global_allocation(
     min_per_stratum: int = 500,
 ) -> dict[int, int]:
     """
-    Compute global per-stratum sample budget using equal-per-biome allocation.
-
-    Each terrestrial biome receives an equal share of the total budget,
-    split between protected and unprotected pools according to
-    treat_control_ratio. This prioritizes uniform model performance
-    across biomes over global area-proportional representation.
-
-    Rationale: the propensity model will be used to compute relative
-    effectiveness for individual PAs and for cross-biome aggregations.
-    Equal-per-biome allocation produces uniform matching quality across
-    biomes, preventing aggregation bias toward biomes with better-fit
-    models. Area-proportional allocation (as in Li et al. 2024) would
-    optimize for global average effects but degrade small-biome performance.
+    Compute global stratified sample allocation.
+    
+    Equal number of samples for each biome, split between protected and unprotected according to
+    treat_control_ratio. This ensures that the model performs equally well across biomes.
 
     Parameters
     ----------
@@ -55,13 +41,12 @@ def compute_global_allocation(
     treat_control_ratio : tuple[int, int]
         Treatment:control ratio. (1, 2) = 1/3 treatment, 2/3 control.
     min_per_stratum : int
-        Floor on samples per (protected, biome) stratum. With equal-per-
-        biome allocation this floor rarely activates, but kept for safety.
+        Floor on samples per (protected, biome) stratum.
 
     Returns
     -------
     dict[int, int]
-        Mapping stratum_id -> sample count. Sum is approximately total_points.
+        Mapping stratum_id -> sample count.
     """
     treat_frac = treat_control_ratio[0] / sum(treat_control_ratio)
     treatment_budget = int(total_points * treat_frac)
@@ -79,7 +64,7 @@ def compute_global_allocation(
     return allocation
 
 
-def _frequency_histogram_for_tile(
+def frequency_histogram_for_tile(
     tile_id: str,
     tile_geom: ee.Geometry,
     strata_image: ee.Image,
@@ -87,7 +72,8 @@ def _frequency_histogram_for_tile(
     projection: ee.Projection,
 ) -> tuple[str, dict[int, int]]:
     """
-    Per-tile stratum pixel count. Used by compute_tile_allocations.
+    Count pixels per stratum within each tile.
+    Used by compute_tile_pixel_counts.
     """
     hist = strata_image.reduceRegion(
         reducer=ee.Reducer.frequencyHistogram(),
@@ -112,9 +98,7 @@ def compute_tile_pixel_counts(
 ) -> dict[str, dict[int, int]]:
     """
     Count pixels per stratum within each tile.
-
-    Parallelized with a thread pool — each task is an independent EE
-    request, so threading helps despite the GIL.
+    Parallelized with a thread pool.
 
     Parameters
     ----------
@@ -123,12 +107,11 @@ def compute_tile_pixel_counts(
     strata_image : ee.Image
         Single-band image where each pixel value is stratum_id.
     scale : int
-        Sampling scale (typically PSM_CELL_SIZE = 1000 m).
+        Sampling scale.
     projection : ee.Projection
-        EPSG:6933 at the target scale.
+        Projection of the strata image.
     max_workers : int
-        Concurrent EE requests. EE's interactive quota typically allows
-        ~20-40 concurrent getInfo calls; 10 is conservative.
+        Number of concurrent EE requests.
 
     Returns
     -------
@@ -139,7 +122,7 @@ def compute_tile_pixel_counts(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(
-                _frequency_histogram_for_tile,
+                frequency_histogram_for_tile,
                 tile_id,
                 geom,
                 strata_image,
@@ -161,7 +144,7 @@ def compute_tile_allocations(
     min_tile_stratum: int = 1,
 ) -> dict[str, dict[int, int]]:
     """
-    Distribute the global per-stratum budget across tiles.
+    Distribute the global sample allocation across tiles.
 
     For each stratum, each tile receives a share proportional to the
     stratum's pixel count in that tile. Sum across tiles equals the
@@ -245,16 +228,4 @@ def validate_allocation(
         print(f"WARNING: {len(bad)} strata deviate from global budget by >{tolerance:.1%}")
         print(bad)
     return df
-
-
-def save_allocation(allocation: dict, path: str | Path) -> None:
-    """Persist allocation dict to JSON for reproducibility / caching."""
-    # JSON keys must be strings
-    serializable = {str(k): v for k, v in allocation.items()}
-    Path(path).write_text(json.dumps(serializable, indent=2))
-
-
-def load_allocation(path: str | Path) -> dict:
-    """Load allocation dict from JSON, casting keys back to int."""
-    raw = json.loads(Path(path).read_text())
-    return {int(k): v for k, v in raw.items()}
+    

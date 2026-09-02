@@ -16,7 +16,9 @@ from utils.variables import (
 
 
 class HabitatConditionAnalyzer:
-    """Computes habitat extent, intactness, and overall condition metrics."""
+    """
+    Computes habitat extent, intactness, and overall condition metrics.
+    """
 
     def __init__(
         self,
@@ -47,15 +49,23 @@ class HabitatConditionAnalyzer:
     def get_habitat_raster(
         self, glc_processed, hgfc_processed, gpw_processed, nfw_processed
     ):
-        """Create habitat extent raster for analysis_end_yr."""
+        """
+        Create habitat extent raster for analysis_end_yr.
+        """
+        # Get GLC raster for analysis_end_yr
         glc_current = glc_processed.select(f"GLC_{self.analysis_end_yr}")
+        # Mask anthropogenic land covers
         anthro_classes = ee.List([1, 2, 3, 4, 30])
         anthro_mask = glc_current.remap(
             anthro_classes, ee.List.repeat(1, anthro_classes.size()), defaultValue=0
         )
+        # Mask areas of forest loss
         forest_loss_mask = hgfc_processed.gt(0)
+        # Mask areas of pasture
         gpw_current = gpw_processed.select(f"GPW_{self.analysis_end_yr}")
         pasture_mask = gpw_current.eq(1)
+        # Mask areas of planted forests
+        # (closed forests that were not classified as natural forest in 2020)
         closed_forest_classes = ee.List([6, 8, 10, 12, 14])
         planted_forest_mask = (
             glc_current.remap(
@@ -64,22 +74,27 @@ class HabitatConditionAnalyzer:
                 defaultValue=0,
             ).updateMask(nfw_processed.eq(0))
         ).unmask(0)
+        # Remove natural grasslands from anthro and planted forest masks
         grassland_mask = gpw_current.eq(2)
         grassland_override = grassland_mask.And(
             anthro_mask.add(planted_forest_mask).gt(0)
         )
         anthro_mask = anthro_mask.where(grassland_override, 0)
         planted_forest_mask = planted_forest_mask.where(grassland_override, 0)
-
+        # Combine masks into a single non-habitat mask
         non_habitat_mask = (
             anthro_mask.add(forest_loss_mask).add(pasture_mask).add(planted_forest_mask)
         )
+        # Invert non-habitat mask to get habitat extent layer
         habitat_mask = non_habitat_mask.eq(0).Or(grassland_override)
         return glc_current.where(grassland_override, 18).updateMask(habitat_mask)
 
-    def calc_habitat_extent_score(self, habitat_raster, site_geom):
-        """Calculate Habitat Extent score for analysis_end_yr within a PA."""
-
+    def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
+        """
+        Calculate Habitat Extent score for analysis_end_yr within a PA.
+        Extent score = habitat area / site area
+        """
+        # Calculate area of habitat within PA
         habitat_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_raster)
@@ -93,11 +108,12 @@ class HabitatConditionAnalyzer:
             .get("area")
             .getInfo()
         )
-
-        # Calculate site area in the same projection as habitat area
+        # Calculate total PA area (land only when land_mask is provided)
+        site_area_img = ee.Image.pixelArea()
+        if land_mask is not None:
+            site_area_img = site_area_img.updateMask(land_mask)
         site_area = (
-            ee.Image.pixelArea()
-            .reduceRegion(
+            site_area_img.reduceRegion(
                 ee.Reducer.sum(),
                 site_geom,
                 scale=self.scale,
@@ -111,7 +127,9 @@ class HabitatConditionAnalyzer:
         return min(habitat_area / site_area, 1)
 
     def build_kernel(self):
-        """Build an exponentially decaying distance-weighted kernel for calculating habitat intactness."""
+        """
+        Build an exponentially decaying distance-weighted kernel for calculating habitat intactness.
+        """
         # Create 2-D array of weights for kernel
         weights = []
         for row in range(self.kernel_size):
@@ -131,8 +149,7 @@ class HabitatConditionAnalyzer:
                 )  # apply exponential decay and clip to kernel radius
                 row_weights.append(w)
             weights.append(row_weights)
-
-        # Build custom kernel with weights
+        # Build custom kernel using weights
         exp_kernel = ee.Kernel.fixed(
             width=self.kernel_size,
             height=self.kernel_size,
@@ -141,33 +158,42 @@ class HabitatConditionAnalyzer:
         )
         return exp_kernel
 
-    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel):
-        """Create continuous habitat intactness raster."""
-        # Get habitat binary
-        habitat_binary = habitat_raster.gt(0).unmask(0).toFloat()
+    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel, land_mask):
+        """
+        Create continuous habitat intactness raster.
 
-        # Reproject habitat binary to meters so that kernel is applied correctly
-        # Improves accuracy at higher latitudes, but increases computation time
-        habitat_binary = habitat_binary.reproject(
-            crs=self.crs,
-            scale=self.scale
+        Uses a three-class kernel input:
+          1 — habitat pixels
+          0 — anthropogenic / non-habitat on land (penalize adjacent habitat)
+          masked — permanent water and ocean (excluded from kernel entirely)
+        """
+        # 1=habitat, 0=anthro on land, null=water (masked out of kernel)
+        habitat_binary = (
+            ee.Image(0)
+            .where(habitat_raster.gt(0), 1)
+            .updateMask(land_mask)
+            .toFloat()
         )
-
-        habitat_binary_clipped = habitat_binary.clip(
+        habitat_binary_reproj = habitat_binary.reproject(
+            crs=self.crs,
+            scale=self.scale,
+        )
+        habitat_binary_clipped = habitat_binary_reproj.clip(
             site_geom.buffer(self.kernel_radius_meters)
         )
-        # Apply kernel to habitat binary to get intactness raster
+        habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
-            habitat_binary_clipped.convolve(
-                exp_kernel
-            )  # sum the weighted habitat binary values in the kernel
+            habitat_binary_clipped.convolve(exp_kernel)
             .rename("intactness")
-            .updateMask(habitat_binary)
-        )  # only habitat pixels get intactness values
+            .updateMask(habitat_output_mask)
+        )
         return intactness_raster
 
     def calc_intactness_score(self, intactness_raster, site_geom):
-        """Calculate Habitat Intactness score within a PA from intactness raster."""
+        """
+        Calculate Habitat Intactness score within a PA from intactness raster.
+        """
+        # Calculate average intactness of habitat pixels within PA
         intactness_score = (
             intactness_raster.reduceRegion(
                 ee.Reducer.mean(),
@@ -180,10 +206,22 @@ class HabitatConditionAnalyzer:
             .get("intactness")
             .getInfo()
         )
+        # Return 0 if score is invalid
+        if intactness_score is None:
+            return 0
+        try:
+            # Check for NaN or non-numeric results
+            if isinstance(intactness_score, float) and math.isnan(intactness_score):
+                return 0
+        except Exception:
+            return 0
         return intactness_score
 
     def calc_habitat_condition_score(
         self, habitat_extent_score, habitat_intactness_score
     ):
-        """Calculate overall Habitat Condition score."""
+        """
+        Calculate overall Habitat Condition score.
+        Condition score = Extent score * Intactness score
+        """
         return habitat_extent_score * habitat_intactness_score

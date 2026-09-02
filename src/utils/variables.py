@@ -7,13 +7,23 @@ GCS_BUCKET = "code_name_capybara"
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
 OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
 GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
-HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2024_v1_12"
+HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2025_v1_13"
 GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
 NFW_ASSET_ID = (
     "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
 )
 COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
 BIOME_ASSET_ID = "RESOLVE/ECOREGIONS/2017"
+GLO30_ASSET_ID = "COPERNICUS/DEM/GLO30"
+ATC_ASSET_ID = "projects/malariaatlasproject/assets/accessibility/accessibility_to_cities/2015_v1_0"
+POP_ASSET_ID = "JRC/GHSL/P2023A/GHS_POP/2000"
+
+TPAE_ASSET_FOLDER = "projects/skytruth-tech/assets/TPAE/"
+GAEZ_WHEAT_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_wheat"
+GAEZ_RICE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_dryland_rice"
+GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
+GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
+HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
 
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
@@ -274,15 +284,23 @@ RAND_SEED = 42
 CALIPER = 0.2
 N_NEIGHBORS = 4 # number of control cells for every treatment cell
 
+# Parameters for global propensity score model
+COVARIATES = ["elevation", "slope", "treecover2000", "travel_time", "log_pop_density", "human_footprint", "ag_suitability"]
+TOTAL_POINTS = 100000 # total number of samples to collect globally
+TREAT_CONTROL = (1, 2) # ratio of protected to unprotected samples
+MIN_PER_STRATUM = 50 # minimum number of samples per stratum
+PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/" # prefix for PSM samples in GCS bucket
+STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
+
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000 # 500 km2
-SAMPLE_AREA_PCT = 0.1 # sample this percentage of the PA's area
+SAMPLE_AREA_PCT = 0.03 # sample this percentage of the PA's area
 
 # Parameters for control cell sampling
-CONTROL_INNER_BUFFER = 10000 # 10km
-CONTROL_OUTER_BUFFER = 50000 # 50km
-CONTROL_SAMPLE_SCALE = 3000 # 3km
-CONTROL_N_SAMPLES = 100
+CONTROL_INNER_BUFFER = 10_000 # minimum distance (m) from PA
+CONTROL_OUTER_BUFFER = 200_000 # maximum distance (m) from PA
+CONTROL_SPACING = 3000 # minimum distance (m) between control cells
+CONTROL_N_SAMPLES = 2000 # number of control cells to sample for each PA
 
 #------------------------------------------------------------------------------------------------
 # FILE PATHS
@@ -294,23 +312,23 @@ REPO_DATA_DIR = "data/"
 # Inputs:
 #----------
 # Geojson of 30 test PAs
-TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites.geojson"
-# Test country boundary
-PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
-# PAs within test country
-PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
+TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites_cleaned.geojson"
 
 # Outputs:
 #----------
+# global_psm.ipynb
+STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
 # get_treatment_cells.py
 TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
 # get_control_cells.ipynb
 CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
-# ps_model.ipynb / run_relative_effectiveness.ipynb
-MATCHED_GRIDS_TEST = REPO_DATA_DIR + "matched_grids_1543.parquet"
-MATCH_TABLE_TEST = REPO_DATA_DIR + "match_table_1543.parquet"
+
+# Archived:
+#----------
 # global_grid_creation.py
 PSM_GLOBAL_GRID = REPO_DATA_DIR + "Ghana_global_grid.parquet"
+PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
+PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
 # psm_grid_creation.py
 BUFFER_10KM = REPO_DATA_DIR + "test_sites_10km_4326.parquet"
 BUFFER_50KM = REPO_DATA_DIR + "test_sites_50km_4326.parquet"

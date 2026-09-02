@@ -1,19 +1,13 @@
 """
-Tile grid construction for global propensity sampling.
+Divides the globe into tiles for efficient global propensity sampling.
 
 Builds a regular lon/lat grid covering the globe and filters to tiles
 that intersect land. Each tile is identified by integer (i, j) indices
 where i increments eastward from -180° and j increments northward from -90°.
 """
 
-from __future__ import annotations
-
 import ee
-
-
-# Hansen datamask: 1 = land, 2 = permanent water, 0 = no data.
-# Using v1.13 (latest as of writing).
-HANSEN_ASSET = "UMD/hansen/global_forest_change_2025_v1_13"
+from utils.variables import HGFC_ASSET_ID
 
 
 def build_tile_grid(
@@ -22,10 +16,7 @@ def build_tile_grid(
     lat_min: float = -60.0,
 ) -> dict[str, ee.Geometry]:
     """
-    Build a regular lon/lat grid.
-
-    Excludes Antarctica (below -60°) and the high Arctic above 84° where
-    Hansen data ends. Tile keys are 'i_j' strings for stable identifiers.
+    Build a regular lon/lat grid covering the globe.
 
     Parameters
     ----------
@@ -33,7 +24,7 @@ def build_tile_grid(
         Tile edge length in degrees. Default 20° gives ~160 candidate tiles
         before land filtering.
     lat_max, lat_min : float
-        Latitude bounds. Hansen datamask is undefined above ~84° N.
+        Latitude bounds. Antarctica (below -60°) and the high Arctic (above 84°) are excluded.
 
     Returns
     -------
@@ -88,14 +79,9 @@ def filter_tiles_to_land(
     -------
     dict[str, ee.Geometry]
         Subset of input tiles that contain land.
-
-    Notes
-    -----
-    This makes one getInfo() per tile sequentially. For ~160 tiles this
-    is ~2-3 minutes. Could be parallelized with concurrent.futures but
-    it's a one-time setup cost, so simplicity wins.
     """
-    is_land = ee.Image(HANSEN_ASSET).select("datamask").eq(1)
+    # Hansen datamask: 1 = land, 2 = permanent water, 0 = no data.
+    is_land = ee.Image(HGFC_ASSET_ID).select("datamask").eq(1)
 
     kept: dict[str, ee.Geometry] = {}
     for tile_id, geom in tiles.items():

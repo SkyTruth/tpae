@@ -11,7 +11,9 @@ from utils.variables import (
 
 
 class DataProcessor:
-    """Processor for core source datasets used in the analysis."""
+    """
+    Imports and pre-processes core source datasets used in the analysis.
+    """
 
     def __init__(
         self,
@@ -33,7 +35,9 @@ class DataProcessor:
 
     @classmethod
     def from_gee_defaults(cls):
-        """Build a processor wired to Earth Engine assets from utils.variables."""
+        """
+        Use Earth Engine asset IDs from utils.variables.
+        """
         return cls(
             glc_collection=ee.ImageCollection(GLC_ASSET_ID),
             gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
@@ -41,15 +45,31 @@ class DataProcessor:
             hgfc_image=ee.Image(HGFC_ASSET_ID),
         )
 
-    def process_glc(self, test_sites, start_yr):
-        """Process Global Land Cover Change data for the analysis period."""
+    def get_land_mask(self):
+        """
+        Land mask from Hansen datamask to exclude oceans and permanent water.
+        1 = land, 2 = permanent water/ocean, 0 = no data.
+        """
+        return self.hgfc_image.select("datamask").eq(1)
+
+    def _apply_land_mask(self, image):
+        return image.updateMask(self.get_land_mask())
+
+    def process_glc(self, test_sites, start_yr, land_masked=True):
+        """
+        Process Global Land Cover Change data for the analysis period.
+        """
         glc_mosaic = self.glc_collection.filterBounds(test_sites).mosaic()
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
+        # Rename bands for clarity
         band_names = [f"b{year - 2000 + 1}" for year in analysis_years]
         new_band_names = [f"GLC_{year}" for year in analysis_years]
         glc_selected = glc_mosaic.select(band_names, new_band_names)
 
         def remap_classes(band):
+            """
+            Remap GLC classes to 1-36.
+            """
             return (
                 glc_selected.select(band)
                 .remap(
@@ -61,27 +81,37 @@ class DataProcessor:
             )
 
         remapped_bands = [remap_classes(band) for band in new_band_names]
-        return ee.Image.cat(remapped_bands)
+        glc = ee.Image.cat(remapped_bands)
+        return self._apply_land_mask(glc) if land_masked else glc
 
-    def process_gpw(self, start_yr):
-        """Process Global Pasture Watch data for the analysis period."""
+    def process_gpw(self, start_yr, land_masked=True):
+        """
+        Process Global Pasture Watch data for the analysis period.
+        """
         year_strings = [str(year) for year in range(start_yr, self.analysis_end_yr + 1)]
         gpw_filtered = self.gpw_collection.filter(
             ee.Filter.inList("system:index", year_strings)
         ).toBands()
         gpw_renamed = gpw_filtered.rename([f"GPW_{year}" for year in year_strings])
-        return gpw_renamed.unmask()
+        gpw = gpw_renamed.unmask()
+        return self._apply_land_mask(gpw) if land_masked else gpw
 
-    def process_nfw(self, test_sites):
-        """Process Natural Forests of the World (2020) data."""
+    def process_nfw(self, test_sites, land_masked=True):
+        """
+        Process Natural Forests of the World (2020) data.
+        """
         nfw_mosaic = self.nfw_collection.filterBounds(test_sites).mosaic()
-        return nfw_mosaic.gte(self.nfw_threshold)
+        nfw = nfw_mosaic.gte(self.nfw_threshold)
+        return self._apply_land_mask(nfw) if land_masked else nfw
 
-    def process_hgfc(self, start_yr):
-        """Process Hansen Global Forest Change data for the analysis period."""
+    def process_hgfc(self, start_yr, land_masked=True):
+        """
+        Process Hansen Global Forest Change data for the analysis period.
+        """
         hgfc_selected = self.hgfc_image.select("lossyear")
         analysis_mask = hgfc_selected.gte(start_yr - 2000).And(
             hgfc_selected.lte(self.analysis_end_yr - 2000)
         )
         hgfc_masked = hgfc_selected.updateMask(analysis_mask)
-        return hgfc_masked.unmask()
+        hgfc = hgfc_masked.unmask()
+        return self._apply_land_mask(hgfc) if land_masked else hgfc
