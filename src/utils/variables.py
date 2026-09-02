@@ -1,7 +1,7 @@
 import math
 
 PROJECT = "skytruth-tech"
-GCS_BUCKET = "tpae"
+GCS_BUCKET = "code_name_capybara"
 
 # Earth Engine asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
@@ -196,6 +196,7 @@ DRIVER_LABELS = {
     4: "Deforestation without conversion",
 }
 
+# RESOLVE Ecoregions biome palette
 BIOME_PALETTE = [
     "#38A700",
     "#CCCD65",
@@ -213,6 +214,7 @@ BIOME_PALETTE = [
     "#FE01C4",
 ]
 
+# RESOLVE Ecoregions biome labels
 BIOME_LABELS = {
     1: "Tropical & Subtropical Moist Broadleaf Forests",
     2: "Tropical & Subtropical Dry Broadleaf Forests",
@@ -284,8 +286,8 @@ PSM_CELL_SIZE = 1000
 GPD_CRS_PARQUET = "EPSG:4326"
 GPD_CRS_METERS = "EPSG:6933"
 RAND_SEED = 42
-CALIPER = 0.2
-N_NEIGHBORS = 4 # number of control cells for every treatment cell
+CALIPER_PSM = 0.2
+N_NEIGHBORS_PSM = 4 # number of control cells for every treatment cell
 
 # Parameters for global propensity score model
 COVARIATES = ["elevation", "slope", "treecover2000", "travel_time", "log_pop_density", "human_footprint", "ag_suitability"]
@@ -295,6 +297,10 @@ MIN_PER_STRATUM = 50 # minimum number of samples per stratum
 PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/" # prefix for PSM samples in GCS bucket
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 RELATIVE_SCORES_PREFIX = "relative_scores/" # prefix for per-cell relative score exports in GCS bucket
+
+# Parameters for MDM
+CALIPER_MDM = 3.0
+N_NEIGHBORS_MDM = 4 # number of control cells for every treatment cell
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000 # 500 km2
