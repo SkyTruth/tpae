@@ -215,3 +215,4 @@ archive/**
 data/*
 notebooks/data/*
 models/*
+results/*

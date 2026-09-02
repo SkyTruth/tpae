@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 
 from psm.predict import load_propensity_artifacts, predict_propensity
-from utils.variables import CALIPER, N_NEIGHBORS
+from utils.variables import CALIPER_PSM, N_NEIGHBORS_PSM
 
 
 def add_propensity_scores(cells_df, models_dir="models"):
@@ -70,7 +70,7 @@ def match_treatment_control(cells_df):
             )
             continue
 
-        n_neighbors = min(N_NEIGHBORS, len(control_sub))
+        n_neighbors = min(N_NEIGHBORS_PSM, len(control_sub))
         nn = NearestNeighbors(n_neighbors=n_neighbors, metric="euclidean")
         nn.fit(control_sub[["propensity_score"]].values)
 
@@ -78,7 +78,7 @@ def match_treatment_control(cells_df):
 
         for i, treat_row in enumerate(treat_sub.itertuples()):
             for rank, (dist, j) in enumerate(zip(distances[i], indices[i]), start=1):
-                if dist <= CALIPER:
+                if dist <= CALIPER_PSM:
                     control_row = control_sub.iloc[j]
                     matches.append(
                         {
@@ -131,8 +131,8 @@ def filter_matched_grids(grid_fc, match_df):
     return grid_fc.filter(ee.Filter.inList("cell_ID", valid_ids))
 
 
-def save_matching_outputs(matched_grids, match_df, pa_id, data_dir="data"):
+def save_matching_outputs(matched_grids, match_df, pa_id, match_method: str = "mdm", data_dir="data"):
     """Write matched grids and match pairs to parquet."""
     matched_grids_gdf = geemap.ee_to_gdf(matched_grids)
-    matched_grids_gdf.to_parquet(f"{data_dir}/matched_grids_{pa_id}.parquet")
-    match_df.to_parquet(f"{data_dir}/match_table_{pa_id}.parquet", index=False)
+    matched_grids_gdf.to_parquet(f"{data_dir}/{match_method}/matched_grids_{match_method}_{pa_id}.parquet")
+    match_df.to_parquet(f"{data_dir}/{match_method}/match_table_{match_method}_{pa_id}.parquet", index=False)
