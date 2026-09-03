@@ -24,6 +24,11 @@ GAEZ_RICE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_dryland_rice"
 GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
 GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
 HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
+AFCD_2018_ASSET_ID = TPAE_ASSET_FOLDER + "AFCD_2018"
+AFCD_2019_ASSET_ID = TPAE_ASSET_FOLDER + "AFCD_2019"
+AFCD_2020_ASSET_ID = TPAE_ASSET_FOLDER + "AFCD_2020"
+AFCD_2021_ASSET_ID = TPAE_ASSET_FOLDER + "AFCD_2021"
+AFCD_2022_ASSET_ID = TPAE_ASSET_FOLDER + "AFCD_2022"
 
 # WDPAID numbers of selected test PAs and OECMs
 TEST_SITE_IDS = [
@@ -291,6 +296,7 @@ TREAT_CONTROL = (1, 2) # ratio of protected to unprotected samples
 MIN_PER_STRATUM = 50 # minimum number of samples per stratum
 PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/" # prefix for PSM samples in GCS bucket
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
+RELATIVE_SCORES_PREFIX = "relative_scores/" # prefix for per-cell relative score exports in GCS bucket
 
 # Parameters for MDM
 CALIPER_MDM = 3.0
