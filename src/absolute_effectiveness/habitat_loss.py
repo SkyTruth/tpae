@@ -54,9 +54,7 @@ class HabitatLossAnalyzer:
         habitat_start = self.get_habitat_start_raster(
             glc_processed, gpw_processed, start_yr
         )
-        lc_end = self.get_lc_at_year(
-            glc_processed, gpw_processed, self.analysis_end_yr
-        )
+        lc_end = self.get_lc_at_year(glc_processed, gpw_processed, self.analysis_end_yr)
         anthro_end = lc_end.remap(
             ANTHRO_CLASSES,
             ee.List.repeat(1, ANTHRO_CLASSES.size()),
@@ -115,7 +113,10 @@ class HabitatLossAnalyzer:
             return (
                 ee.Dictionary()
                 .set(key, value)
-                .set(base.cat("_pct_site"), ee.Number(value).divide(site_area).multiply(100))
+                .set(
+                    base.cat("_pct_site"),
+                    ee.Number(value).divide(site_area).multiply(100),
+                )
                 .set(
                     base.cat("_pct_start"),
                     ee.Number(value).divide(habitat_start_area).multiply(100),
@@ -152,7 +153,9 @@ class HabitatLossAnalyzer:
                 ee.Number(value).divide(start_area).multiply(100),
                 0,
             )
-            return ee.Dictionary().set(key, value).set(base.cat("_pct_class"), pct_class)
+            return (
+                ee.Dictionary().set(key, value).set(base.cat("_pct_class"), pct_class)
+            )
 
         return self.flatten_dict(class_dict.map(add_metrics)).getInfo()
 
@@ -164,9 +167,7 @@ class HabitatLossAnalyzer:
             3: Pasture
             4: Deforestation without conversion
         """
-        lc_end = self.get_lc_at_year(
-            glc_processed, gpw_processed, self.analysis_end_yr
-        )
+        lc_end = self.get_lc_at_year(glc_processed, gpw_processed, self.analysis_end_yr)
         return (
             lc_end.updateMask(habitat_loss_raster)
             .remap([1, 2, 3, 4, 30, 37], [1, 1, 1, 1, 2, 3], defaultValue=4)
@@ -288,9 +289,7 @@ class HabitatLossAnalyzer:
 
     def top_class_areas(self, class_image, site_geom, top_n):
         areas = self.calc_class_area_dict(class_image, site_geom)
-        top = areas.select(
-            areas.keys().sort(areas.values()).reverse().slice(0, top_n)
-        )
+        top = areas.select(areas.keys().sort(areas.values()).reverse().slice(0, top_n))
         keys = top.keys().map(lambda key: ee.String(key).cat("_area"))
         return ee.Dictionary.fromLists(keys, top.values())
 
@@ -308,6 +307,6 @@ def parse_result_key(key):
         if key.endswith(suffix):
             try:
                 return int(float(key[: -len(suffix)])), metric
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
     return None

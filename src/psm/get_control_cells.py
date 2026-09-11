@@ -32,6 +32,7 @@ from utils.variables import (
     HGFC_ASSET_ID,
 )
 
+
 def init_ee(project):
     """
     Initialize Earth Engine, authenticating if needed.
@@ -120,8 +121,10 @@ def points_to_cells(points_fc):
     Draw a cell around each point.
     """
     # Convert points to GeoDataFrame
-    points_gdf = gpd.GeoDataFrame.from_features(points_fc.getInfo()["features"], crs="EPSG:4326")
-    
+    points_gdf = gpd.GeoDataFrame.from_features(
+        points_fc.getInfo()["features"], crs="EPSG:4326"
+    )
+
     # Reproject to meter-based CRS for cell construction
     points_gdf = points_gdf.to_crs(GPD_CRS_METERS)
 
@@ -137,7 +140,9 @@ def points_to_cells(points_fc):
         cells.append(cell_geom)
         wdpaids.append(str(row.get("WDPAID")))
 
-    cells_gdf = gpd.GeoDataFrame({"geometry": cells, "WDPAID": wdpaids}, crs=points_gdf.crs)
+    cells_gdf = gpd.GeoDataFrame(
+        {"geometry": cells, "WDPAID": wdpaids}, crs=points_gdf.crs
+    )
     cells_gdf["geometry"] = cells_gdf.geometry.set_precision(1.0)
     cells_gdf = cells_gdf.drop_duplicates(subset="geometry")
     cells_gdf["protected"] = 0
@@ -167,9 +172,9 @@ def get_control_cells(
     for _, row in pa_gdf.iterrows():
         wdpaid = int(row["WDPAID"])
         print("Starting PA: ", wdpaid)
-        
+
         pa_geom = all_pas.filter(ee.Filter.eq("SITE_ID", wdpaid)).geometry()
-        
+
         print("Sampling points for PA: ", wdpaid)
         points_fc = sample_points(
             all_pas,
@@ -183,14 +188,14 @@ def get_control_cells(
         )
         print("Drawing cells for PA: ", wdpaid)
         cells_gdf = points_to_cells(points_fc)
-        
+
         if len(cells_gdf) == 0:
             print(f"Warning: WDPAID {wdpaid}: no control cells")
             continue
-        
+
         print("Appending cells for PA: ", wdpaid)
         all_cells.append(cells_gdf)
-        
+
         print("Completed PA: ", wdpaid)
         pa_count += 1
         print(f"Progress: {pa_count}/{total_pas} PAs processed")
@@ -200,7 +205,9 @@ def get_control_cells(
         raise RuntimeError("No control cells generated for any site.")
 
     print("Concatenating cells for all PAs")
-    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS)
+    all_cells = gpd.GeoDataFrame(
+        pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
+    )
     all_cells = all_cells.drop_duplicates(subset="geometry")
     all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
     print("Saving cells to parquet: ", output_parquet)

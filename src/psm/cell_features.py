@@ -9,7 +9,7 @@ from utils.variables import (
     COUNTRIES_ASSET_ID,
     BIOME_ASSET_ID,
     PSM_CELL_SIZE,
-    COVARIATES
+    COVARIATES,
 )
 
 REQUIRED_COLS = COVARIATES + [
@@ -21,18 +21,15 @@ REQUIRED_COLS = COVARIATES + [
 
 def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
     """Aggregate covariates within grid cells and join country / ecoregion / biome."""
-    grid_fc = (
-        covariates.reduceRegions(
-            collection=grid_fc,
-            reducer=ee.Reducer.mean(),
-            scale=PSM_CELL_SIZE,
-            crs=ee_crs_1km,
-        )
-        .select(
-            "cell_ID",
-            *COVARIATES,
-            "protected",
-        )
+    grid_fc = covariates.reduceRegions(
+        collection=grid_fc,
+        reducer=ee.Reducer.mean(),
+        scale=PSM_CELL_SIZE,
+        crs=ee_crs_1km,
+    ).select(
+        "cell_ID",
+        *COVARIATES,
+        "protected",
     )
 
     n_before = grid_fc.size().getInfo()
@@ -48,13 +45,17 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         maxError=1,
     )
 
-    centroids = ee.Join.saveFirst("_match").apply(
-        primary=centroids,
-        secondary=countries,
-        condition=spatial_filter,
-    ).map(
-        lambda f: f.set("country", ee.Feature(f.get("_match")).get("country_na")).set(
-            "_match", None
+    centroids = (
+        ee.Join.saveFirst("_match")
+        .apply(
+            primary=centroids,
+            secondary=countries,
+            condition=spatial_filter,
+        )
+        .map(
+            lambda f: f.set(
+                "country", ee.Feature(f.get("_match")).get("country_na")
+            ).set("_match", None)
         )
     )
 
@@ -64,14 +65,20 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         print(f"Dropped {n_dropped} cell(s) with no matching country.")
     n_before = centroids.size().getInfo()
 
-    centroids = ee.Join.saveFirst("_match").apply(
-        primary=centroids,
-        secondary=ecoregions,
-        condition=spatial_filter,
-    ).map(
-        lambda f: f.set("ecoregion", ee.Feature(f.get("_match")).get("ECO_ID"))
-        .set("biome", ee.Feature(f.get("_match")).get("BIOME_NUM"))
-        .set("_match", None)
+    centroids = (
+        ee.Join.saveFirst("_match")
+        .apply(
+            primary=centroids,
+            secondary=ecoregions,
+            condition=spatial_filter,
+        )
+        .map(
+            lambda f: (
+                f.set("ecoregion", ee.Feature(f.get("_match")).get("ECO_ID"))
+                .set("biome", ee.Feature(f.get("_match")).get("BIOME_NUM"))
+                .set("_match", None)
+            )
+        )
     )
 
     # Print a warning message if any centroids were not joined to an ecoregion
@@ -90,7 +97,7 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
 
     if n_dropped > 0:
         print(
-            f"⚠ Dropped {n_dropped}/{n_before} cell(s) ({n_dropped/n_before:.1%}) with missing covariate values:"
+            f"⚠ Dropped {n_dropped}/{n_before} cell(s) ({n_dropped / n_before:.1%}) with missing covariate values:"
         )
         for col, n in n_missing_by_col.items():
             if n > 0:

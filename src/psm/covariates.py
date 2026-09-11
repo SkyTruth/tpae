@@ -36,16 +36,17 @@ def build_resampled_covariates(ee_crs_1km):
         .rename("log_pop_density")
     )
     human_footprint = ee.Image(HUMAN_FOOTPRINT_ASSET_ID).rename("human_footprint")
-    
+
     wheat = ee.Image(GAEZ_WHEAT_ASSET_ID).rename("wheat")
     rice = ee.Image(GAEZ_RICE_ASSET_ID).rename("rice")
     maize = ee.Image(GAEZ_MAIZE_ASSET_ID).rename("maize")
     soybean = ee.Image(GAEZ_SOYBEAN_ASSET_ID).rename("soybean")
-    
-    ag_suitability = (wheat.addBands([rice, maize, soybean])
+
+    ag_suitability = (
+        wheat.addBands([rice, maize, soybean])
         .reduce(ee.Reducer.max())
         .rename("ag_suitability")
-        )
+    )
 
     def resample(img):
         return (

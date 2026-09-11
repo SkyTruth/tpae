@@ -108,7 +108,7 @@ def match_treatment_control_psm(cells_df):
 
     match_df = pd.DataFrame(matches).sort_values("treat_cell_id").reset_index(drop=True)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Total matched pairs: {len(match_df)}")
     print(f"  Unique treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
@@ -130,7 +130,7 @@ def match_treatment_control_psm(cells_df):
             f"mean={control_reuse.mean():.1f}"
         )
 
-    print(f"\nFirst 10 matches:")
+    print("\nFirst 10 matches:")
     print(match_df.head(10) if len(match_df) > 0 else "(no matches)")
 
     return match_df, treat_df, control_df
@@ -239,7 +239,7 @@ def match_treatment_control_mdm(
 
     match_df = pd.DataFrame(matches).sort_values("treat_cell_id").reset_index(drop=True)
 
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
     print(f"  Total matched pairs: {len(match_df)}")
