@@ -6,110 +6,128 @@ import pandas as pd
 from utils.variables import COVARIATES
 
 
-def compute_pair_smd(matched_t_vals, matched_c_vals, full_t_vals, full_c_vals):
-    """
-    Pair-level standardized mean difference.
-
-    Returns the mean absolute pair distance (in pooled-SD units) plus
-    the 90th percentile, which surfaces worst-pair imbalance.
-
-    Pooled SD is computed on the FULL (unmatched) treatment and control pools
-    to anchor the metric to the original covariate scale.
-
-    Parameters
-    ----------
-    matched_t_vals, matched_c_vals : pandas Series, equal length
-        Covariate values for matched treatment and control cells (in pair order).
-    full_t_vals, full_c_vals : pandas Series
-        Covariate values for the full unmatched treatment and control pools.
-        Used to compute the pooled SD that anchors the metric.
-
-    Returns
-    -------
-    (mean_abs_smd, p90_abs_smd, signed_smd) : tuple of floats
-    """
-    var_full_t = full_t_vals.var()
-    var_full_c = full_c_vals.var()
-    pooled_sd = np.sqrt((var_full_t + var_full_c) / 2)
-    if pooled_sd == 0:
-        return 0.0, 0.0, 0.0
-
-    pair_diffs = (matched_t_vals.values - matched_c_vals.values) / pooled_sd
+def calc_match_coverage(match_df, treat_df):
+    """Calculate match coverage as the ratio of matched treatment cells to total treatment cells."""
     return (
-        np.abs(pair_diffs).mean(),
-        np.percentile(np.abs(pair_diffs), 90),
-        pair_diffs.mean(),  # signed mean for directional info
+        match_df["treat_cell_id"].nunique() / len(treat_df) if len(treat_df) > 0 else 0
     )
 
 
-def pair_smd_verdict(mean_abs):
-    """Label pair-level mean |SMD| as excellent, acceptable, or imbalanced."""
-    if mean_abs < 0.10:
-        return "excellent"
-    if mean_abs < 0.25:
-        return "acceptable"
-    return "IMBALANCED"
+def calc_avg_matches_per_treat(match_df):
+    """Calculate average matches per treatment cell."""
+    return match_df.groupby("treat_cell_id").size().mean()
 
 
-def pair_covariate_balance(match_df, cells_df, covariates=None):
-    """
-    Pair-level covariate balance for matched treatment/control cells.
+def calc_control_reuse(match_df):
+    """Calculate average number of times a control cell is reused."""
+    return match_df.groupby("control_cell_id").size().mean()
 
-    Prints the per-covariate table and returns a DataFrame with mean |SMD|,
-    90th-percentile |SMD|, signed mean, and verdict.
-    """
-    if covariates is None:
-        covariates = COVARIATES
 
+def calc_extrapolation(t_vals, c_vals):
+    """Calculate percentage of treatment cells that fall outside the range of control cells.
+    If treatment cells have covariate values outside the range of available control cells,
+    they cannot be properly matched and balanced by any method."""
+    c_min = c_vals.min()
+    c_max = c_vals.max()
+    n_below = (t_vals < c_min).sum()
+    n_above = (t_vals > c_max).sum()
+    n_total = n_below + n_above
+    pct = n_total / len(t_vals)
+    return pct
+
+
+def calc_pooled_sd(t_vals, c_vals):
+    """Pooled standard deviation formula."""
+    var_t, var_c = t_vals.var(), c_vals.var()  # sample variances
+    pooled_sd = np.sqrt((var_t + var_c) / 2)
+    if pooled_sd == 0:
+        return 0.0
+    return pooled_sd
+
+
+def calc_smd(t_vals, c_vals, pooled_sd):
+    """Standardized mean difference formula."""
+    mean_t, mean_c = t_vals.mean(), c_vals.mean()  # sample means
+    return (mean_t - mean_c) / pooled_sd
+
+
+def balance_verdict(smd):
+    """A standardized mean difference of 0.2 or less after matching indicates
+    that a covariate is balanced (Feng et al. 2022)."""
+    if abs(smd) <= 0.2:
+        return 1
+    else:
+        return 0
+
+
+def calc_improvement(smd_before, smd_after):
+    """Did matching decrease the SMD?"""
+    return abs(smd_before) - abs(smd_after)
+
+
+def evaluate_covariate_balance(match_df, cells_df):
+    """Calculate balance diagnostics for each covariate."""
+    # Before matching: full treatment and control pools
+    unmatched_treat = cells_df[cells_df["protected"] == 1][COVARIATES]
+    unmatched_control = cells_df[cells_df["protected"] == 0][COVARIATES]
+
+    # After matching: matched treatment and control cells
     matched_treat = match_df.merge(
-        cells_df[["cell_ID"] + list(covariates)],
+        cells_df[["cell_ID"] + COVARIATES],
         left_on="treat_cell_id",
         right_on="cell_ID",
     ).drop(columns="cell_ID")
 
     matched_control = match_df.merge(
-        cells_df[["cell_ID"] + list(covariates)],
+        cells_df[["cell_ID"] + COVARIATES],
         left_on="control_cell_id",
         right_on="cell_ID",
     ).drop(columns="cell_ID")
 
-    unmatched_treat = cells_df[cells_df["protected"] == 1]
-    unmatched_control = cells_df[cells_df["protected"] == 0]
-
-    results = []
-    for col in covariates:
-        mean_abs, p90, signed = compute_pair_smd(
-            matched_treat[col],
-            matched_control[col],
-            unmatched_treat[col],
-            unmatched_control[col],
+    rows = []
+    for covariate in COVARIATES:
+        extrapolation = calc_extrapolation(
+            unmatched_treat[covariate], unmatched_control[covariate]
         )
-        results.append(
+        pooled_sd = calc_pooled_sd(
+            unmatched_treat[covariate], unmatched_control[covariate]
+        )
+        smd_before = calc_smd(
+            unmatched_treat[covariate], unmatched_control[covariate], pooled_sd
+        )
+        smd_after = calc_smd(
+            matched_treat[covariate], matched_control[covariate], pooled_sd
+        )
+        balanced = balance_verdict(smd_after)
+        improvement = calc_improvement(smd_before, smd_after)
+        rows.append(
             {
-                "covariate": col,
-                "mean_abs_smd": mean_abs,
-                "p90_abs_smd": p90,
-                "signed_mean": signed,
-                "verdict": pair_smd_verdict(mean_abs),
+                "covariate": covariate,
+                "extrapolation": extrapolation,
+                "smd_before": smd_before,
+                "smd_after": smd_after,
+                "balanced": balanced,
+                "improvement": improvement,
             }
         )
 
-    results_df = pd.DataFrame(results)
+    covariate_results = pd.DataFrame(rows)
+    return covariate_results
 
-    print("Pair-level balance check")
-    print("Mean absolute pair SMD (lower = better individual match quality)")
-    print("Threshold: < 0.25 = acceptable; < 0.10 = excellent")
-    print("=" * 90)
-    print(
-        f"{'covariate':<20s} {'mean |smd|':>12s} {'p90 |smd|':>12s} "
-        f"{'signed mean':>14s} {'verdict':>20s}"
+
+def evaluate_overall_balance(covariate_results):
+    """Evaluate overall balance across all covariates."""
+    avg_extrapolation = covariate_results["extrapolation"].mean()
+    avg_abs_SDM_before = covariate_results["smd_before"].abs().mean()
+    avg_abs_SDM_after = covariate_results["smd_after"].abs().mean()
+    n_covariates_balanced = covariate_results["balanced"].sum()
+    avg_abs_SDM_improvement = covariate_results["improvement"].mean()
+    n_covariates_improved = (covariate_results["improvement"] > 0).sum()
+    return (
+        avg_extrapolation,
+        avg_abs_SDM_before,
+        avg_abs_SDM_after,
+        n_covariates_balanced,
+        avg_abs_SDM_improvement,
+        n_covariates_improved,
     )
-    print("-" * 90)
-    for row in results:
-        print(
-            f"{row['covariate']:<20s} {row['mean_abs_smd']:>12.3f} "
-            f"{row['p90_abs_smd']:>12.3f} {row['signed_mean']:>+14.3f} "
-            f"{row['verdict']:>20s}"
-        )
-
-    return results_df

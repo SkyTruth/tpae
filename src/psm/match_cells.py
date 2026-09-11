@@ -24,6 +24,7 @@ from utils.variables import (
 PSM matching functions
 """
 
+
 def add_propensity_scores(cells_df, models_dir="models"):
     """Load the latest saved propensity model and score each cell."""
     model_files = sorted(Path(models_dir).glob("propensity_model_*.pkl"))
@@ -139,6 +140,7 @@ def match_treatment_control_psm(cells_df):
 MDM matching functions
 """
 
+
 def fit_control_scaler_and_inv_cov(control_df, covariates):
     """StandardScaler and inverse covariance from control cells only (Stuart 2010)."""
     scaler = StandardScaler()
@@ -173,8 +175,8 @@ def match_treatment_control_mdm(
     treat_df = cells_df[cells_df["protected"] == 1].copy().reset_index(drop=True)
     control_df = cells_df[cells_df["protected"] == 0].copy().reset_index(drop=True)
 
-    print(f"Treatment cells: {len(treat_df)}")
-    print(f"Control cells: {len(control_df)}")
+    print(f"Number of candidate treatment cells: {len(treat_df)}")
+    print(f"Number of candidate control cells: {len(control_df)}")
 
     scaled_cols = [f"_scaled_{c}" for c in covariates]
     matches = []
@@ -238,31 +240,9 @@ def match_treatment_control_mdm(
     match_df = pd.DataFrame(matches).sort_values("treat_cell_id").reset_index(drop=True)
 
     print(f"\nResults:")
-    print(f"  Total matched pairs: {len(match_df)}")
-    print(f"  Unique treatment cells matched: {match_df['treat_cell_id'].nunique()}")
+    print(f"  Treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
-    unmatched_treat = set(treat_df["cell_ID"]) - set(match_df["treat_cell_id"])
-    print(f"  Treatment cells with no match: {len(unmatched_treat)}")
-    match_coverage = (
-        match_df["treat_cell_id"].nunique() / len(treat_df) if len(treat_df) > 0 else 0
-    )
-    print(f"  Match coverage: {match_coverage:.1%}")
-
-    if len(match_df) > 0:
-        avg_matches = match_df.groupby("treat_cell_id").size().mean()
-        print(f"  Avg matches per matched treatment cell: {avg_matches:.2f}")
-
-        control_reuse = match_df.groupby("control_cell_id").size()
-        print(
-            f"  Control reuse: min={control_reuse.min()}, "
-            f"max={control_reuse.max()}, "
-            f"mean={control_reuse.mean():.1f}"
-        )
-
-        print(
-            f"  Mahalanobis distance: mean={match_df['mahalanobis_distance'].mean():.3f}, "
-            f"max={match_df['mahalanobis_distance'].max():.3f}"
-        )
+    print(f"  Total matched pairs: {len(match_df)}")
 
     return match_df, treat_df, control_df
 
@@ -271,15 +251,25 @@ def match_treatment_control_mdm(
 Save matched outputs
 """
 
+
 def filter_matched_grids(grid_fc, match_df):
     """Filter the grid FeatureCollection to cells that appear in the match table."""
-    valid_ids = pd.concat([match_df["treat_cell_id"], match_df["control_cell_id"]]).unique()
+    valid_ids = pd.concat(
+        [match_df["treat_cell_id"], match_df["control_cell_id"]]
+    ).unique()
     valid_ids = ee.List(valid_ids.astype(int).tolist())
     return grid_fc.filter(ee.Filter.inList("cell_ID", valid_ids))
 
 
-def save_matching_outputs(matched_grids, match_df, pa_id, match_method: str = "mdm", data_dir="data"):
+def save_matching_outputs(
+    matched_grids, match_df, pa_id, match_method: str = "mdm", data_dir="data"
+):
     """Write matched grids and match pairs to parquet."""
     matched_grids_gdf = geemap.ee_to_gdf(matched_grids)
-    matched_grids_gdf.to_parquet(f"{data_dir}/{match_method}/matched_grids_{match_method}_{pa_id}.parquet")
-    match_df.to_parquet(f"{data_dir}/{match_method}/match_table_{match_method}_{pa_id}.parquet", index=False)
+    matched_grids_gdf.to_parquet(
+        f"{data_dir}/{match_method}/matched_grids_{match_method}_{pa_id}.parquet"
+    )
+    match_df.to_parquet(
+        f"{data_dir}/{match_method}/match_table_{match_method}_{pa_id}.parquet",
+        index=False,
+    )
