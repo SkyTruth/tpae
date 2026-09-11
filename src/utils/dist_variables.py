@@ -46,7 +46,7 @@ CONFPAL = ['000000',
            "B60026FF",
            "800026FF"]
 
-# DIST-STATSU Legend Visualization Dictionary
+# DIST-STATUS Legend Visualization Dictionary
 LEGEND_DICT = {
     "No disturbance" : "121212",
     "confirmed <50% ongoing" : "E48727",
@@ -67,3 +67,20 @@ DW_PALETTE = [
 ]
 DW_VIS = {'min': 0, 'max': 8, 'palette': [c.lstrip('#') for c in DW_PALETTE]}
 
+
+# DIST-STATUS values:
+    # 0 = No Disturbance
+    # 3 = <50% ongoing
+    # 6 = >50% ongoing
+    # 7 = <50% finished
+    # 8 = >50% finished
+    # 9 = <50% previous year
+    # 10 = >50% previous year
+
+DIST_MASK_FROM = [0, 3, 6, 7, 8, 9, 10]
+
+DIST_MASK_TO = [0, 0, 1, 0, 1, 0, 0]
+
+SCALE = 30
+
+MAXPIXELS = 1e9
