@@ -35,6 +35,8 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         )
     )
 
+    n_before = grid_fc.size().getInfo()
+
     centroids = grid_fc.map(lambda cell: ee.Feature(cell).centroid())
 
     countries = ee.FeatureCollection(COUNTRIES_ASSET_ID)
@@ -56,6 +58,12 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         )
     )
 
+    # Print a warning message if any centroids were not joined to a country
+    n_dropped = n_before - centroids.size().getInfo()
+    if n_dropped > 0:
+        print(f"Dropped {n_dropped} cell(s) with no matching country.")
+    n_before = centroids.size().getInfo()
+
     centroids = ee.Join.saveFirst("_match").apply(
         primary=centroids,
         secondary=ecoregions,
@@ -65,6 +73,11 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         .set("biome", ee.Feature(f.get("_match")).get("BIOME_NUM"))
         .set("_match", None)
     )
+
+    # Print a warning message if any centroids were not joined to an ecoregion
+    n_dropped = n_before - centroids.size().getInfo()
+    if n_dropped > 0:
+        print(f"Dropped {n_dropped} cell(s) with no matching ecoregion.")
 
     cells_list = centroids.getInfo()["features"]
     cells_df = pd.DataFrame([feature["properties"] for feature in cells_list])
@@ -77,13 +90,10 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
 
     if n_dropped > 0:
         print(
-            f"⚠ Dropped {n_dropped}/{n_before} cells ({n_dropped/n_before:.1%}) with missing values:"
+            f"⚠ Dropped {n_dropped}/{n_before} cell(s) ({n_dropped/n_before:.1%}) with missing covariate values:"
         )
         for col, n in n_missing_by_col.items():
             if n > 0:
                 print(f"    {col}: {n}")
-
-    if n_dropped == 0:
-        print("No cells dropped.")
 
     return grid_fc, cells_df
