@@ -169,10 +169,7 @@ class HabitatConditionAnalyzer:
         """
         # 1=habitat, 0=anthro on land, null=water (masked out of kernel)
         habitat_binary = (
-            ee.Image(0)
-            .where(habitat_raster.gt(0), 1)
-            .updateMask(land_mask)
-            .toFloat()
+            ee.Image(0).where(habitat_raster.gt(0), 1).updateMask(land_mask).toFloat()
         )
         habitat_binary_reproj = habitat_binary.reproject(
             crs=self.crs,

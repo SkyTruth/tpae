@@ -13,9 +13,7 @@ Two-stage allocation:
      Proportional to the stratum's area within the tile.
 """
 
-import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 import ee
 import pandas as pd
@@ -30,7 +28,7 @@ def compute_global_allocation(
 ) -> dict[int, int]:
     """
     Compute global stratified sample allocation.
-    
+
     Equal number of samples for each biome, split between protected and unprotected according to
     treat_control_ratio. This ensures that the model performs equally well across biomes.
 
@@ -170,7 +168,9 @@ def compute_tile_allocations(
     global_pixel_count: dict[int, int] = {}
     for counts in tile_pixel_counts.values():
         for stratum_id, count in counts.items():
-            global_pixel_count[stratum_id] = global_pixel_count.get(stratum_id, 0) + count
+            global_pixel_count[stratum_id] = (
+                global_pixel_count.get(stratum_id, 0) + count
+            )
 
     tile_alloc: dict[str, dict[int, int]] = {}
     for tile_id, counts in tile_pixel_counts.items():
@@ -225,7 +225,8 @@ def validate_allocation(
 
     bad = df[(df["ratio"] - 1).abs() > tolerance]
     if len(bad) > 0:
-        print(f"WARNING: {len(bad)} strata deviate from global budget by >{tolerance:.1%}")
+        print(
+            f"WARNING: {len(bad)} strata deviate from global budget by >{tolerance:.1%}"
+        )
         print(bad)
     return df
-    

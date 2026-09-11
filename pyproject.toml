@@ -20,6 +20,9 @@ dependencies = [
 [tool.poetry]
 package-mode = false
 
+[tool.ruff.lint]
+ignore = ["E402"]
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

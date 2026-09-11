@@ -173,7 +173,9 @@ class TileTaskManager:
         if tile_state.status in self.TERMINAL_STATUSES:
             return tile_state.status
 
-        status_dict = ee.data.getOperation(f"projects/earthengine-legacy/operations/{tile_state.task_id}")
+        status_dict = ee.data.getOperation(
+            f"projects/earthengine-legacy/operations/{tile_state.task_id}"
+        )
         # getOperation returns a structured response; we just want the state
         # Fallback: use ee.batch.Task.status() if getOperation isn't available
         try:
@@ -188,7 +190,7 @@ class TileTaskManager:
                 tile_state.status = "COMPLETED"
             else:
                 tile_state.status = ee_state
-        except Exception as e:
+        except Exception:
             # Fall back to legacy status method
             task = ee.batch.Task(tile_state.task_id, None, None, None)
             legacy = task.status()
@@ -210,11 +212,7 @@ class TileTaskManager:
 
     def pending_tiles(self) -> list[str]:
         """Tiles not yet completed (UNSUBMITTED, RUNNING, FAILED, etc.)."""
-        return [
-            tid
-            for tid, st in self.state.items()
-            if st.status not in {"COMPLETED"}
-        ]
+        return [tid for tid, st in self.state.items() if st.status not in {"COMPLETED"}]
 
     def failed_tiles(self, max_attempts: int = 3) -> list[str]:
         """Failed tiles eligible for retry (under attempt cap)."""
@@ -237,7 +235,11 @@ class TileTaskManager:
         deadline = time.time() + max_wait_hours * 3600
         while time.time() < deadline:
             counts = self.refresh_all()
-            n_done = counts.get("COMPLETED", 0) + counts.get("FAILED", 0) + counts.get("CANCELLED", 0)
+            n_done = (
+                counts.get("COMPLETED", 0)
+                + counts.get("FAILED", 0)
+                + counts.get("CANCELLED", 0)
+            )
             n_total = len(self.state)
             print(f"[{time.strftime('%H:%M:%S')}] {n_done}/{n_total} done — {counts}")
             if n_done >= n_total:
