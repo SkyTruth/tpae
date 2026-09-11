@@ -2,7 +2,7 @@ import ee
 import geemap
 import pandas as pd
 
-from utils.dist_variables import(FOLDERSET)
+from utils.dist_variables import(FOLDERSET, DIST_MASK_FROM, DIST_MASK_TO, SCALE, MAXPIXELS)
 
 def calculate_site_disturbance_rate(year, test_site_id, sites):
     """
@@ -25,9 +25,7 @@ def calculate_site_disturbance_rate(year, test_site_id, sites):
     """
     VEGDISTSTATUS = ee.ImageCollection(FOLDERSET[year] + "/VEG-DIST-STATUS").mosaic()
 
-    mask_from = [0, 3, 6, 7, 8, 9, 10]
-    mask_to   = [0, 0, 1, 0, 1, 0, 1]
-    dist_mask = VEGDISTSTATUS.remap(mask_from, mask_to, 0).eq(1)
+    dist_mask = VEGDISTSTATUS.remap(DIST_MASK_FROM, DIST_MASK_TO, 0).eq(1)
     masked_dist = VEGDISTSTATUS.updateMask(dist_mask)
 
     site = sites.filter(ee.Filter.eq("SITE_ID", test_site_id))
@@ -35,11 +33,11 @@ def calculate_site_disturbance_rate(year, test_site_id, sites):
     site_geom = site.geometry()
 
     dist_pixels = masked_dist.reduceRegion(
-        reducer=ee.Reducer.count(), geometry=site_geom, scale=30, maxPixels=1e9
+        reducer=ee.Reducer.count(), geometry=site_geom, scale=SCALE, maxPixels=MAXPIXELS
     ).getInfo()['b1']
 
     total_pixels = VEGDISTSTATUS.reduceRegion(
-        reducer=ee.Reducer.count(), geometry=site_geom, scale=30, maxPixels=1e9
+        reducer=ee.Reducer.count(), geometry=site_geom, scale=SCALE, maxPixels=MAXPIXELS
     ).getInfo()['b1']
 
     dist_rate = dist_pixels / total_pixels
@@ -65,9 +63,7 @@ def calculate_FeatureCollection_disturbance_rate(year, features):
     """
     VEGDISTSTATUS = ee.ImageCollection(FOLDERSET[year] + "/VEG-DIST-STATUS").mosaic()
 
-    mask_from = [0, 3, 6, 7, 8, 9, 10]
-    mask_to   = [0, 0, 1, 0, 1, 0, 1]
-    dist_mask = VEGDISTSTATUS.remap(mask_from, mask_to, 0).eq(1)
+    dist_mask = VEGDISTSTATUS.remap(DIST_MASK_FROM, DIST_MASK_TO, 0).eq(1)
     masked_dist = VEGDISTSTATUS.updateMask(dist_mask)
 
     combined = ee.Image.cat([

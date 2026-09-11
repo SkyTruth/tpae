@@ -2,7 +2,7 @@ import ee
 import geemap
 import pandas as pd
 
-from utils.dist_variables import(FOLDERSET)
+from utils.dist_variables import(FOLDERSET, SCALE)
 
 # visualization function for the dist_status workflow
 def visualize_site_disturbance(year, test_site_id, test_sites, Map=None):
@@ -83,7 +83,7 @@ def visualize_AC_site_dist(year, test_site_id, test_sites, Map=None, ANOM_lower=
 
     site_DIST = ac_vis.clip(site_geom)
     counts = site_DIST.select('anom').reduceRegion(
-        reducer=ee.Reducer.frequencyHistogram(), geometry=site, scale=30, maxPixels=1e13
+        reducer=ee.Reducer.frequencyHistogram(), geometry=site, scale=SCALE, maxPixels=1e13
     ).getInfo()
     print('Pixel counts:', counts)
 
@@ -95,7 +95,7 @@ def visualize_AC_site_dist(year, test_site_id, test_sites, Map=None, ANOM_lower=
         Map.addLayer(site_geom, {"color": "red"}, f"{site_name} Boundary")
         Map.centerObject(site)
 
-    Map.addLayer(site_DIST.select('anom'), {"min": 0, "max": 100, "palette": palette}, f"DIST {year} - {site_name}")
+    Map.addLayer(site_DIST.select('anom'), {"min": 0, "max": 100, "palette": palette}, f"DIST AC {year} - {site_name}")
 
     return Map
 
