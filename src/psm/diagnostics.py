@@ -1,9 +1,24 @@
 """Covariate balance diagnostics for matched treatment and control cells."""
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 from utils.variables import COVARIATES
+
+DIAGNOSTIC_COLUMNS = [
+    "site_id",
+    "match_coverage",
+    "avg_matches_per_treat",
+    "avg_control_reuse",
+    "avg_extrapolation",
+    "avg_abs_smd_before",
+    "avg_abs_smd_after",
+    "n_covariates_balanced",
+    "avg_abs_smd_improvement",
+    "n_covariates_improved",
+]
 
 
 def calc_match_coverage(match_df, treat_df):
@@ -116,7 +131,7 @@ def evaluate_covariate_balance(match_df, cells_df):
 
 
 def evaluate_overall_balance(covariate_results):
-    """Evaluate overall balance across all covariates."""
+    """Evaluate overall site balance across all covariates."""
     avg_extrapolation = covariate_results["extrapolation"].mean()
     avg_abs_SDM_before = covariate_results["smd_before"].abs().mean()
     avg_abs_SDM_after = covariate_results["smd_after"].abs().mean()
@@ -131,3 +146,57 @@ def evaluate_overall_balance(covariate_results):
         avg_abs_SDM_improvement,
         n_covariates_improved,
     )
+
+
+def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
+    """Compile all site-level diagnostics for a site in a single row."""
+    has_matches = (
+        match_df is not None
+        and len(match_df) > 0
+        and "treat_cell_id" in match_df.columns
+    )
+
+    row = {col: np.nan for col in DIAGNOSTIC_COLUMNS}
+    row["site_id"] = site_id
+    row["match_coverage"] = (
+        calc_match_coverage(match_df, treat_df) if has_matches else 0.0
+    )
+    row["n_covariates_balanced"] = 0
+    row["n_covariates_improved"] = 0
+
+    if not has_matches:
+        return row
+
+    covariate_results = evaluate_covariate_balance(match_df, cells_df)
+    (
+        avg_extrapolation,
+        avg_abs_smd_before,
+        avg_abs_smd_after,
+        n_covariates_balanced,
+        avg_abs_smd_improvement,
+        n_covariates_improved,
+    ) = evaluate_overall_balance(covariate_results)
+
+    row.update(
+        {
+            "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
+            "avg_control_reuse": calc_control_reuse(match_df),
+            "avg_extrapolation": avg_extrapolation,
+            "avg_abs_smd_before": avg_abs_smd_before,
+            "avg_abs_smd_after": avg_abs_smd_after,
+            "n_covariates_balanced": n_covariates_balanced,
+            "avg_abs_smd_improvement": avg_abs_smd_improvement,
+            "n_covariates_improved": n_covariates_improved,
+        }
+    )
+    return row
+
+
+def save_experiment_diagnostics(site_rows, output_path):
+    """Write one-row-per-site experiment diagnostics to a single CSV."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    results_df = pd.DataFrame(site_rows).reindex(columns=DIAGNOSTIC_COLUMNS)
+    results_df.to_csv(output_path, index=False)
+    print(f"Saved {len(results_df)} site rows to {output_path}")
+    return results_df
