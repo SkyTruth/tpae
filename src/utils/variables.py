@@ -303,6 +303,13 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 # Parameters for MDM
 CALIPER_MDM = 3.0
 N_NEIGHBORS_MDM = 4  # number of control cells for every treatment cell
+# Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
+MAX_CONTROL_REUSE_FRAC = (
+    0.05  # reuse_frac: max share of matched pairs from any one control
+)
+MAX_CONTROL_REUSE_CEILING = (
+    8  # reuse_ceiling: hard ceiling on number of times a control can be used
+)
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2

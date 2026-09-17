@@ -16,6 +16,8 @@ from utils.variables import (
     CALIPER_MDM,
     CALIPER_PSM,
     COVARIATES,
+    MAX_CONTROL_REUSE_CEILING,
+    MAX_CONTROL_REUSE_FRAC,
     N_NEIGHBORS_MDM,
     N_NEIGHBORS_PSM,
 )
@@ -154,11 +156,23 @@ def fit_control_scaler_and_inv_cov(control_df, covariates):
     return scaler, inv_cov
 
 
+def calc_control_reuse_cap(
+    n_treat,
+    k,
+    reuse_frac=MAX_CONTROL_REUSE_FRAC,
+    reuse_ceiling=MAX_CONTROL_REUSE_CEILING,
+):
+    """Maximum number of times one control can be used."""
+    return min(reuse_ceiling, max(1, int(np.ceil(reuse_frac * n_treat * k))))
+
+
 def match_treatment_control_mdm(
     cells_df,
     covariates=None,
     caliper=CALIPER_MDM,
     n_neighbors=N_NEIGHBORS_MDM,
+    reuse_frac=MAX_CONTROL_REUSE_FRAC,
+    reuse_ceiling=MAX_CONTROL_REUSE_CEILING,
 ):
     """Match each treatment cell to control cells by Mahalanobis Distance Matching (MDM)."""
     if covariates is None:
@@ -175,8 +189,17 @@ def match_treatment_control_mdm(
     treat_df = cells_df[cells_df["protected"] == 1].copy().reset_index(drop=True)
     control_df = cells_df[cells_df["protected"] == 0].copy().reset_index(drop=True)
 
+    cap = calc_control_reuse_cap(
+        len(treat_df), n_neighbors, reuse_frac=reuse_frac, reuse_ceiling=reuse_ceiling
+    )
+    control_uses = {}
+
     print(f"Number of candidate treatment cells: {len(treat_df)}")
     print(f"Number of candidate control cells: {len(control_df)}")
+    print(
+        f"Control reuse cap: {cap} "
+        f"(reuse_frac={reuse_frac}, reuse_ceiling={reuse_ceiling}, k={n_neighbors})"
+    )
 
     scaled_cols = [f"_scaled_{c}" for c in covariates]
     matches = []
@@ -213,36 +236,70 @@ def match_treatment_control_mdm(
 
         k = min(n_neighbors, len(control_sub))
         nn = NearestNeighbors(
-            n_neighbors=k,
             metric="mahalanobis",
             metric_params={"VI": inv_cov},
         )
         nn.fit(control_sub[scaled_cols].values)
+        distances, indices = nn.radius_neighbors(
+            treat_sub[scaled_cols].values, radius=caliper
+        )
 
-        distances, indices = nn.kneighbors(treat_sub[scaled_cols].values)
-
+        # Assign hardest-to-match treatment cells first (fewest in-caliper candidates)
+        pending = []
         for i, treat_row in enumerate(treat_sub.itertuples()):
-            for rank, (dist, j) in enumerate(zip(distances[i], indices[i]), start=1):
-                if dist <= caliper:
-                    control_row = control_sub.iloc[j]
-                    matches.append(
-                        {
-                            "treat_cell_id": treat_row.cell_ID,
-                            "control_cell_id": control_row["cell_ID"],
-                            "mahalanobis_distance": float(dist),
-                            "match_rank": rank,
-                            "match_country": country,
-                            "match_ecoregion": ecoregion,
-                            "match_fallback": fallback,
-                        }
-                    )
+            candidates = sorted(zip(distances[i], indices[i]))
+            pending.append((len(candidates), i, treat_row, candidates))
+        pending.sort(key=lambda item: item[0])
 
-    match_df = pd.DataFrame(matches).sort_values("treat_cell_id").reset_index(drop=True)
+        for _, _, treat_row, candidates in pending:
+            n_matched = 0
+            for dist, j in candidates:
+                control_row = control_sub.iloc[j]
+                control_id = control_row["cell_ID"]
+                if control_uses.get(control_id, 0) >= cap:
+                    continue
+                control_uses[control_id] = control_uses.get(control_id, 0) + 1
+                n_matched += 1
+                matches.append(
+                    {
+                        "treat_cell_id": treat_row.cell_ID,
+                        "control_cell_id": control_id,
+                        "mahalanobis_distance": float(dist),
+                        "match_rank": n_matched,
+                        "match_country": country,
+                        "match_ecoregion": ecoregion,
+                        "match_fallback": fallback,
+                    }
+                )
+                if n_matched >= k:
+                    break
+
+    if matches:
+        match_df = (
+            pd.DataFrame(matches).sort_values("treat_cell_id").reset_index(drop=True)
+        )
+    else:
+        match_df = pd.DataFrame(
+            columns=[
+                "treat_cell_id",
+                "control_cell_id",
+                "mahalanobis_distance",
+                "match_rank",
+                "match_country",
+                "match_ecoregion",
+                "match_fallback",
+            ]
+        )
 
     print("\nResults:")
     print(f"  Treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
     print(f"  Total matched pairs: {len(match_df)}")
+    if control_uses:
+        print(
+            f"  Control reuse: max={max(control_uses.values())} "
+            f"(cap={cap}), mean={np.mean(list(control_uses.values())):.1f}"
+        )
 
     return match_df, treat_df, control_df
 
