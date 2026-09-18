@@ -18,6 +18,8 @@ dependencies = [
     "earthaccess (>=0.16.0,<0.17.0)",
     "xarray (>=2026.2.0,<2027.0.0)",
     "rioxarray (>=0.22.0,<0.23.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "scipy (>=1.17.1,<2.0.0)"
 ]
 
 [tool.poetry]
