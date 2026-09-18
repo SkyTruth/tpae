@@ -42,7 +42,7 @@ def visualize_site_disturbance(year, test_site_id, test_sites, Map=None):
         Map = geemap.Map()
         Map.add_basemap("Esri.WorldImagery")
         Map.addLayer(site_geom, {"color": "red"}, f"{site_name} Boundary")
-        Map.centerObject(site)
+        Map.centerObject(site, zoom = 12)
         Map.add_legend(
             title="DIST-ANN Disturbance Status",
             legend_dict=legend_dict,
@@ -88,14 +88,32 @@ def visualize_AC_site_dist(year, test_site_id, test_sites, Map=None, ANOM_lower=
     print('Pixel counts:', counts)
 
     palette = ['fee5d9', 'fcae91', 'fb6a4a', 'de2d26', '895c5e']
+    viz_params = {"min": 30, "max": 100, "palette": palette}
+
+    legend_dict = {
+        
+    }
 
     if Map is None:
         Map = geemap.Map()
         Map.add_basemap("Esri.WorldImagery")
         Map.addLayer(site_geom, {"color": "red"}, f"{site_name} Boundary")
-        Map.centerObject(site)
+        Map.centerObject(site, zoom = 12)
 
-    Map.addLayer(site_DIST.select('anom'), {"min": 0, "max": 100, "palette": palette}, f"DIST AC {year} - {site_name}")
+    if Map is not None:
+        for layer in Map.layers:
+            if layer.name == "Esri.WorldImagery":
+                layer.visible = True
+            else:
+                layer.visible = False
+        
+    Map.addLayer(site_DIST.select('anom'), viz_params, f"AC DIST {year} - {site_name}")
+    Map.add_colorbar(
+        viz_params,
+        label="DIST-ANN AC Disturbance (%)",
+        layer_name = "DIST-ANN Anomaly & Confidence Disturbance",
+        position = "bottomleft",
+        )
 
     return Map
 
