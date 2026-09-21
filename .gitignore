@@ -216,3 +216,5 @@ data/*
 notebooks/data/*
 models/*
 results/*
+!results/mdm_experiments/
+!results/mdm_experiments/**

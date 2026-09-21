@@ -301,7 +301,7 @@ PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GC
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for MDM
-CALIPER_MDM = 3.0
+CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 4  # number of control cells for every treatment cell
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
 MAX_CONTROL_REUSE_FRAC = (
