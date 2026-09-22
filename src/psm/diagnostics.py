@@ -7,6 +7,8 @@ import pandas as pd
 
 from utils.variables import COVARIATES
 
+ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
+
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
@@ -19,6 +21,7 @@ DIAGNOSTIC_COLUMNS = [
     "avg_extrapolation",
     "avg_abs_smd_before",
     "avg_abs_smd_after",
+    *ABS_SMD_AFTER_COLS,
     "n_covariates_balanced",
     "avg_abs_smd_improvement",
     "n_covariates_improved",
@@ -240,6 +243,9 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             "n_covariates_improved": n_covariates_improved,
         }
     )
+    abs_smds = covariate_results.set_index("covariate")["smd_after"].abs()
+    for cov in COVARIATES:
+        row[f"abs_smd_after_{cov}"] = abs_smds.get(cov, np.nan)
     return row
 
 
