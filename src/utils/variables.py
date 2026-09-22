@@ -319,7 +319,12 @@ SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
 CONTROL_INNER_BUFFER = 10_000  # minimum distance (m) from PA
 CONTROL_OUTER_BUFFER = 200_000  # maximum distance (m) from PA
 CONTROL_SPACING = 3000  # minimum distance (m) between control cells
-CONTROL_N_SAMPLES = 2000  # number of control cells to sample for each PA
+# number of control cells to sample for each PA
+CONTROL_N_SAMPLES_MIN = 2000  # floor on control cells per PA (small PAs still need plenty of samples to find rare matches)
+CONTROL_N_SAMPLES_MAX = (
+    5000  # cap on control cells per PA so large parks do not over-sample
+)
+CONTROL_SAMPLES_PER_TREAT = 5  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
 
 # ------------------------------------------------------------------------------------------------
 # FILE PATHS

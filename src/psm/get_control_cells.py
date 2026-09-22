@@ -1,6 +1,6 @@
 """
 Creates a set of control cells for each PA.
-Control cells are 1km x 1km cells that are between 10km and 50km from the PA.
+Control cells are 1km x 1km cells that fall within a given distance range around the PA.
 """
 
 from pathlib import Path
@@ -19,6 +19,7 @@ from utils.variables import (
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
     TEST_SITES_GEOJSON,
+    TREATMENT_CELLS,
     CONTROL_CELLS,
     EE_CRS_METERS,
     GPD_CRS_METERS,
@@ -28,7 +29,9 @@ from utils.variables import (
     CONTROL_INNER_BUFFER,
     CONTROL_OUTER_BUFFER,
     CONTROL_SPACING,
-    CONTROL_N_SAMPLES,
+    CONTROL_N_SAMPLES_MIN,
+    CONTROL_N_SAMPLES_MAX,
+    CONTROL_SAMPLES_PER_TREAT,
     HGFC_ASSET_ID,
 )
 
@@ -42,6 +45,26 @@ def init_ee(project):
     except Exception:
         ee.Authenticate()
         ee.Initialize(project=project)
+
+
+def load_treatment_cell_counts(treatment_cells_path: str = TREATMENT_CELLS):
+    """Count treatment cells per PA from treatment_cells.parquet."""
+    treat_df = gpd.read_parquet(treatment_cells_path)
+    if treat_df.empty or "WDPAID" not in treat_df.columns:
+        return {}
+    counts = treat_df.groupby(treat_df["WDPAID"].astype(str)).size()
+    return {wdpaid: int(n) for wdpaid, n in counts.items()}
+
+
+def calc_n_control_samples(
+    n_treat,
+    per_treat=CONTROL_SAMPLES_PER_TREAT,
+    minimum=CONTROL_N_SAMPLES_MIN,
+    maximum=CONTROL_N_SAMPLES_MAX,
+):
+    """Control sample size: per_treat per treatment cell, clipped to [minimum, maximum]."""
+    n_treat = 0 if n_treat is None else int(n_treat)
+    return min(maximum, max(minimum, per_treat * n_treat))
 
 
 def get_all_pas():
@@ -153,7 +176,8 @@ def get_control_cells(
     test_sites: str,
     *,
     output_parquet: str = CONTROL_CELLS,
-    n_samples: int = CONTROL_N_SAMPLES,
+    treatment_cells_path: str = TREATMENT_CELLS,
+    n_samples: int | None = None,
     sample_scale_m: int = CONTROL_SPACING,
     seed: int = RAND_SEED,
     inner_buffer_m: int = CONTROL_INNER_BUFFER,
@@ -165,13 +189,32 @@ def get_control_cells(
     init_ee(PROJECT)
     pa_gdf = gpd.read_file(test_sites)
     all_pas = get_all_pas()
+    try:
+        treat_counts = load_treatment_cell_counts(treatment_cells_path)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            f"Treatment cells not found at {treatment_cells_path}. "
+            "Run get_treatment_cells.py first."
+        ) from exc
 
     all_cells = []
     pa_count = 0
     total_pas = len(pa_gdf)
     for _, row in pa_gdf.iterrows():
         wdpaid = int(row["WDPAID"])
+        n_treat = treat_counts.get(str(wdpaid), 0)
+        if n_treat == 0:
+            print(f"Skipping PA: {wdpaid} (0 treatment cells)")
+            continue
+        n_samples_pa = (
+            n_samples if n_samples is not None else calc_n_control_samples(n_treat)
+        )
         print("Starting PA: ", wdpaid)
+        print(
+            f"Treatment cells: {n_treat}; requesting {n_samples_pa} control cells "
+            f"(min={CONTROL_N_SAMPLES_MIN}, max={CONTROL_N_SAMPLES_MAX}, "
+            f"per_treat={CONTROL_SAMPLES_PER_TREAT})"
+        )
 
         pa_geom = all_pas.filter(ee.Filter.eq("SITE_ID", wdpaid)).geometry()
 
@@ -180,7 +223,7 @@ def get_control_cells(
             all_pas,
             pa_geom,
             wdpaid,
-            n_samples=n_samples,
+            n_samples=n_samples_pa,
             sample_scale_m=sample_scale_m,
             seed=seed,
             inner_buffer_m=inner_buffer_m,
@@ -193,7 +236,7 @@ def get_control_cells(
             print(f"Warning: WDPAID {wdpaid}: no control cells")
             continue
 
-        print("Appending cells for PA: ", wdpaid)
+        print(f"Got {len(cells_gdf)} control cells (requested {n_samples_pa})")
         all_cells.append(cells_gdf)
 
         print("Completed PA: ", wdpaid)

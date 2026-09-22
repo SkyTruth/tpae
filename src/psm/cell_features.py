@@ -18,9 +18,54 @@ REQUIRED_COLS = COVARIATES + [
     "biome",
 ]
 
+# Earth Engine aborts getInfo() after 5000 features.
+EE_GETINFO_LIMIT = 5000
+
 
 def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
     """Aggregate covariates within grid cells and join country / ecoregion / biome."""
+    n = grid_fc.size().getInfo()
+    if n == 0:
+        return grid_fc, pd.DataFrame()
+
+    reduced_chunks = []
+    df_chunks = []
+    for start in range(0, n, EE_GETINFO_LIMIT):
+        chunk = grid_fc.filter(
+            ee.Filter.And(
+                ee.Filter.gte("cell_ID", start),
+                ee.Filter.lt("cell_ID", start + EE_GETINFO_LIMIT),
+            )
+        )
+        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km)
+        reduced_chunks.append(reduced)
+        if len(cells_df) > 0:
+            df_chunks.append(cells_df)
+
+    grid_fc = ee.FeatureCollection(reduced_chunks).flatten()
+    cells_df = pd.concat(df_chunks, ignore_index=True) if df_chunks else pd.DataFrame()
+
+    if len(cells_df) == 0:
+        return grid_fc, cells_df
+
+    n_before = len(cells_df)
+    n_missing_by_col = cells_df[REQUIRED_COLS].isna().sum()
+    cells_df = cells_df.dropna(subset=REQUIRED_COLS).reset_index(drop=True)
+    n_dropped = n_before - len(cells_df)
+
+    if n_dropped > 0:
+        print(
+            f"⚠ Dropped {n_dropped}/{n_before} cell(s) ({n_dropped / n_before:.1%}) with missing covariate values:"
+        )
+        for col, n_missing in n_missing_by_col.items():
+            if n_missing > 0:
+                print(f"    {col}: {n_missing}")
+
+    return grid_fc, cells_df
+
+
+def _extract_chunk(grid_fc, covariates, ee_crs_1km):
+    """Run reduceRegions, spatial joins, and getInfo on one <=5000-feature chunk."""
     grid_fc = covariates.reduceRegions(
         collection=grid_fc,
         reducer=ee.Reducer.mean(),
