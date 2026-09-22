@@ -194,6 +194,7 @@ def match_treatment_control_mdm(
     )
     control_uses = {}
     in_caliper_control_ids = set()
+    n_candidates_by_treat = {cell_id: 0 for cell_id in treat_df["cell_ID"]}
 
     print(f"Number of candidate treatment cells: {len(treat_df)}")
     print(f"Number of candidate control cells: {len(control_df)}")
@@ -250,6 +251,7 @@ def match_treatment_control_mdm(
         control_ids = control_sub["cell_ID"].values
         for i, treat_row in enumerate(treat_sub.itertuples()):
             candidates = sorted(zip(distances[i], indices[i]))
+            n_candidates_by_treat[treat_row.cell_ID] = len(candidates)
             for _, j in candidates:
                 in_caliper_control_ids.add(control_ids[j])
             pending.append((len(candidates), i, treat_row, candidates))
@@ -302,11 +304,21 @@ def match_treatment_control_mdm(
     match_df.attrs["n_in_caliper_controls"] = n_in_caliper
     match_df.attrs["reuse_cap"] = cap
     match_df.attrs["n_neighbors"] = n_neighbors
+    match_df.attrs["n_candidates_by_treat"] = n_candidates_by_treat
+
+    n_treat_counts = len(n_candidates_by_treat)
+    counts = np.fromiter(
+        n_candidates_by_treat.values(), dtype=float, count=n_treat_counts
+    )
+    frac0 = float((counts == 0).mean()) if n_treat_counts else np.nan
+    frac1 = float((counts == 1).mean()) if n_treat_counts else np.nan
+    frac2 = float((counts >= 2).mean()) if n_treat_counts else np.nan
 
     print("\nResults:")
     print(f"  Treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
     print(f"  Total matched pairs: {len(match_df)}")
+    print(f"  In-caliper neighbors: 0={frac0:.1%}, 1={frac1:.1%}, 2+={frac2:.1%}")
     print(
         f"  In-caliper controls: {n_in_caliper}; "
         f"control supply ratio: {control_supply_ratio:.2f} "
