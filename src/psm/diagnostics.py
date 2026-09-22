@@ -10,6 +10,7 @@ from utils.variables import COVARIATES
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
+    "control_supply_ratio",
     "avg_matches_per_treat",
     "avg_control_reuse",
     "avg_extrapolation",
@@ -26,6 +27,18 @@ def calc_match_coverage(match_df, treat_df):
     return (
         match_df["treat_cell_id"].nunique() / len(treat_df) if len(treat_df) > 0 else 0
     )
+
+
+def calc_control_supply_ratio(n_in_caliper_controls, n_treat, k, cap):
+    """(in-caliper controls × reuse cap) / (n_treat × k).
+
+    Values < 1 mean there are not enough reusable in-caliper controls to give
+    every treatment cell k matches, so the control pool needs to be expanded.
+    """
+    demand = n_treat * k
+    if demand == 0:
+        return np.nan
+    return (n_in_caliper_controls * cap) / demand
 
 
 def calc_avg_matches_per_treat(match_df):
@@ -163,6 +176,15 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
     )
     row["n_covariates_balanced"] = 0
     row["n_covariates_improved"] = 0
+
+    if match_df is not None:
+        n_in_caliper = match_df.attrs.get("n_in_caliper_controls")
+        cap = match_df.attrs.get("reuse_cap")
+        k = match_df.attrs.get("n_neighbors")
+        if n_in_caliper is not None and cap is not None and k is not None:
+            row["control_supply_ratio"] = calc_control_supply_ratio(
+                n_in_caliper, len(treat_df), k, cap
+            )
 
     if not has_matches:
         return row

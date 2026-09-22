@@ -193,6 +193,7 @@ def match_treatment_control_mdm(
         len(treat_df), n_neighbors, reuse_frac=reuse_frac, reuse_ceiling=reuse_ceiling
     )
     control_uses = {}
+    in_caliper_control_ids = set()
 
     print(f"Number of candidate treatment cells: {len(treat_df)}")
     print(f"Number of candidate control cells: {len(control_df)}")
@@ -246,8 +247,11 @@ def match_treatment_control_mdm(
 
         # Assign hardest-to-match treatment cells first (fewest in-caliper candidates)
         pending = []
+        control_ids = control_sub["cell_ID"].values
         for i, treat_row in enumerate(treat_sub.itertuples()):
             candidates = sorted(zip(distances[i], indices[i]))
+            for _, j in candidates:
+                in_caliper_control_ids.add(control_ids[j])
             pending.append((len(candidates), i, treat_row, candidates))
         pending.sort(key=lambda item: item[0])
 
@@ -291,10 +295,23 @@ def match_treatment_control_mdm(
             ]
         )
 
+    n_in_caliper = len(in_caliper_control_ids)
+    n_treat = len(treat_df)
+    demand = n_treat * n_neighbors
+    control_supply_ratio = (n_in_caliper * cap) / demand if demand else np.nan
+    match_df.attrs["n_in_caliper_controls"] = n_in_caliper
+    match_df.attrs["reuse_cap"] = cap
+    match_df.attrs["n_neighbors"] = n_neighbors
+
     print("\nResults:")
     print(f"  Treatment cells matched: {match_df['treat_cell_id'].nunique()}")
     print(f"  Unique control cells used: {match_df['control_cell_id'].nunique()}")
     print(f"  Total matched pairs: {len(match_df)}")
+    print(
+        f"  In-caliper controls: {n_in_caliper}; "
+        f"control supply ratio: {control_supply_ratio:.2f} "
+        f"(in-caliper × cap) / (n_treat × k)"
+    )
     if control_uses:
         print(
             f"  Control reuse: max={max(control_uses.values())} "
