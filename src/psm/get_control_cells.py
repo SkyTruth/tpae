@@ -123,20 +123,21 @@ def sample_points(
     # Sample random unprotected points within the donut
     points = (
         ee.Image.constant(0)
+        .rename("stratum")
         .updateMask(unprotected_mask)
-        .sample(
+        .stratifiedSample(
+            numPoints=n_samples,
+            classBand="stratum",
             region=donut,
             scale=sample_scale_m,
             projection=EE_CRS_METERS,
-            numPixels=n_samples,
             seed=seed,
             geometries=True,
         )
     )
 
     # Set WDPAID as a property of each point
-    points = points.map(lambda f: f.set("WDPAID", wdpaid))
-    return points.limit(n_samples)
+    return points.map(lambda f: f.set("WDPAID", wdpaid))
 
 
 def points_to_cells(points_fc):
@@ -216,7 +217,8 @@ def get_control_cells(
             f"per_treat={CONTROL_SAMPLES_PER_TREAT})"
         )
 
-        pa_geom = all_pas.filter(ee.Filter.eq("SITE_ID", wdpaid)).geometry()
+        # Use the cleaned site geometry (same one used for treatment cells)
+        pa_geom = ee.Geometry(row.geometry.__geo_interface__)
 
         print("Sampling points for PA: ", wdpaid)
         points_fc = sample_points(
@@ -251,7 +253,8 @@ def get_control_cells(
     all_cells = gpd.GeoDataFrame(
         pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
     )
-    all_cells = all_cells.drop_duplicates(subset="geometry")
+    # A cell can be a control for more than one PA, so only drop duplicates within a PA
+    all_cells = all_cells.drop_duplicates(subset=["WDPAID", "geometry"])
     all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
     print("Saving cells to parquet: ", output_parquet)
     all_cells.to_parquet(output_parquet)
