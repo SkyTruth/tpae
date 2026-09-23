@@ -310,6 +310,13 @@ MAX_CONTROL_REUSE_FRAC = (
 MAX_CONTROL_REUSE_CEILING = (
     8  # reuse_ceiling: hard ceiling on number of times a control can be used
 )
+# Per-covariate calipers: a control must also be within this many pooled SDs of the
+# treatment cell on each listed covariate (on top of the Mahalanobis caliper)
+PER_COVARIATE_CALIPERS = {
+    "elevation": 0.75,
+    "travel_time": 0.75,
+    "treecover2000": 0.75,
+}
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2

@@ -12,6 +12,7 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
+from psm.diagnostics import calc_pooled_sd
 from psm.predict import load_propensity_artifacts, predict_propensity
 from utils.variables import (
     CALIPER_MDM,
@@ -21,6 +22,7 @@ from utils.variables import (
     MAX_CONTROL_REUSE_FRAC,
     N_NEIGHBORS_MDM,
     N_NEIGHBORS_PSM,
+    PER_COVARIATE_CALIPERS,
 )
 
 """
@@ -74,8 +76,14 @@ def _control_pool(control_df, group_cols, key):
     return control_df.iloc[np.flatnonzero(mask)]
 
 
-def _in_caliper_candidates(treat_sub, control_sub, feature_cols, caliper, nn_kwargs):
-    """Map treat cell_ID → sorted (distance, control_cell_id) within caliper."""
+def _in_caliper_candidates(
+    treat_sub, control_sub, feature_cols, caliper, nn_kwargs, max_abs_diff=None
+):
+    """Map treat cell_ID → sorted (distance, control_cell_id) within caliper.
+
+    max_abs_diff: optional {column: limit}; candidates must also have
+    |treat - control| ≤ limit on each column.
+    """
     if treat_sub.empty or control_sub.empty:
         return {}
     nn = NearestNeighbors(**nn_kwargs)
@@ -84,14 +92,22 @@ def _in_caliper_candidates(treat_sub, control_sub, feature_cols, caliper, nn_kwa
         treat_sub[feature_cols].values, radius=caliper
     )
     control_ids = control_sub["cell_ID"].values
+    limits = [
+        (treat_sub[col].values, control_sub[col].values, limit)
+        for col, limit in (max_abs_diff or {}).items()
+    ]
     out = {}
     for i, treat_row in enumerate(treat_sub.itertuples()):
-        out[treat_row.cell_ID] = sorted(zip(distances[i], control_ids[indices[i]]))
+        dist, idx = distances[i], indices[i]
+        for treat_vals, control_vals, limit in limits:
+            keep = np.abs(control_vals[idx] - treat_vals[i]) <= limit
+            dist, idx = dist[keep], idx[keep]
+        out[treat_row.cell_ID] = sorted(zip(dist, control_ids[idx]))
     return out
 
 
 def waterfall_in_caliper_neighbors(
-    treat_df, control_df, feature_cols, caliper, nn_kwargs
+    treat_df, control_df, feature_cols, caliper, nn_kwargs, max_abs_diff=None
 ):
     """Lock each treatment cell to the tightest pool with ≥1 in-caliper neighbor.
 
@@ -109,7 +125,7 @@ def waterfall_in_caliper_neighbors(
         for key, treat_sub in subset.groupby(list(group_cols), dropna=False):
             control_sub = _control_pool(control_df, group_cols, _as_tuple(key))
             cand_map = _in_caliper_candidates(
-                treat_sub, control_sub, feature_cols, caliper, nn_kwargs
+                treat_sub, control_sub, feature_cols, caliper, nn_kwargs, max_abs_diff
             )
             for treat_row in treat_sub.itertuples():
                 candidates = cand_map.get(treat_row.cell_ID, [])
@@ -250,10 +266,17 @@ def match_treatment_control_mdm(
     n_neighbors=N_NEIGHBORS_MDM,
     reuse_frac=MAX_CONTROL_REUSE_FRAC,
     reuse_ceiling=MAX_CONTROL_REUSE_CEILING,
+    per_covariate_calipers=None,
 ):
-    """Match each treatment cell to control cells by Mahalanobis Distance Matching (MDM)."""
+    """Match each treatment cell to control cells by Mahalanobis Distance Matching (MDM).
+
+    per_covariate_calipers: {covariate: n_sd}; controls must also be within
+    n_sd pooled SDs of the treatment cell on each listed covariate.
+    """
     if covariates is None:
         covariates = COVARIATES
+    if per_covariate_calipers is None:
+        per_covariate_calipers = PER_COVARIATE_CALIPERS
 
     cells_df = cells_df.copy()
     control_only = cells_df[cells_df["protected"] == 0]
@@ -278,6 +301,16 @@ def match_treatment_control_mdm(
         f"(reuse_frac={reuse_frac}, reuse_ceiling={reuse_ceiling}, k={n_neighbors})"
     )
 
+    # Convert SD multiples to raw units, using the same pooled SD as the SMD diagnostic.
+    # Pooled SD is NaN with a single treatment cell, so fall back to the control SD.
+    max_abs_diff = {}
+    for col, n_sd in per_covariate_calipers.items():
+        sd = calc_pooled_sd(treat_df[col], control_df[col])
+        if not np.isfinite(sd):
+            sd = control_df[col].std()
+        max_abs_diff[col] = n_sd * sd
+    print(f"Per-covariate calipers (SD): {per_covariate_calipers}")
+
     scaled_cols = [f"_scaled_{c}" for c in covariates]
     pending, n_candidates_by_treat, in_caliper_control_ids = (
         waterfall_in_caliper_neighbors(
@@ -286,6 +319,7 @@ def match_treatment_control_mdm(
             scaled_cols,
             caliper,
             {"metric": "mahalanobis", "metric_params": {"VI": inv_cov}},
+            max_abs_diff,
         )
     )
     _print_waterfall_pools(pending, len(treat_df))
