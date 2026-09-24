@@ -321,6 +321,7 @@ PER_COVARIATE_CALIPERS = {
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
 SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
+MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER = 10_000  # minimum distance (m) from PA

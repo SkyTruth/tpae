@@ -10,6 +10,7 @@ from utils.variables import (
     BIOME_ASSET_ID,
     PSM_CELL_SIZE,
     COVARIATES,
+    MIN_LAND_FRACTION,
 )
 
 REQUIRED_COLS = COVARIATES + [
@@ -74,6 +75,7 @@ def _extract_chunk(grid_fc, covariates, ee_crs_1km):
     ).select(
         "cell_ID",
         *COVARIATES,
+        "land_frac",
         "protected",
     )
 
@@ -134,6 +136,16 @@ def _extract_chunk(grid_fc, covariates, ee_crs_1km):
     cells_list = centroids.getInfo()["features"]
     cells_df = pd.DataFrame([feature["properties"] for feature in cells_list])
     # print(cells_df.head())
+
+    # Drop any cells that are mostly water
+    is_water = ~(cells_df["land_frac"] >= MIN_LAND_FRACTION)
+    if is_water.any():
+        n_water_treat = (is_water & (cells_df["protected"] == 1)).sum()
+        print(
+            f"Dropped {is_water.sum()} cell(s) with land fraction < {MIN_LAND_FRACTION} "
+            f"({n_water_treat} treatment, {is_water.sum() - n_water_treat} control)."
+        )
+    cells_df = cells_df[~is_water].reset_index(drop=True)
 
     n_before = len(cells_df)
     n_missing_by_col = cells_df[REQUIRED_COLS].isna().sum()
