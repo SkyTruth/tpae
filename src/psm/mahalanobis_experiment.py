@@ -33,7 +33,11 @@ from psm.prepare_pa_grid import load_pa_candidate_cells
 from psm.covariates import build_resampled_covariates
 from psm.cell_features import extract_cells_with_covariates
 from psm.match_cells import match_treatment_control_mdm
-from psm.diagnostics import site_diagnostics_row, save_experiment_diagnostics
+from psm.diagnostics import (
+    site_diagnostics_row,
+    save_experiment_diagnostics,
+    save_report_card,
+)
 
 ee.Authenticate()
 ee.Initialize(project=PROJECT)
@@ -42,6 +46,7 @@ site_selector = SiteSelector()
 
 EE_CRS_1km = ee.Projection(EE_CRS_METERS).atScale(PSM_CELL_SIZE)
 output_path = f"results/mdm_experiments/{run_id}.csv"
+report_card_path = f"results/report_cards/{run_id}_report_card.csv"
 
 # Load the covariate stack.
 covariates = build_resampled_covariates(EE_CRS_1km)
@@ -67,6 +72,8 @@ for i, site_id in enumerate(TEST_SITE_IDS, start=1):
 
     results_df = save_experiment_diagnostics(site_rows, output_path)
 
+save_report_card(results_df, report_card_path)
+
 print("\nExperiment summary")
 print(f"  Sites: {len(results_df)}")
 print(f"  Mean match coverage: {results_df['match_coverage'].mean():.1%}")
@@ -74,4 +81,4 @@ print(f"  Mean |SMD| after: {results_df['avg_abs_smd_after'].mean():.3f}")
 print(
     f"  Mean covariates balanced: {results_df['n_covariates_balanced'].mean():.1f} / 7"
 )
-print(f"\nSaved to {output_path}")
+print(f"\nSaved to {output_path} and {report_card_path}")

@@ -5,13 +5,23 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from utils.variables import COVARIATES
+from utils.variables import (
+    COVARIATES,
+    REPORT_NO_MAX_SMD,
+    REPORT_NO_MIN_COVERAGE,
+    REPORT_YES_MAX_CROSS_BORDER,
+    REPORT_YES_MAX_SMD,
+    REPORT_YES_MIN_COVERAGE,
+    REPORT_YES_MIN_MATCHED_TREAT,
+)
 
 ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
 
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
+    "n_matched_treat",
+    "cross_border_share",
     "frac_treat_0_neighbors",
     "frac_treat_1_neighbor",
     "frac_treat_2plus_neighbors",
@@ -67,6 +77,14 @@ def calc_avg_matches_per_treat(match_df):
 def calc_control_reuse(match_df):
     """Calculate average number of times a control cell is reused."""
     return match_df.groupby("control_cell_id").size().mean()
+
+
+def calc_cross_border_share(match_df, cells_df):
+    """Share of matched pairs whose control is in a different country than its treatment cell."""
+    country = cells_df.set_index("cell_ID")["country"]
+    treat_country = match_df["treat_cell_id"].map(country)
+    control_country = match_df["control_cell_id"].map(country)
+    return float((treat_country != control_country).mean())
 
 
 def calc_extrapolation(t_vals, c_vals):
@@ -200,6 +218,7 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
     row["match_coverage"] = (
         calc_match_coverage(match_df, treat_df) if has_matches else 0.0
     )
+    row["n_matched_treat"] = match_df["treat_cell_id"].nunique() if has_matches else 0
     row["n_covariates_balanced"] = 0
     row["n_covariates_improved"] = 0
 
@@ -233,6 +252,7 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
 
     row.update(
         {
+            "cross_border_share": calc_cross_border_share(match_df, cells_df),
             "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
             "avg_control_reuse": calc_control_reuse(match_df),
             "avg_extrapolation": avg_extrapolation,
@@ -257,3 +277,102 @@ def save_experiment_diagnostics(site_rows, output_path):
     results_df.to_csv(output_path, index=False)
     print(f"Saved {len(results_df)} site rows to {output_path}")
     return results_df
+
+
+"""
+Report card: the key diagnostics per site and whether an effectiveness assessment is valid
+"""
+
+REPORT_CARD_COLUMNS = [
+    "site_id",
+    "n_matched_treat",
+    "match_coverage_pct",
+    "max_abs_smd_after",
+    "worst_covariate",
+    "avg_abs_smd_after",
+    "n_covariates_balanced",
+    "cross_border_pct",
+    "reason",
+    "assessable?",
+]
+
+
+def classify_site(row):
+    """Return ("Yes" | "Caution" | "No", reason) for one site's diagnostics row.
+
+    No: results cannot be meaningful (too little of the PA matched, or a covariate
+    too imbalanced).
+    Caution: usable, but misses a Yes criterion (imbalance beyond the 0.25 guideline
+    for reliable adjustment, low coverage, cross-border pairs, or few matched cells).
+    """
+    coverage = row["match_coverage"]
+    if pd.isna(coverage) or coverage == 0:
+        return "No", "no matched treatment cells"
+
+    max_smd = row["max_abs_smd_after"]
+    worst = row["worst_covariate"]
+    cross_border = row["cross_border_share"]
+
+    no_reasons = []
+    if coverage < REPORT_NO_MIN_COVERAGE:
+        no_reasons.append(f"coverage {coverage:.0%} < {REPORT_NO_MIN_COVERAGE:.0%}")
+    if max_smd > REPORT_NO_MAX_SMD:
+        no_reasons.append(f"{worst} |SMD| {max_smd:.3f} > {REPORT_NO_MAX_SMD}")
+    if no_reasons:
+        return "No", "; ".join(no_reasons)
+
+    caution_reasons = []
+    n_matched = row["n_matched_treat"]
+    if n_matched < REPORT_YES_MIN_MATCHED_TREAT:
+        caution_reasons.append(
+            f"only {int(n_matched)} matched treatment cells (< {REPORT_YES_MIN_MATCHED_TREAT})"
+        )
+    if coverage < REPORT_YES_MIN_COVERAGE:
+        caution_reasons.append(
+            f"coverage {coverage:.0%} < {REPORT_YES_MIN_COVERAGE:.0%}"
+        )
+    if max_smd > REPORT_YES_MAX_SMD:
+        caution_reasons.append(f"{worst} |SMD| {max_smd:.3f} > {REPORT_YES_MAX_SMD}")
+    if cross_border > REPORT_YES_MAX_CROSS_BORDER:
+        caution_reasons.append(
+            f"cross-border pairs {cross_border:.0%} > {REPORT_YES_MAX_CROSS_BORDER:.0%}"
+        )
+    if caution_reasons:
+        return "Caution", "; ".join(caution_reasons)
+
+    return "Yes", "meets all criteria"
+
+
+def build_report_card(results_df):
+    """One row per site with the key validity diagnostics and an assessable? tier."""
+    card = results_df.copy()
+    abs_smds = card[ABS_SMD_AFTER_COLS].astype(float)
+    card["max_abs_smd_after"] = abs_smds.max(axis=1)
+    card["worst_covariate"] = [
+        row.idxmax().removeprefix("abs_smd_after_") if row.notna().any() else None
+        for _, row in abs_smds.iterrows()
+    ]
+    tiers = card.apply(classify_site, axis=1, result_type="expand")
+    card["assessable?"], card["reason"] = tiers[0], tiers[1]
+    # Nullable integers so counts print as whole numbers even when some sites are empty
+    for col in ("n_matched_treat", "n_covariates_balanced"):
+        card[col] = card[col].round().astype("Int64")
+    card["match_coverage_pct"] = (card["match_coverage"] * 100).round(1)
+    card["cross_border_pct"] = (card["cross_border_share"] * 100).round(1)
+    return card[REPORT_CARD_COLUMNS].round(3)
+
+
+def save_report_card(results_df, output_path):
+    """Write the report card CSV and print the tier counts."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    card = build_report_card(results_df)
+    card.to_csv(output_path, index=False)
+    counts = card["assessable?"].value_counts()
+    print(
+        f"Saved report card to {output_path}: "
+        + ", ".join(
+            f"{tier}={counts.get(tier, 0)}" for tier in ("Yes", "Caution", "No")
+        )
+    )
+    return card

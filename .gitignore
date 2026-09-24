@@ -218,3 +218,5 @@ models/*
 results/*
 !results/mdm_experiments/
 !results/mdm_experiments/**
+!results/report_cards/
+!results/report_cards/**

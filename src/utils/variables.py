@@ -318,6 +318,18 @@ PER_COVARIATE_CALIPERS = {
     "treecover2000": 0.75,
 }
 
+# Parameters for the per-site report card ("assessable?": Yes / Caution / No)
+# No if any: match coverage too low, or any covariate very imbalanced
+REPORT_NO_MIN_COVERAGE = 0.25
+REPORT_NO_MAX_SMD = 0.5
+# Yes if all: enough matched treatment cells, high enough match coverage, every
+# covariate within the |SMD| 0.25 guideline for reliable adjustment (Stuart 2010), few cross-border pairs
+REPORT_YES_MIN_MATCHED_TREAT = 10
+REPORT_YES_MIN_COVERAGE = 0.75
+REPORT_YES_MAX_SMD = 0.25
+REPORT_YES_MAX_CROSS_BORDER = 0.10
+# Caution otherwise
+
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
 SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
