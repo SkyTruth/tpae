@@ -14,6 +14,7 @@ from utils.variables import (
     REPORT_YES_MIN_COVERAGE,
     REPORT_YES_MIN_MATCHED_TREAT,
     REPORT_CARD_COLUMNS,
+    FENG_BALANCED_SMD,
 )
 
 ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
@@ -128,7 +129,7 @@ def balance_verdict(smd):
     equal means are treated as balanced (SMD = 0)."""
     if pd.isna(smd):
         return 0
-    if abs(smd) <= 0.2:
+    if abs(smd) <= FENG_BALANCED_SMD:
         return 1
     return 0
 

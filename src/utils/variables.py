@@ -321,6 +321,7 @@ PER_COVARIATE_CALIPERS = {
     "travel_time": 0.75,
     "treecover2000": 0.75,
 }
+FENG_BALANCED_SMD = 0.2
 
 # Parameters for the per-site report card ("assessable?": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
