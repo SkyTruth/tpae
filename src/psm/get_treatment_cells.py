@@ -7,6 +7,7 @@ If the PA is large, a random sample of valid interior cells is returned.
 
 from pathlib import Path
 import sys
+
 _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
@@ -24,6 +25,7 @@ from utils.variables import (
     PA_AREA_THRESHOLD,
     SAMPLE_AREA_PCT,
 )
+
 
 def draw_grid(pa_geom, cell_size):
     """
@@ -51,7 +53,6 @@ def draw_grid(pa_geom, cell_size):
     valid_grid = valid_grid.drop("exclude", axis=1)
 
     return valid_grid
-
 
 
 def sample_cells(pa_geom, n_samples, seed, cell_size):
@@ -83,14 +84,16 @@ def sample_cells(pa_geom, n_samples, seed, cell_size):
         if cell.disjoint(pa_geom) or cell.intersects(boundary):
             continue
         # Reject the cell if it overlaps any previously accepted cell.
-        if any(cell.intersects(existing) and not cell.touches(existing) for existing in cells):
+        if any(
+            cell.intersects(existing) and not cell.touches(existing)
+            for existing in cells
+        ):
             continue
         cells.append(cell)
 
     cells = gpd.GeoDataFrame({"geometry": cells}, crs=GPD_CRS_METERS)
 
     return cells
-
 
 
 def get_treatment_cells(test_sites):
@@ -113,7 +116,9 @@ def get_treatment_cells(test_sites):
         if area < PA_AREA_THRESHOLD:
             cells = draw_grid(pa_geom, PSM_CELL_SIZE)
         else:
-            cells = sample_cells(pa_geom, (area/1000000) * SAMPLE_AREA_PCT, RAND_SEED, PSM_CELL_SIZE)
+            cells = sample_cells(
+                pa_geom, (area / 1000000) * SAMPLE_AREA_PCT, RAND_SEED, PSM_CELL_SIZE
+            )
         # Add attributes to cells
         cells["WDPAID"] = str(row.get("WDPAID"))
         cells["protected"] = 1
@@ -125,7 +130,9 @@ def get_treatment_cells(test_sites):
             continue
         all_cells.append(cells)
 
-    all_cells = gpd.GeoDataFrame(pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS)
+    all_cells = gpd.GeoDataFrame(
+        pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
+    )
     all_cells = all_cells.drop_duplicates(subset="geometry")
     all_cells["geometry"] = all_cells.geometry.set_precision(1.0)
     all_cells = all_cells.to_crs(GPD_CRS_PARQUET)

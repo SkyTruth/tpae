@@ -19,9 +19,13 @@ __all__ = [
 ]
 
 
-def load_match_table(site_id: int, match_method: str = "mdm", data_dir: str | Path = "data") -> pd.DataFrame:
-    f"""Load the MDM/PSM match table for a site."""
-    path = Path(data_dir) / match_method / f"match_table_{match_method}_{site_id}.parquet"
+def load_match_table(
+    site_id: int, match_method: str = "mdm", data_dir: str | Path = "data"
+) -> pd.DataFrame:
+    """Load the MDM/PSM match table for a site."""
+    path = (
+        Path(data_dir) / match_method / f"match_table_{match_method}_{site_id}.parquet"
+    )
     mt = pd.read_parquet(path)
     mt["treat_cell_id"] = mt["treat_cell_id"].astype(int)
     mt["control_cell_id"] = mt["control_cell_id"].astype(int)
@@ -34,8 +38,14 @@ def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.Dat
     scores = score_gdf[["cell_ID"] + SCORE_COLS].drop_duplicates("cell_ID").copy()
     scores["cell_ID"] = scores["cell_ID"].astype(int)
 
-    treat_renamed = {"cell_ID": "treat_cell_id", **{c: f"treat_{c}" for c in SCORE_COLS}}
-    ctrl_renamed = {"cell_ID": "control_cell_id", **{c: f"control_{c}" for c in SCORE_COLS}}
+    treat_renamed = {
+        "cell_ID": "treat_cell_id",
+        **{c: f"treat_{c}" for c in SCORE_COLS},
+    }
+    ctrl_renamed = {
+        "cell_ID": "control_cell_id",
+        **{c: f"control_{c}" for c in SCORE_COLS},
+    }
 
     match_df = match_table.merge(
         scores.rename(columns=treat_renamed), on="treat_cell_id", how="left"
@@ -47,7 +57,9 @@ def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.Dat
     return match_df
 
 
-def aggregate_pa_relative_scores(match_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, float]]:
+def aggregate_pa_relative_scores(
+    match_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, float]]:
     """Average score differences in two steps to avoid weighting cells with more matches.
 
     Returns per-treatment-cell mean differences and PA-level relative scores.

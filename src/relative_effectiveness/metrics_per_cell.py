@@ -23,11 +23,10 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
     """
 
     def calc_loss_score_per_cell(self, habitat_loss_raster, fc):
-        """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`.
-        """
+        """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`."""
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        loss_area_image = (
-            cell_area_image.updateMask(habitat_loss_raster).rename("loss_area")
+        loss_area_image = cell_area_image.updateMask(habitat_loss_raster).rename(
+            "loss_area"
         )
         combined = loss_area_image.addBands(cell_area_image)
 
@@ -65,8 +64,8 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
         # but this might be more accurate given the projection
 
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        habitat_area_image = (
-            cell_area_image.updateMask(habitat_raster).rename("habitat_area")
+        habitat_area_image = cell_area_image.updateMask(habitat_raster).rename(
+            "habitat_area"
         )
         combined = habitat_area_image.addBands(cell_area_image)
 
@@ -111,4 +110,3 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
             return feature.set("condition_score", extent.multiply(intactness))
 
         return fc.map(compute)
-
