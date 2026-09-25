@@ -270,9 +270,9 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
 
 
 def save_experiment_diagnostics(site_rows, output_path):
-    """Write one-row-per-site experiment diagnostics to a single CSV."""
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    """Write one-row-per-site experiment diagnostics to a single CSV (local or gs:// path)."""
+    if "://" not in output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     results_df = pd.DataFrame(site_rows).reindex(columns=DIAGNOSTIC_COLUMNS)
     results_df.to_csv(output_path, index=False)
     print(f"Saved {len(results_df)} site rows to {output_path}")
