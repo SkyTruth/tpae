@@ -304,6 +304,7 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 MDM_EXPERIMENTS_PREFIX = (
     "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
 )
+REPORT_CARDS_PREFIX = "report_cards/"  # prefix for MDM report cards in GCS bucket
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
@@ -320,6 +321,32 @@ PER_COVARIATE_CALIPERS = {
     "travel_time": 0.75,
     "treecover2000": 0.75,
 }
+FENG_BALANCED_SMD = 0.2
+
+# Parameters for the per-site report card ("assessable": Yes / Caution / No)
+# No if any: match coverage too low, or any covariate very imbalanced
+REPORT_NO_MIN_COVERAGE = 0.25
+REPORT_NO_MAX_SMD = 0.5
+# Yes if all: enough matched treatment cells, high enough match coverage, every
+# covariate within the |SMD| 0.25 guideline for reliable adjustment (Stuart 2010), few cross-border pairs
+REPORT_YES_MIN_MATCHED_TREAT = 10
+REPORT_YES_MIN_COVERAGE = 0.75
+REPORT_YES_MAX_SMD = 0.25
+REPORT_YES_MAX_CROSS_BORDER = 0.10
+# Caution otherwise
+
+REPORT_CARD_COLUMNS = [
+    "site_id",
+    "n_matched_treat",
+    "match_coverage_pct",
+    "max_abs_smd_after",
+    "worst_covariate",
+    "avg_abs_smd_after",
+    "n_covariates_balanced",
+    "cross_border_pct",
+    "reason",
+    "assessable",
+]
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
