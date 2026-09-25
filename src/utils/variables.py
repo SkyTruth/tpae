@@ -334,6 +334,19 @@ REPORT_YES_MAX_SMD = 0.25
 REPORT_YES_MAX_CROSS_BORDER = 0.10
 # Caution otherwise
 
+REPORT_CARD_COLUMNS = [
+    "site_id",
+    "n_matched_treat",
+    "match_coverage_pct",
+    "max_abs_smd_after",
+    "worst_covariate",
+    "avg_abs_smd_after",
+    "n_covariates_balanced",
+    "cross_border_pct",
+    "reason",
+    "assessable",
+]
+
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
 SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area

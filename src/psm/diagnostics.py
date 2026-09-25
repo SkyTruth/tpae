@@ -13,6 +13,7 @@ from utils.variables import (
     REPORT_YES_MAX_SMD,
     REPORT_YES_MIN_COVERAGE,
     REPORT_YES_MIN_MATCHED_TREAT,
+    REPORT_CARD_COLUMNS,
 )
 
 ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
@@ -282,19 +283,6 @@ def save_experiment_diagnostics(site_rows, output_path):
 """
 Report card: the key diagnostics per site and whether an effectiveness assessment is valid
 """
-
-REPORT_CARD_COLUMNS = [
-    "site_id",
-    "n_matched_treat",
-    "match_coverage_pct",
-    "max_abs_smd_after",
-    "worst_covariate",
-    "avg_abs_smd_after",
-    "n_covariates_balanced",
-    "cross_border_pct",
-    "reason",
-    "assessable?",
-]
 
 
 def classify_site(row):
