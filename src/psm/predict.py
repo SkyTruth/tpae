@@ -132,4 +132,3 @@ def predict_propensity(
     """
     X = build_design_matrix(df, artifacts)
     return artifacts["model"].predict_proba(X)[:, 1]
-    

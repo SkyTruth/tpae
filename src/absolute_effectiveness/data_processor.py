@@ -1,5 +1,10 @@
 import ee
 from utils.variables import (
+    AFCD_2018_ASSET_ID,
+    AFCD_2019_ASSET_ID,
+    AFCD_2020_ASSET_ID,
+    AFCD_2021_ASSET_ID,
+    AFCD_2022_ASSET_ID,
     ANALYSIS_END_YR,
     GLC_ASSET_ID,
     GLC_CLASSES,
@@ -21,6 +26,7 @@ class DataProcessor:
         gpw_collection,
         nfw_collection,
         hgfc_image,
+        afcd_image=None,
         analysis_end_yr=ANALYSIS_END_YR,
         glc_classes=GLC_CLASSES,
         nfw_threshold=NFW_THRESHOLD,
@@ -29,6 +35,9 @@ class DataProcessor:
         self.gpw_collection = gpw_collection
         self.nfw_collection = nfw_collection
         self.hgfc_image = hgfc_image
+        # Optional region-specific cropland override (African PAs only).
+        # None for the global workflow, which leaves the analysis unchanged.
+        self.afcd_image = afcd_image
         self.analysis_end_yr = analysis_end_yr
         self.glc_classes = glc_classes
         self.nfw_threshold = nfw_threshold
@@ -43,6 +52,25 @@ class DataProcessor:
             gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
             nfw_collection=ee.ImageCollection(NFW_ASSET_ID),
             hgfc_image=ee.Image(HGFC_ASSET_ID),
+        )
+
+    @classmethod
+    def from_africa_defaults(cls):
+        """
+        Same global sources as from_gee_defaults, plus the African Cropland
+        Dataset (AFCD).
+        """
+        return cls(
+            glc_collection=ee.ImageCollection(GLC_ASSET_ID),
+            gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
+            nfw_collection=ee.ImageCollection(NFW_ASSET_ID),
+            hgfc_image=ee.Image(HGFC_ASSET_ID),
+            afcd_image = (ee.Image(AFCD_2018_ASSET_ID).rename("AFCD_2018")
+                .addBands(ee.Image(AFCD_2019_ASSET_ID).rename("AFCD_2019"))
+                .addBands(ee.Image(AFCD_2020_ASSET_ID).rename("AFCD_2020"))
+                .addBands(ee.Image(AFCD_2021_ASSET_ID).rename("AFCD_2021"))
+                .addBands(ee.Image(AFCD_2022_ASSET_ID).rename("AFCD_2022"))
+            ),
         )
 
     def get_land_mask(self):
@@ -115,3 +143,16 @@ class DataProcessor:
         hgfc_masked = hgfc_selected.updateMask(analysis_mask)
         hgfc = hgfc_masked.unmask()
         return self._apply_land_mask(hgfc) if land_masked else hgfc
+
+    def process_afcd(self, start_yr, land_masked=True):
+        """
+        Process African Cropland Dataset (AFCD) data for the analysis
+        period.
+
+        """
+        # Select bands for analysis years
+        analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
+        band_names = [f"AFCD_{year}" for year in analysis_years]
+        afcd_selected = self.afcd_image.select(band_names)
+        
+        return self._apply_land_mask(afcd_selected) if land_masked else afcd_selected
