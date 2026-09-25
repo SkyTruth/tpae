@@ -301,21 +301,41 @@ PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GC
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for MDM
-CALIPER_MDM = 3.0
-N_NEIGHBORS_MDM = 4  # number of control cells for every treatment cell
 MDM_EXPERIMENTS_PREFIX = (
     "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
 )
+CALIPER_MDM = 2.0
+N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
+# Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
+MAX_CONTROL_REUSE_FRAC = (
+    0.05  # reuse_frac: max share of matched pairs from any one control
+)
+MAX_CONTROL_REUSE_CEILING = (
+    8  # reuse_ceiling: hard ceiling on number of times a control can be used
+)
+# Per-covariate calipers: a control must also be within this many pooled SDs of the
+# treatment cell on each listed covariate (on top of the Mahalanobis caliper)
+PER_COVARIATE_CALIPERS = {
+    "elevation": 0.75,
+    "travel_time": 0.75,
+    "treecover2000": 0.75,
+}
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
 SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
+MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER = 10_000  # minimum distance (m) from PA
 CONTROL_OUTER_BUFFER = 200_000  # maximum distance (m) from PA
 CONTROL_SPACING = 3000  # minimum distance (m) between control cells
-CONTROL_N_SAMPLES = 2000  # number of control cells to sample for each PA
+# number of control cells to sample for each PA
+CONTROL_N_SAMPLES_MIN = 2000  # floor on control cells per PA (small PAs still need plenty of samples to find rare matches)
+CONTROL_N_SAMPLES_MAX = (
+    5000  # cap on control cells per PA so large parks do not over-sample
+)
+CONTROL_SAMPLES_PER_TREAT = 5  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
 
 # ------------------------------------------------------------------------------------------------
 # FILE PATHS

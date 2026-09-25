@@ -2,9 +2,10 @@
 Load candidate treatment and control cells for a single PA and build a labeled grid FeatureCollection.
 """
 
-import ee
+import pandas as pd
 import geemap
 import geopandas as gpd
+import ee
 
 from utils.variables import TREATMENT_CELLS, CONTROL_CELLS
 
@@ -24,19 +25,15 @@ def load_pa_candidate_cells(site_id, site_selector):
     print(f"Number of candidate treatment cells: {len(treatment_cells)}")
     print(f"Number of candidate control cells: {len(control_cells)}")
 
-    treatment_fc = geemap.geopandas_to_ee(treatment_cells)
-    control_fc = geemap.geopandas_to_ee(control_cells)
-    all_cells = ee.FeatureCollection([treatment_fc, control_fc]).flatten()
-
-    cell_IDs = ee.List.sequence(0, all_cells.size().getInfo() - 1)
-    featureList = all_cells.toList(all_cells.size())
-    grid_fc = ee.FeatureCollection(
-        cell_IDs.map(
-            lambda cell_ID: ee.Feature(featureList.get(cell_ID)).set(
-                {"cell_ID": cell_ID, "label": None}
-            )
-        )
+    all_cells = gpd.GeoDataFrame(
+        pd.concat([treatment_cells, control_cells], ignore_index=True)
     )
+    if len(all_cells) == 0:
+        grid_fc = ee.FeatureCollection([])
+    else:
+        all_cells["cell_ID"] = range(len(all_cells))
+        all_cells["label"] = None
+        grid_fc = geemap.geopandas_to_ee(all_cells)
 
     return {
         "PA_ID": PA_ID,

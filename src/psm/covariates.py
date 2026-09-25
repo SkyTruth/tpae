@@ -63,6 +63,11 @@ def build_resampled_covariates(ee_crs_1km):
     human_footprint = resample(human_footprint)
     ag_suitability = resample(ag_suitability)
 
+    # Share of each cell that is land (1 = land, 2 = water, 0 = no data); not a covariate, just a flag
+    land_frac = resample(
+        ee.Image(HGFC_ASSET_ID).select("datamask").eq(1).rename("land_frac")
+    )
+
     return (
         elevation.addBands(slope)
         .addBands(treecover2000)
@@ -70,4 +75,5 @@ def build_resampled_covariates(ee_crs_1km):
         .addBands(log_pop_density)
         .addBands(human_footprint)
         .addBands(ag_suitability)
+        .addBands(land_frac)
     )

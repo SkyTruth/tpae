@@ -7,14 +7,21 @@ import pandas as pd
 
 from utils.variables import COVARIATES
 
+ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
+
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
+    "frac_treat_0_neighbors",
+    "frac_treat_1_neighbor",
+    "frac_treat_2plus_neighbors",
+    "control_supply_ratio",
     "avg_matches_per_treat",
     "avg_control_reuse",
     "avg_extrapolation",
     "avg_abs_smd_before",
     "avg_abs_smd_after",
+    *ABS_SMD_AFTER_COLS,
     "n_covariates_balanced",
     "avg_abs_smd_improvement",
     "n_covariates_improved",
@@ -25,6 +32,30 @@ def calc_match_coverage(match_df, treat_df):
     """Calculate match coverage as the ratio of matched treatment cells to total treatment cells."""
     return (
         match_df["treat_cell_id"].nunique() / len(treat_df) if len(treat_df) > 0 else 0
+    )
+
+
+def calc_control_supply_ratio(n_in_caliper_controls, n_treat, k, cap):
+    """(in-caliper controls × reuse cap) / (n_treat × k).
+
+    Values < 1 mean there are not enough reusable in-caliper controls to give
+    every treatment cell k matches, so the control pool needs to be expanded.
+    """
+    demand = n_treat * k
+    if demand == 0:
+        return np.nan
+    return (n_in_caliper_controls * cap) / demand
+
+
+def calc_neighbor_count_shares(n_candidates_by_treat):
+    """Share of treatment cells with 0, 1, or 2+ in-caliper control neighbors."""
+    if not n_candidates_by_treat:
+        return np.nan, np.nan, np.nan
+    counts = np.fromiter(n_candidates_by_treat.values(), dtype=float)
+    return (
+        float((counts == 0).mean()),
+        float((counts == 1).mean()),
+        float((counts >= 2).mean()),
     )
 
 
@@ -61,18 +92,26 @@ def calc_pooled_sd(t_vals, c_vals):
 
 
 def calc_smd(t_vals, c_vals, pooled_sd):
-    """Standardized mean difference formula."""
-    mean_t, mean_c = t_vals.mean(), c_vals.mean()  # sample means
+    """Standardized mean difference formula.
+
+    If a covariate has no variation (pooled SD is 0) and the two groups have the
+    same mean, treat SMD as 0 (balanced). If the means differ, SMD is undefined.
+    """
+    mean_t, mean_c = float(t_vals.mean()), float(c_vals.mean())
+    if pooled_sd == 0 or not np.isfinite(pooled_sd):
+        return 0.0 if np.isclose(mean_t, mean_c) else np.nan
     return (mean_t - mean_c) / pooled_sd
 
 
 def balance_verdict(smd):
     """A standardized mean difference of 0.2 or less after matching indicates
-    that a covariate is balanced (Feng et al. 2022)."""
+    that a covariate is balanced (Feng et al. 2022). Constant covariates with
+    equal means are treated as balanced (SMD = 0)."""
+    if pd.isna(smd):
+        return 0
     if abs(smd) <= 0.2:
         return 1
-    else:
-        return 0
+    return 0
 
 
 def calc_improvement(smd_before, smd_after):
@@ -164,6 +203,21 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
     row["n_covariates_balanced"] = 0
     row["n_covariates_improved"] = 0
 
+    if match_df is not None:
+        n_in_caliper = match_df.attrs.get("n_in_caliper_controls")
+        cap = match_df.attrs.get("reuse_cap")
+        k = match_df.attrs.get("n_neighbors")
+        if n_in_caliper is not None and cap is not None and k is not None:
+            row["control_supply_ratio"] = calc_control_supply_ratio(
+                n_in_caliper, len(treat_df), k, cap
+            )
+        n_candidates = match_df.attrs.get("n_candidates_by_treat")
+        if n_candidates is not None:
+            frac0, frac1, frac2 = calc_neighbor_count_shares(n_candidates)
+            row["frac_treat_0_neighbors"] = frac0
+            row["frac_treat_1_neighbor"] = frac1
+            row["frac_treat_2plus_neighbors"] = frac2
+
     if not has_matches:
         return row
 
@@ -189,6 +243,9 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             "n_covariates_improved": n_covariates_improved,
         }
     )
+    abs_smds = covariate_results.set_index("covariate")["smd_after"].abs()
+    for cov in COVARIATES:
+        row[f"abs_smd_after_{cov}"] = abs_smds.get(cov, np.nan)
     return row
 
 
