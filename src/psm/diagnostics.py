@@ -333,7 +333,7 @@ def classify_site(row):
 
 
 def build_report_card(results_df):
-    """One row per site with the key validity diagnostics and an assessable? tier."""
+    """One row per site with the key validity diagnostics and an assessable tier."""
     card = results_df.copy()
     abs_smds = card[ABS_SMD_AFTER_COLS].astype(float)
     card["max_abs_smd_after"] = abs_smds.max(axis=1)
@@ -342,7 +342,7 @@ def build_report_card(results_df):
         for _, row in abs_smds.iterrows()
     ]
     tiers = card.apply(classify_site, axis=1, result_type="expand")
-    card["assessable?"], card["reason"] = tiers[0], tiers[1]
+    card["assessable"], card["reason"] = tiers[0], tiers[1]
     # Nullable integers so counts print as whole numbers even when some sites are empty
     for col in ("n_matched_treat", "n_covariates_balanced"):
         card[col] = card[col].round().astype("Int64")
@@ -357,7 +357,7 @@ def save_report_card(results_df, output_path):
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     card = build_report_card(results_df)
     card.to_csv(output_path, index=False)
-    counts = card["assessable?"].value_counts()
+    counts = card["assessable"].value_counts()
     print(
         f"Saved report card to {output_path}: "
         + ", ".join(

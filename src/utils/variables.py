@@ -323,7 +323,7 @@ PER_COVARIATE_CALIPERS = {
 }
 FENG_BALANCED_SMD = 0.2
 
-# Parameters for the per-site report card ("assessable?": Yes / Caution / No)
+# Parameters for the per-site report card ("assessable": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
 REPORT_NO_MIN_COVERAGE = 0.25
 REPORT_NO_MAX_SMD = 0.5
