@@ -303,6 +303,9 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 # Parameters for MDM
 CALIPER_MDM = 3.0
 N_NEIGHBORS_MDM = 4  # number of control cells for every treatment cell
+MDM_EXPERIMENTS_PREFIX = (
+    "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
+)
 
 # Parameters for treatment cell sampling
 PA_AREA_THRESHOLD = 500000000  # 500 km2
