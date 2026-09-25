@@ -28,6 +28,7 @@ from utils.variables import (
     TEST_SITE_IDS,
     GCS_BUCKET,
     MDM_EXPERIMENTS_PREFIX,
+    REPORT_CARDS_PREFIX,
 )
 
 from absolute_effectiveness.site_selector import SiteSelector
@@ -48,7 +49,7 @@ site_selector = SiteSelector()
 
 EE_CRS_1km = ee.Projection(EE_CRS_METERS).atScale(PSM_CELL_SIZE)
 output_path = f"gs://{GCS_BUCKET}/{MDM_EXPERIMENTS_PREFIX}{run_id}.csv"
-report_card_path = f"results/report_cards/{run_id}_report_card.csv"
+report_card_path = f"gs://{GCS_BUCKET}/{REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
 
 # Load the covariate stack.
 covariates = build_resampled_covariates(EE_CRS_1km)

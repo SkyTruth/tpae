@@ -363,9 +363,9 @@ def build_report_card(results_df):
 
 
 def save_report_card(results_df, output_path):
-    """Write the report card CSV and print the tier counts."""
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    """Write the report card CSV (local or gs:// path) and print the tier counts."""
+    if "://" not in output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     card = build_report_card(results_df)
     card.to_csv(output_path, index=False)
     counts = card["assessable?"].value_counts()

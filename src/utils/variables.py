@@ -304,6 +304,7 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 MDM_EXPERIMENTS_PREFIX = (
     "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
 )
+REPORT_CARDS_PREFIX = "report_cards/"  # prefix for MDM report cards in GCS bucket
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
