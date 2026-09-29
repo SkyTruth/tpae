@@ -11,11 +11,18 @@ import sys
 _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
+import ee
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import box, Point
+from psm.get_control_cells import init_ee
 from utils.variables import (
+    PROJECT,
+    HGFC_ASSET_ID,
+    EE_CRS_METERS,
+    SCALE,
+    MAX_PIXELS,
     TEST_SITES_GEOJSON,
     TREATMENT_CELLS,
     GPD_CRS_METERS,
@@ -96,24 +103,42 @@ def sample_cells(pa_geom, n_samples, seed, cell_size):
     return cells
 
 
+def get_land_fraction(pa_geom_4326):
+    """Share of a PA that is land (Hansen datamask, same mask used to drop water cells)."""
+    land = ee.Image(HGFC_ASSET_ID).select("datamask").eq(1)
+    land_frac = (
+        land.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=ee.Geometry(pa_geom_4326.__geo_interface__),
+            scale=SCALE,
+            crs=EE_CRS_METERS,
+            maxPixels=MAX_PIXELS,
+        )
+        .get("datamask")
+        .getInfo()
+    )
+    return 1.0 if land_frac is None else land_frac
+
+
 def get_treatment_cells(test_sites):
     """
     Iterate through a set of PAs and return a set of valid treatment cells for each.
-    If the PA is less than 500 km2, return a grid of all valid interior cells.
-    If the PA is greater than 500 km2, return a random sample of valid interior cells.
+    If the PA has less than 500 km2 of land area, return a grid of all valid interior cells.
+    Otherwise, return a random sample of valid interior cells.
     """
-    # Read in PAs and convert to 6933
-    pa_gdf = gpd.read_file(test_sites)
-    pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
+    init_ee(PROJECT)
+    # Read in PAs (EPSG:4326 for Earth Engine) and convert to 6933
+    pa_gdf_4326 = gpd.read_file(test_sites)
+    pa_gdf = pa_gdf_4326.to_crs(GPD_CRS_METERS)
 
     all_cells = []
 
     # Iterate through PAs and get a set of valid treatment cells for each
-    for _, row in pa_gdf.iterrows():
+    for (_, row), geom_4326 in zip(pa_gdf.iterrows(), pa_gdf_4326.geometry):
         pa_geom = row.geometry
         area = pa_geom.area
-        # Apply the appropriate function based on the PA's size
-        if area < PA_AREA_THRESHOLD:
+        land_area = area * get_land_fraction(geom_4326)
+        if land_area < PA_AREA_THRESHOLD:
             cells = draw_grid(pa_geom, PSM_CELL_SIZE)
         else:
             cells = sample_cells(
