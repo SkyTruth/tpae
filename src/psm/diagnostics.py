@@ -81,6 +81,16 @@ def calc_control_reuse(match_df):
     return match_df.groupby("control_cell_id").size().mean()
 
 
+def calc_match_weights(match_df):
+    """Weight each matched pair 1/k, where k is its treatment cell's number of matches.
+
+    Each matched treatment cell then counts once, and its controls share its weight
+    (Stuart 2010, p. 14). This matches how aggregate_pa_relative_scores averages outcomes.
+    """
+    k = match_df.groupby("treat_cell_id")["treat_cell_id"].transform("size")
+    return 1.0 / k
+
+
 def calc_cross_border_share(match_df, cells_df):
     """Share of matched pairs whose control is in a different country than its treatment cell."""
     country = cells_df.set_index("cell_ID")["country"]
@@ -111,13 +121,16 @@ def calc_pooled_sd(t_vals, c_vals):
     return pooled_sd
 
 
-def calc_smd(t_vals, c_vals, pooled_sd):
+def calc_smd(t_vals, c_vals, pooled_sd, weights=None):
     """Standardized mean difference formula.
 
+    weights: optional per-row weights applied to both groups' means (e.g. match weights,
+    where row i of t_vals and c_vals is the same matched pair).
     If a covariate has no variation (pooled SD is 0) and the two groups have the
     same mean, treat SMD as 0 (balanced). If the means differ, SMD is undefined.
     """
-    mean_t, mean_c = float(t_vals.mean()), float(c_vals.mean())
+    mean_t = float(np.average(t_vals, weights=weights))
+    mean_c = float(np.average(c_vals, weights=weights))
     if pooled_sd == 0 or not np.isfinite(pooled_sd):
         return 0.0 if np.isclose(mean_t, mean_c) else np.nan
     return (mean_t - mean_c) / pooled_sd
@@ -145,18 +158,12 @@ def evaluate_covariate_balance(match_df, cells_df):
     unmatched_treat = cells_df[cells_df["protected"] == 1][COVARIATES]
     unmatched_control = cells_df[cells_df["protected"] == 0][COVARIATES]
 
-    # After matching: matched treatment and control cells
-    matched_treat = match_df.merge(
-        cells_df[["cell_ID"] + COVARIATES],
-        left_on="treat_cell_id",
-        right_on="cell_ID",
-    ).drop(columns="cell_ID")
-
-    matched_control = match_df.merge(
-        cells_df[["cell_ID"] + COVARIATES],
-        left_on="control_cell_id",
-        right_on="cell_ID",
-    ).drop(columns="cell_ID")
+    # After matching: one row per matched pair, weighted 1/k so balance is measured
+    # the same way outcomes are averaged
+    covs_by_id = cells_df.set_index("cell_ID")[COVARIATES]
+    matched_treat = covs_by_id.loc[match_df["treat_cell_id"]]
+    matched_control = covs_by_id.loc[match_df["control_cell_id"]]
+    match_weights = calc_match_weights(match_df).to_numpy()
 
     rows = []
     for covariate in COVARIATES:
@@ -170,7 +177,10 @@ def evaluate_covariate_balance(match_df, cells_df):
             unmatched_treat[covariate], unmatched_control[covariate], pooled_sd
         )
         smd_after = calc_smd(
-            matched_treat[covariate], matched_control[covariate], pooled_sd
+            matched_treat[covariate],
+            matched_control[covariate],
+            pooled_sd,
+            weights=match_weights,
         )
         balanced = balance_verdict(smd_after)
         improvement = calc_improvement(smd_before, smd_after)
