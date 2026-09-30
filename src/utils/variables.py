@@ -349,8 +349,10 @@ REPORT_CARD_COLUMNS = [
 ]
 
 # Parameters for treatment cell sampling
-PA_AREA_THRESHOLD = 500000000  # 500 km2
-SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
+# Treatment cells per PA follow Cochran (1977, section 4.6): n = n0 / (1 + n0 / N), where
+# n0 = 1 / e^2, N is the PA's number of valid interior land cells, and e is the target
+# standard error of the PA's treatment-cell mean, in units of that PA's standard deviation
+TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large PAs
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 
 # Parameters for control cell sampling
