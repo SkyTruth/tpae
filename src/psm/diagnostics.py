@@ -23,16 +23,13 @@ ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
+    "common_support",
     "n_matched_treat",
     "matched_vs_all_treat_smd",
     "cross_border_share",
-    "frac_treat_0_neighbors",
-    "frac_treat_1_neighbor",
-    "frac_treat_2plus_neighbors",
     "control_supply_ratio",
     "avg_matches_per_treat",
     "avg_control_reuse",
-    "avg_extrapolation",
     "avg_abs_smd_before",
     "avg_abs_smd_after",
     *ABS_SMD_AFTER_COLS,
@@ -61,16 +58,17 @@ def calc_control_supply_ratio(n_in_caliper_controls, n_treat, k, cap):
     return (n_in_caliper_controls * cap) / demand
 
 
-def calc_neighbor_count_shares(n_candidates_by_treat):
-    """Share of treatment cells with 0, 1, or 2+ in-caliper control neighbors."""
+def calc_common_support(n_candidates_by_treat):
+    """Share of treatment cells with at least one control within the matching calipers.
+
+    Support is defined by the matching rules themselves (Mahalanobis and per-covariate
+    calipers, any geographic pool), so it is the share of the PA that can be matched at
+    all. Coverage can never exceed it; the gap is cells lost to the control reuse cap.
+    """
     if not n_candidates_by_treat:
-        return np.nan, np.nan, np.nan
+        return np.nan
     counts = np.fromiter(n_candidates_by_treat.values(), dtype=float)
-    return (
-        float((counts == 0).mean()),
-        float((counts == 1).mean()),
-        float((counts >= 2).mean()),
-    )
+    return float((counts > 0).mean())
 
 
 def calc_avg_matches_per_treat(match_df):
@@ -99,19 +97,6 @@ def calc_cross_border_share(match_df, cells_df):
     treat_country = match_df["treat_cell_id"].map(country)
     control_country = match_df["control_cell_id"].map(country)
     return float((treat_country != control_country).mean())
-
-
-def calc_extrapolation(t_vals, c_vals):
-    """Calculate percentage of treatment cells that fall outside the range of control cells.
-    If treatment cells have covariate values outside the range of available control cells,
-    they cannot be properly matched and balanced by any method."""
-    c_min = c_vals.min()
-    c_max = c_vals.max()
-    n_below = (t_vals < c_min).sum()
-    n_above = (t_vals > c_max).sum()
-    n_total = n_below + n_above
-    pct = n_total / len(t_vals)
-    return pct
 
 
 def calc_pooled_sd(t_vals, c_vals):
@@ -191,9 +176,6 @@ def evaluate_covariate_balance(match_df, cells_df):
 
     rows = []
     for covariate in COVARIATES:
-        extrapolation = calc_extrapolation(
-            unmatched_treat[covariate], unmatched_control[covariate]
-        )
         pooled_sd = calc_pooled_sd(
             unmatched_treat[covariate], unmatched_control[covariate]
         )
@@ -211,7 +193,6 @@ def evaluate_covariate_balance(match_df, cells_df):
         rows.append(
             {
                 "covariate": covariate,
-                "extrapolation": extrapolation,
                 "smd_before": smd_before,
                 "smd_after": smd_after,
                 "balanced": balanced,
@@ -225,14 +206,12 @@ def evaluate_covariate_balance(match_df, cells_df):
 
 def evaluate_overall_balance(covariate_results):
     """Evaluate overall site balance across all covariates."""
-    avg_extrapolation = covariate_results["extrapolation"].mean()
     avg_abs_SDM_before = covariate_results["smd_before"].abs().mean()
     avg_abs_SDM_after = covariate_results["smd_after"].abs().mean()
     n_covariates_balanced = covariate_results["balanced"].sum()
     avg_abs_SDM_improvement = covariate_results["improvement"].mean()
     n_covariates_improved = (covariate_results["improvement"] > 0).sum()
     return (
-        avg_extrapolation,
         avg_abs_SDM_before,
         avg_abs_SDM_after,
         n_covariates_balanced,
@@ -268,17 +247,13 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             )
         n_candidates = match_df.attrs.get("n_candidates_by_treat")
         if n_candidates is not None:
-            frac0, frac1, frac2 = calc_neighbor_count_shares(n_candidates)
-            row["frac_treat_0_neighbors"] = frac0
-            row["frac_treat_1_neighbor"] = frac1
-            row["frac_treat_2plus_neighbors"] = frac2
+            row["common_support"] = calc_common_support(n_candidates)
 
     if not has_matches:
         return row
 
     covariate_results = evaluate_covariate_balance(match_df, cells_df)
     (
-        avg_extrapolation,
         avg_abs_smd_before,
         avg_abs_smd_after,
         n_covariates_balanced,
@@ -294,7 +269,6 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             "cross_border_share": calc_cross_border_share(match_df, cells_df),
             "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
             "avg_control_reuse": calc_control_reuse(match_df),
-            "avg_extrapolation": avg_extrapolation,
             "avg_abs_smd_before": avg_abs_smd_before,
             "avg_abs_smd_after": avg_abs_smd_after,
             "n_covariates_balanced": n_covariates_balanced,
@@ -391,6 +365,7 @@ def build_report_card(results_df):
     for col in ("n_matched_treat", "n_covariates_balanced"):
         card[col] = card[col].round().astype("Int64")
     card["match_coverage_pct"] = (card["match_coverage"] * 100).round(1)
+    card["common_support_pct"] = (card["common_support"] * 100).round(1)
     card["cross_border_pct"] = (card["cross_border_share"] * 100).round(1)
     return card[REPORT_CARD_COLUMNS].round(3)
 

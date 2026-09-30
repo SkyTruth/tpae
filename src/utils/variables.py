@@ -343,6 +343,7 @@ REPORT_CARD_COLUMNS = [
     "site_id",
     "n_matched_treat",
     "match_coverage_pct",
+    "common_support_pct",
     "matched_vs_all_treat_smd",
     "max_abs_smd_after",
     "worst_covariate",
