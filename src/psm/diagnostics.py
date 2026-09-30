@@ -32,6 +32,7 @@ DIAGNOSTIC_COLUMNS = [
     "avg_control_reuse",
     "avg_abs_smd_before",
     "avg_abs_smd_after",
+    "avg_abs_pair_diff",
     *ABS_SMD_AFTER_COLS,
     "n_covariates_balanced",
     "avg_abs_smd_improvement",
@@ -123,6 +124,20 @@ def calc_smd(t_vals, c_vals, pooled_sd, weights=None):
     return (mean_t - mean_c) / pooled_sd
 
 
+def calc_pair_diff(t_vals, c_vals, pooled_sd, weights=None):
+    """Mean absolute within-pair difference, in pooled SDs (0 = identical pairs).
+
+    Row i of t_vals and c_vals is the same matched pair. Unlike the SMD, differences
+    can't cancel out across pairs, so this shows whether individual pairs are close,
+    not just the group means. Two random draws from the same normal distribution
+    differ by about 1.13 SD on average.
+    """
+    diffs = np.abs(np.asarray(t_vals, dtype=float) - np.asarray(c_vals, dtype=float))
+    if pooled_sd == 0 or not np.isfinite(pooled_sd):
+        return 0.0 if np.allclose(diffs, 0) else np.nan
+    return float(np.average(diffs, weights=weights) / pooled_sd)
+
+
 def balance_verdict(smd):
     """A standardized mean difference of 0.2 or less after matching indicates
     that a covariate is balanced (Feng et al. 2022). Constant covariates with
@@ -188,6 +203,12 @@ def evaluate_covariate_balance(match_df, cells_df):
             pooled_sd,
             weights=match_weights,
         )
+        pair_diff = calc_pair_diff(
+            matched_treat[covariate],
+            matched_control[covariate],
+            pooled_sd,
+            weights=match_weights,
+        )
         balanced = balance_verdict(smd_after)
         improvement = calc_improvement(smd_before, smd_after)
         rows.append(
@@ -195,6 +216,7 @@ def evaluate_covariate_balance(match_df, cells_df):
                 "covariate": covariate,
                 "smd_before": smd_before,
                 "smd_after": smd_after,
+                "pair_diff": pair_diff,
                 "balanced": balanced,
                 "improvement": improvement,
             }
@@ -271,6 +293,7 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             "avg_control_reuse": calc_control_reuse(match_df),
             "avg_abs_smd_before": avg_abs_smd_before,
             "avg_abs_smd_after": avg_abs_smd_after,
+            "avg_abs_pair_diff": covariate_results["pair_diff"].mean(),
             "n_covariates_balanced": n_covariates_balanced,
             "avg_abs_smd_improvement": avg_abs_smd_improvement,
             "n_covariates_improved": n_covariates_improved,

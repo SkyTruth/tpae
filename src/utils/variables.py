@@ -348,6 +348,7 @@ REPORT_CARD_COLUMNS = [
     "max_abs_smd_after",
     "worst_covariate",
     "avg_abs_smd_after",
+    "avg_abs_pair_diff",
     "n_covariates_balanced",
     "cross_border_pct",
     "reason",
