@@ -13,6 +13,7 @@ from utils.variables import (
     REPORT_YES_MAX_SMD,
     REPORT_YES_MIN_COVERAGE,
     REPORT_YES_MIN_MATCHED_TREAT,
+    REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
     FENG_BALANCED_SMD,
 )
@@ -23,6 +24,7 @@ DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
     "n_matched_treat",
+    "matched_vs_all_treat_smd",
     "cross_border_share",
     "frac_treat_0_neighbors",
     "frac_treat_1_neighbor",
@@ -152,6 +154,28 @@ def calc_improvement(smd_before, smd_after):
     return abs(smd_before) - abs(smd_after)
 
 
+def calc_matched_vs_all_treat_smd(match_df, cells_df):
+    """Largest single covariate |SMD| between matched and all treatment cells.
+
+    Shows how similar the pre-match treatment group is to the post-match treatment
+    group, i.e. whether the matched cells are still representative of the whole PA.
+    """
+    all_treat = cells_df[cells_df["protected"] == 1]
+    all_control = cells_df[cells_df["protected"] == 0]
+    matched_treat = all_treat[all_treat["cell_ID"].isin(match_df["treat_cell_id"])]
+    smds = [
+        abs(
+            calc_smd(
+                matched_treat[cov],
+                all_treat[cov],
+                calc_pooled_sd(all_treat[cov], all_control[cov]),
+            )
+        )
+        for cov in COVARIATES
+    ]
+    return float(np.nanmax(smds))
+
+
 def evaluate_covariate_balance(match_df, cells_df):
     """Calculate balance diagnostics for each covariate."""
     # Before matching: full treatment and control pools
@@ -264,6 +288,9 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
 
     row.update(
         {
+            "matched_vs_all_treat_smd": calc_matched_vs_all_treat_smd(
+                match_df, cells_df
+            ),
             "cross_border_share": calc_cross_border_share(match_df, cells_df),
             "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
             "avg_control_reuse": calc_control_reuse(match_df),
@@ -302,7 +329,8 @@ def classify_site(row):
     No: results cannot be meaningful (too little of the PA matched, or a covariate
     too imbalanced).
     Caution: usable, but misses a Yes criterion (imbalance beyond the 0.25 guideline
-    for reliable adjustment, low coverage, cross-border pairs, or few matched cells).
+    for reliable adjustment, low coverage, matched cells unrepresentative of the PA,
+    cross-border pairs, or few matched cells).
     """
     coverage = row["match_coverage"]
     if pd.isna(coverage) or coverage == 0:
@@ -329,6 +357,12 @@ def classify_site(row):
     if coverage < REPORT_YES_MIN_COVERAGE:
         caution_reasons.append(
             f"coverage {coverage:.0%} < {REPORT_YES_MIN_COVERAGE:.0%}"
+        )
+    treat_shift = row["matched_vs_all_treat_smd"]
+    if treat_shift > REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD:
+        caution_reasons.append(
+            f"matched vs all treatment max |SMD| {treat_shift:.3f} > "
+            f"{REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD}"
         )
     if max_smd > REPORT_YES_MAX_SMD:
         caution_reasons.append(f"{worst} |SMD| {max_smd:.3f} > {REPORT_YES_MAX_SMD}")
