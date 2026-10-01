@@ -307,6 +307,14 @@ MDM_EXPERIMENTS_PREFIX = (
 REPORT_CARDS_PREFIX = "report_cards/"  # prefix for MDM report cards in GCS bucket
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
+# How in-caliper candidates are assigned under the reuse cap:
+# "greedy": hardest-to-match treatment cells first, each takes its nearest available controls
+# "optimal": most matched treatment cells, then most pairs, then least total distance
+MATCHING_ALGORITHM = "optimal"
+# Optimal matching only considers each treatment cell's nearest N in-caliper candidates,
+# which keeps it fast at large sites. 20 and 50 gave the same optimum as no limit on all
+# test sites that could be solved without one
+OPTIMAL_MAX_CANDIDATES = 50
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
 MAX_CONTROL_REUSE_FRAC = (
     0.05  # reuse_frac: max share of matched pairs from any one control
