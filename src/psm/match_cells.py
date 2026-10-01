@@ -9,6 +9,8 @@ import ee
 import geemap
 import numpy as np
 import pandas as pd
+from scipy.optimize import Bounds, LinearConstraint, milp
+from scipy.sparse import csr_matrix, hstack, identity
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
@@ -20,7 +22,9 @@ from utils.variables import (
     COVARIATES,
     MAX_CONTROL_REUSE_CEILING,
     MAX_CONTROL_REUSE_FRAC,
+    MATCHING_ALGORITHM,
     N_NEIGHBORS_MDM,
+    OPTIMAL_MAX_CANDIDATES,
     N_NEIGHBORS_PSM,
     PER_COVARIATE_CALIPERS,
 )
@@ -259,6 +263,94 @@ def calc_control_reuse_cap(
     return min(reuse_ceiling, max(1, int(np.ceil(reuse_frac * n_treat * k))))
 
 
+def _assign_greedy(pending, k, cap):
+    """Hardest-to-match treatment cells first; each takes its nearest available controls.
+
+    Returns [(treat_row, fallback, [(dist, control_id), ...]), ...].
+    """
+    control_uses = Counter()
+    assigned = []
+    for _, treat_row, fallback, candidates in sorted(pending, key=lambda item: item[0]):
+        chosen = []
+        for dist, control_id in candidates:
+            if control_uses[control_id] >= cap:
+                continue
+            control_uses[control_id] += 1
+            chosen.append((dist, control_id))
+            if len(chosen) >= k:
+                break
+        assigned.append((treat_row, fallback, chosen))
+    return assigned
+
+
+def _assign_optimal(pending, k, cap, max_candidates=OPTIMAL_MAX_CANDIDATES):
+    """Assign all candidates at once, under the same reuse cap, in priority order:
+    1. most treatment cells matched, 2. most matched pairs (up to k per cell),
+    3. least total Mahalanobis distance.
+
+    Solved as three integer programs (HiGHS via scipy), each holding the previous
+    optimum fixed. Only each cell's nearest max_candidates candidates are considered,
+    to keep large sites fast. Returns the same structure as _assign_greedy.
+    """
+    edges = [
+        (i, dist, control_id)
+        for i, (_, _, _, candidates) in enumerate(pending)
+        for dist, control_id in candidates[:max_candidates]  # sorted by distance
+    ]
+    if not edges:
+        return [(treat_row, fallback, []) for _, treat_row, fallback, _ in pending]
+
+    n_treat, n_edges = len(pending), len(edges)
+    treat_idx = np.array([e[0] for e in edges])
+    dists = np.array([e[1] for e in edges], dtype=float)
+    control_ids, control_idx = np.unique([e[2] for e in edges], return_inverse=True)
+    edge_range = np.arange(n_edges)
+    ones = np.ones(n_edges)
+
+    # Variables: x (one per candidate pair, 1 = matched), then y (one per treatment
+    # cell, 1 = has at least one match)
+    treat_x = csr_matrix((ones, (treat_idx, edge_range)), shape=(n_treat, n_edges))
+    control_x = csr_matrix(
+        (ones, (control_idx, edge_range)), shape=(len(control_ids), n_edges)
+    )
+    zeros_ty = csr_matrix((n_treat, n_treat))
+    zeros_cy = csr_matrix((len(control_ids), n_treat))
+    constraints = [
+        LinearConstraint(hstack([treat_x, zeros_ty]), ub=k),  # at most k per cell
+        LinearConstraint(hstack([-treat_x, identity(n_treat)]), ub=0),  # y <= matches
+        LinearConstraint(hstack([control_x, zeros_cy]), ub=cap),  # reuse cap
+    ]
+    is_x = np.r_[np.ones(n_edges), np.zeros(n_treat)]
+    is_y = np.r_[np.zeros(n_edges), np.ones(n_treat)]
+    integrality = np.ones(n_edges + n_treat)
+    bounds = Bounds(0, 1)
+
+    def solve(cost):
+        result = milp(
+            cost, constraints=constraints, integrality=integrality, bounds=bounds
+        )
+        if not result.success:
+            raise RuntimeError(f"Optimal matching failed: {result.message}")
+        return np.round(result.x)
+
+    # 1. Maximize matched treatment cells, then hold that fixed
+    n_covered = solve(-is_y) @ is_y
+    constraints.append(LinearConstraint(is_y, lb=n_covered))
+    # 2. Maximize matched pairs, then hold that fixed
+    n_pairs = solve(-is_x) @ is_x
+    constraints.append(LinearConstraint(is_x, lb=n_pairs))
+    # 3. Minimize total distance
+    x = solve(np.r_[dists, np.zeros(n_treat)])[:n_edges]
+
+    chosen = [[] for _ in range(n_treat)]
+    for e in np.flatnonzero(x > 0.5):
+        chosen[treat_idx[e]].append((dists[e], control_ids[control_idx[e]]))
+    return [
+        (treat_row, fallback, sorted(chosen[i]))
+        for i, (_, treat_row, fallback, _) in enumerate(pending)
+    ]
+
+
 def match_treatment_control_mdm(
     cells_df,
     covariates=None,
@@ -267,11 +359,13 @@ def match_treatment_control_mdm(
     reuse_frac=MAX_CONTROL_REUSE_FRAC,
     reuse_ceiling=MAX_CONTROL_REUSE_CEILING,
     per_covariate_calipers=None,
+    matching_algorithm=MATCHING_ALGORITHM,
 ):
     """Match each treatment cell to control cells by Mahalanobis Distance Matching (MDM).
 
     per_covariate_calipers: {covariate: n_sd}; controls must also be within
     n_sd pooled SDs of the treatment cell on each listed covariate.
+    matching_algorithm: "greedy" or "optimal" (see _assign_greedy / _assign_optimal).
     """
     if covariates is None:
         covariates = COVARIATES
@@ -324,29 +418,29 @@ def match_treatment_control_mdm(
     )
     _print_waterfall_pools(pending, len(treat_df))
 
-    pending.sort(key=lambda item: item[0])
+    if matching_algorithm == "greedy":
+        assigned = _assign_greedy(pending, n_neighbors, cap)
+    elif matching_algorithm == "optimal":
+        assigned = _assign_optimal(pending, n_neighbors, cap)
+    else:
+        raise ValueError(f"Unknown matching_algorithm: {matching_algorithm!r}")
+    print(f"Matching algorithm: {matching_algorithm}")
+
     matches = []
-    for _, treat_row, fallback, candidates in pending:
-        n_matched = 0
-        k = min(n_neighbors, len(candidates))
-        for dist, control_id in candidates:
-            if control_uses.get(control_id, 0) >= cap:
-                continue
+    for treat_row, fallback, chosen in assigned:
+        for rank, (dist, control_id) in enumerate(chosen, start=1):
             control_uses[control_id] = control_uses.get(control_id, 0) + 1
-            n_matched += 1
             matches.append(
                 {
                     "treat_cell_id": treat_row.cell_ID,
                     "control_cell_id": control_id,
                     "mahalanobis_distance": float(dist),
-                    "match_rank": n_matched,
+                    "match_rank": rank,
                     "match_country": treat_row.country,
                     "match_ecoregion": treat_row.ecoregion,
                     "match_fallback": fallback,
                 }
             )
-            if n_matched >= k:
-                break
 
     if matches:
         match_df = (
