@@ -325,8 +325,7 @@ def classify_site(row):
 
     No: results cannot be meaningful (too little of the PA matched, or a covariate
     too imbalanced).
-    Caution: usable, but misses a Yes criterion (imbalance beyond the 0.25 guideline
-    for reliable adjustment, low coverage, matched cells unrepresentative of the PA,
+    Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the PA,
     cross-border pairs, or few matched cells).
     """
     coverage = row["match_coverage"]
