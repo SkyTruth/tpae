@@ -25,8 +25,8 @@ GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
 GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
 HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
 
-# WDPAID numbers of selected test PAs and OECMs
-TEST_SITE_IDS = [
+# WDPAID numbers of selected test PAs and OECMs, one list per site group
+TEST_SITE_IDS_65 = [
     555714961,
     1543,
     555557937,
@@ -127,6 +127,17 @@ TEST_SITE_IDS_OG30 = [
     164,
     555784006,
 ]
+
+# Site groups, keyed by group ID. To add a group, define its list above and add it here
+SITE_GROUPS = {
+    "OG30": TEST_SITE_IDS_OG30,
+    "65": TEST_SITE_IDS_65,
+}
+# Active site group: change this one value to switch groups. The cleaned sites, treatment
+# and control cells, and experiment outputs are all tagged with it, so groups never
+# overwrite each other
+SITE_GROUP = "65"
+TEST_SITE_IDS = SITE_GROUPS[SITE_GROUP]
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018
@@ -370,10 +381,9 @@ PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GC
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for MDM
-MDM_EXPERIMENTS_PREFIX = (
-    "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
-)
-REPORT_CARDS_PREFIX = "report_cards/"  # prefix for MDM report cards in GCS bucket
+# GCS prefixes for MDM experiment results and report cards, one folder per site group
+MDM_EXPERIMENTS_PREFIX = f"mdm_experiments/{SITE_GROUP}/"
+REPORT_CARDS_PREFIX = f"report_cards/{SITE_GROUP}/"
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
@@ -457,19 +467,18 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
-# Cleaned test site geometries (TEST_SITE_IDS), written by clean_test_sites.py
+# Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_test_sites.py
 SITES_DIR = REPO_DATA_DIR + "sites/"
-TEST_SITES = SITES_DIR + "test_sites.parquet"
-TEST_SITES_OG30 = SITES_DIR + "test_sites_OG30.parquet"
+TEST_SITES = SITES_DIR + f"test_sites_{SITE_GROUP}.parquet"
 
 # Outputs:
 # ----------
 # global_psm.ipynb
 STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
-# get_treatment_cells.py
-TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
-# get_control_cells.ipynb
-CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
+# get_treatment_cells.py (active site group)
+TREATMENT_CELLS = REPO_DATA_DIR + f"treatment_cells_{SITE_GROUP}.parquet"
+# get_control_cells.py (active site group)
+CONTROL_CELLS = REPO_DATA_DIR + f"control_cells_{SITE_GROUP}.parquet"
 
 # Archived:
 # ----------
