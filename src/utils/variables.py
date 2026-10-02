@@ -468,17 +468,21 @@ REPO_DATA_DIR = "data/"
 # Inputs:
 # ----------
 # Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_test_sites.py
-SITES_DIR = REPO_DATA_DIR + "sites/"
-TEST_SITES = SITES_DIR + f"test_sites_{SITE_GROUP}.parquet"
+SITES_PREFIX = "sites/"  # stored in the GCS bucket
+TEST_SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}test_sites_{SITE_GROUP}.parquet"
 
 # Outputs:
 # ----------
 # global_psm.ipynb
 STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
-# get_treatment_cells.py (active site group)
-TREATMENT_CELLS = REPO_DATA_DIR + f"treatment_cells_{SITE_GROUP}.parquet"
-# get_control_cells.py (active site group)
-CONTROL_CELLS = REPO_DATA_DIR + f"control_cells_{SITE_GROUP}.parquet"
+# Treatment and control cells for the active site group, stored in the GCS bucket
+CELLS_PREFIX = "cells/"
+# get_treatment_cells.py
+TREATMENT_CELLS = (
+    f"gs://{GCS_BUCKET}/{CELLS_PREFIX}treatment_cells_{SITE_GROUP}.parquet"
+)
+# get_control_cells.py
+CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.parquet"
 
 # Archived:
 # ----------

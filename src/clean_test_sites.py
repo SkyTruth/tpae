@@ -1,6 +1,6 @@
 """
 Extract a set of sites (TEST_SITE_IDS) from the WDPA and WDOECM feature collections in
-Earth Engine, clean their geometries, and save them to TEST_SITES (GeoParquet).
+Earth Engine, clean their geometries, and save them to TEST_SITES (GeoParquet in GCS).
 
 Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
 WDPAID, and dissolves multi-part sites into one row per site.
@@ -76,7 +76,8 @@ def save_sites(site_ids=TEST_SITE_IDS, output_path=TEST_SITES):
         f"realms: {sites['REALM'].value_counts().to_dict()}"
     )
 
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    if "://" not in output_path:  # local path; gs:// needs no folder
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     sites.to_parquet(output_path)
     print(f"Saved {len(sites)} site(s) to {output_path}")
     return sites
