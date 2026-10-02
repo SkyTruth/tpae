@@ -1,7 +1,10 @@
 """
 Mahalanobis Distance Matching — Experiment
 -------------------------------------------
-Runs MDM iteratively on all 30 test sites and writes one site-level diagnostics CSV so experiment runs can be compared.
+Runs MDM iteratively on every site in the active SITE_GROUP and writes one site-level
+diagnostics CSV (and report card) so experiment runs can be compared.
+
+Reads each site's cell covariates from GCS, so run extract_cell_covariates.py first.
 """
 
 # Change this for each experiment so results are not overwritten.
@@ -11,7 +14,7 @@ run_id = "optimal_matching"
 from pathlib import Path
 import sys
 import os
-import ee
+import pandas as pd
 
 cur = Path.cwd().resolve()
 for parent in [cur] + list(cur.parents):
@@ -22,19 +25,13 @@ for parent in [cur] + list(cur.parents):
 sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 
 from utils.variables import (
-    PROJECT,
-    EE_CRS_METERS,
-    PSM_CELL_SIZE,
     TEST_SITE_IDS,
     GCS_BUCKET,
     MDM_EXPERIMENTS_PREFIX,
     REPORT_CARDS_PREFIX,
 )
 
-from absolute_effectiveness.site_selector import SiteSelector
-from psm.prepare_pa_grid import load_pa_candidate_cells
-from psm.covariates import build_resampled_covariates
-from psm.cell_features import extract_cells_with_covariates
+from psm.extract_cell_covariates import cell_covariates_path
 from psm.match_cells import match_treatment_control_mdm
 from psm.diagnostics import (
     site_diagnostics_row,
@@ -42,19 +39,10 @@ from psm.diagnostics import (
     save_report_card,
 )
 
-ee.Authenticate()
-ee.Initialize(project=PROJECT)
-
-site_selector = SiteSelector()
-
-EE_CRS_1km = ee.Projection(EE_CRS_METERS).atScale(PSM_CELL_SIZE)
 output_path = f"gs://{GCS_BUCKET}/{MDM_EXPERIMENTS_PREFIX}{run_id}.csv"
 report_card_path = f"gs://{GCS_BUCKET}/{REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
 
-# Load the covariate stack.
-covariates = build_resampled_covariates(EE_CRS_1km)
-
-# Iteratively apply MDM to each of the 30 test sites and record diagnostic results.
+# Iteratively apply MDM to each site and record diagnostic results.
 
 site_rows = []
 
@@ -63,10 +51,14 @@ for i, site_id in enumerate(TEST_SITE_IDS, start=1):
     print(f"Site {site_id} ({i}/{len(TEST_SITE_IDS)})")
     print("=" * 70)
     try:
-        pa_ctx = load_pa_candidate_cells(site_id, site_selector)
-        grid_fc, cells_df = extract_cells_with_covariates(
-            pa_ctx["grid_fc"], covariates, EE_CRS_1km
-        )
+        covariates_path = cell_covariates_path(site_id)
+        try:
+            cells_df = pd.read_parquet(covariates_path)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"No cell covariates at {covariates_path}; "
+                "run extract_cell_covariates.py first"
+            ) from None
         match_df, treat_df, control_df = match_treatment_control_mdm(cells_df)
         site_rows.append(site_diagnostics_row(match_df, treat_df, cells_df, site_id))
     except Exception as exc:
