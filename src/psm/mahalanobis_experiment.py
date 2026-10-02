@@ -9,7 +9,7 @@ Reads each site's cell covariates from GCS, so run extract_cell_covariates.py fi
 
 # Change this for each experiment so results are not overwritten.
 # Should be a unique identifier for the experiment so we know which changes caused which results.
-run_id = "optimal_matching"
+run_id = "v2.3_footprint_caliper"
 
 from pathlib import Path
 import sys

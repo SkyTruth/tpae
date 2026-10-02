@@ -407,6 +407,7 @@ PER_COVARIATE_CALIPERS = {
     "elevation": 0.75,
     "travel_time": 0.75,
     "treecover2000": 0.75,
+    "human_footprint": 0.75,
 }
 FENG_BALANCED_SMD = 0.2
 
