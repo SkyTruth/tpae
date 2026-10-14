@@ -388,12 +388,15 @@ CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
 # "greedy": hardest-to-match treatment cells first, each takes its nearest available controls
-# "optimal": most matched treatment cells, then most pairs, then least total distance
+# "optimal": most matched treatment cells, then covariate balance (see BALANCE_SMD_TARGET),
+# then most pairs, then least total distance
 MATCHING_ALGORITHM = "optimal"
-# Optimal matching only considers each treatment cell's nearest N in-caliper candidates,
-# which keeps it fast at large sites. 20 and 50 gave the same optimum as no limit on all
-# test sites that could be solved without one
-OPTIMAL_MAX_CANDIDATES = 50
+# Optimal matching only considers each treatment cell's nearest N in-caliper candidates
+OPTIMAL_MAX_CANDIDATES = 20
+# Each optimal matching solve stops after this many branch-and-bound nodes or seconds and
+# keeps the best solution found.
+OPTIMAL_NODE_LIMIT = 2000
+OPTIMAL_TIME_LIMIT_S = 60
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
 MAX_CONTROL_REUSE_FRAC = (
     0.05  # reuse_frac: max share of matched pairs from any one control
@@ -410,6 +413,10 @@ PER_COVARIATE_CALIPERS = {
     "human_footprint": 0.75,
 }
 FENG_BALANCED_SMD = 0.2
+# Optimal matching aims to get every covariate's |SMD|
+# at or below this target, without reducing the number of matched treatment cells.
+# "None" turns balance constraints off. Supports N_NEIGHBORS_MDM <= 2
+BALANCE_SMD_TARGET = FENG_BALANCED_SMD
 
 # Parameters for the per-site report card ("assessable": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
