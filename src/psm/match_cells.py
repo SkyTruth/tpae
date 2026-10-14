@@ -305,8 +305,10 @@ def _assign_optimal(
     SD, indexed by cell_ID. The weighting is exact for k <= 2.
 
     Solved as integer programs (HiGHS via scipy), each holding the previous optimum
-    fixed. Only each cell's nearest max_candidates candidates are considered, to keep
-    large sites fast. Returns the same structure as _assign_greedy.
+    fixed. If the best match without priority 2 already meets the balance target, it is
+    also the best balanced match, so the (slower) balance step is skipped. Only each
+    cell's nearest max_candidates candidates are considered, to keep large sites fast.
+    Returns the same structure as _assign_greedy.
     """
     balance = balance_smd_target is not None
     if balance and k > 2:
@@ -396,6 +398,14 @@ def _assign_optimal(
         # Keep float round-off on the passing side of the report card threshold
         target = balance_smd_target - 1e-6
 
+    def smd_excess(x):
+        """Each covariate's |SMD| excess over the target for a 0/1 pair selection x,
+        with pairs weighted 1/(matches of their treatment cell)."""
+        matches = (treat_x @ x)[treat_idx]
+        weights = np.divide(x, matches, out=np.zeros(n_edges), where=x > 0)
+        smd = weights @ diffs / n_covered
+        return np.maximum(np.abs(smd) - target, 0)
+
     def solve(cost, previous=None):
         """Best solution within the node and time limits; if none was found, the
         previous step's solution, which still satisfies every earlier priority."""
@@ -420,26 +430,36 @@ def _assign_optimal(
     n_covered = round(solution[var["y"]].sum())
     constraints.append(LinearConstraint(on("y"), lb=n_covered))
 
+    # 3. (objective) Maximize matched pairs, then minimize total distance, in one
+    #    solve: each pair is worth 1 and all distances together are worth less than 1
+    eps = 1 / (k * n_treat * dists.max() + 1)
+    pairs_cost = on("x", -1 + eps * dists)
+
+    # Shortcut: if the best match without the balance step already meets the target,
+    # no balanced match can beat it on pairs or distance, so it is the answer
+    skip_balance = False
+    if balance:
+        solution = solve(pairs_cost, previous=solution)
+        x = np.round(solution[var["x"]])
+        skip_balance = not smd_excess(x).any()
+
     # 2. Minimize total |SMD| excess over the target, then hold that fixed.
     #    Pair weight w = x - u/2 is 1 if its cell has one match and 1/2 if two, so
     #    SMD_j = sum(w * diffs_j) / n_covered, and |SMD_j| <= target + s_j
-    if balance:
+    if balance and not skip_balance:
         d = csr_matrix(diffs.T)
         excess = -n_covered * identity(n_balance_covs)
         for sign in (1, -1):
             smd_rows = rows(n_balance_covs, x=sign * d, u=-sign * d / 2, s=excess)
             constraints.append(LinearConstraint(smd_rows, ub=target * n_covered))
         solution = solve(on("s"), previous=solution)
-        x, u = np.round(solution[var["x"]]), solution[var["u"]]
-        smd = (x - u / 2) @ diffs / n_covered
-        total_excess = np.maximum(np.abs(smd) - target, 0).sum()
+        total_excess = smd_excess(np.round(solution[var["x"]])).sum()
         constraints.append(LinearConstraint(on("s"), ub=total_excess + 1e-7))
 
-    # 3. Maximize matched pairs, then minimize total distance, in one solve: each pair
-    #    is worth 1 and all distances together are worth less than 1
-    eps = 1 / (k * n_treat * dists.max() + 1)
-    solution = solve(on("x", -1 + eps * dists), previous=solution)
-    x = np.round(solution[var["x"]])
+    # 3. Maximize matched pairs, then minimize total distance
+    if not skip_balance:
+        solution = solve(pairs_cost, previous=solution)
+        x = np.round(solution[var["x"]])
 
     chosen = [[] for _ in range(n_treat)]
     for e in np.flatnonzero(x > 0.5):
