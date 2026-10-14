@@ -385,7 +385,7 @@ STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 MDM_EXPERIMENTS_PREFIX = f"mdm_experiments/{SITE_GROUP}/"
 REPORT_CARDS_PREFIX = f"report_cards/{SITE_GROUP}/"
 CALIPER_MDM = 2.0
-N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
+N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
 # "greedy": hardest-to-match treatment cells first, each takes its nearest available controls
 # "optimal": most matched treatment cells, then covariate balance (see BALANCE_SMD_TARGET),
