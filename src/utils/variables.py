@@ -128,15 +128,89 @@ TEST_SITE_IDS_OG30 = [
     555784006,
 ]
 
+# Held-out group for validating the method on sites not used to tune it. Random draw
+# (numpy seed 42) of terrestrial WDPA/WDOECM sites that are Designated, Inscribed or
+# Established, have STATUS_YR <= ANALYSIS_END_YR - 1 and GIS_AREA >= 20 km², and are not
+# in OG30 or 65; one site per country (first ISO3), first 65 countries in draw order.
+# Sites are much smaller than group 65 (median 91 vs ~2,000 km²), as most PAs are
+TEST_SITE_IDS_HOLDOUT65 = [
+    555703814,  # MLI
+    555573476,  # JPN
+    837,  # PAK
+    11111300,  # USA
+    29484,  # GIN
+    62635,  # KAZ
+    555785745,  # YEM
+    19422,  # BRA
+    301516,  # TZA
+    555523562,  # ESP
+    556123516,  # IND
+    478106,  # DOM
+    555557763,  # CAN
+    18251,  # MYS
+    2423,  # KEN
+    555713523,  # RUS
+    555786568,  # GBR
+    555570466,  # ZAF
+    11491,  # BGR
+    555722186,  # SWE
+    300838,  # CIV
+    300083,  # ARG
+    555579026,  # ROU
+    555558544,  # DEU
+    36823,  # NGA
+    341555,  # GRC
+    555547169,  # FRA
+    555624255,  # TUN
+    555580747,  # LVA
+    555787293,  # UKR
+    27034,  # ZMB
+    555722667,  # ITA
+    555549398,  # AZE
+    309678,  # AUS
+    555540767,  # POL
+    903089,  # CMR
+    68201,  # LKA
+    10110,  # VNM
+    902849,  # DZA
+    4727,  # IDN
+    555579905,  # NLD
+    102910,  # GTM
+    555527419,  # HUN
+    555571310,  # TJK
+    555590782,  # EST
+    17229,  # JOR
+    61942,  # THA
+    555622905,  # KOR
+    19174,  # AUT
+    555569962,  # MAR
+    555722305,  # BEL
+    555622082,  # ARE
+    12159,  # SVK
+    555580203,  # FIN
+    555757185,  # LTU
+    11676,  # ALB
+    33147,  # UGA
+    300807,  # TGO
+    40774,  # GHA
+    555588627,  # SRB
+    18887,  # LAO
+    310901,  # NZL
+    555547343,  # NAM
+    101139,  # VEN
+    1631,  # ARM
+]
+
 # Site groups, keyed by group ID. To add a group, define its list above and add it here
 SITE_GROUPS = {
     "OG30": TEST_SITE_IDS_OG30,
     "65": TEST_SITE_IDS_65,
+    "holdout65": TEST_SITE_IDS_HOLDOUT65,
 }
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
 # overwrite each other
-SITE_GROUP = "65"
+SITE_GROUP = "OG30"
 TEST_SITE_IDS = SITE_GROUPS[SITE_GROUP]
 
 # Habitat loss analysis period
