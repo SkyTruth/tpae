@@ -16,9 +16,11 @@ from utils.variables import (
     REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
     FENG_BALANCED_SMD,
+    VARIANCE_RATIO_MIN_SD,
 )
 
 ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
+VARIANCE_RATIO_COLS = [f"variance_ratio_{c}" for c in COVARIATES]
 
 DIAGNOSTIC_COLUMNS = [
     "site_id",
@@ -37,6 +39,7 @@ DIAGNOSTIC_COLUMNS = [
     "n_covariates_balanced",
     "avg_abs_smd_improvement",
     "n_covariates_improved",
+    *VARIANCE_RATIO_COLS,
 ]
 
 
@@ -138,6 +141,31 @@ def calc_pair_diff(t_vals, c_vals, pooled_sd, weights=None):
     return float(np.average(diffs, weights=weights) / pooled_sd)
 
 
+def calc_variance_ratio(t_vals, c_vals, pooled_sd, weights=None):
+    """Variance of the treatment group / variance of the control group (1 = equal spread).
+
+    Complements the SMD, which compares only means. weights are applied
+    to both groups, as in calc_smd. NaN when both groups have almost no spread (SD below
+    VARIANCE_RATIO_MIN_SD pooled SDs), where the ratio is meaningless; infinite when
+    only the control group has no spread.
+    """
+
+    def variance(vals):
+        vals = np.asarray(vals, dtype=float)
+        mean = np.average(vals, weights=weights)
+        return np.average((vals - mean) ** 2, weights=weights)
+
+    var_t, var_c = variance(t_vals), variance(c_vals)
+    if pooled_sd == 0 or not np.isfinite(pooled_sd):
+        return np.nan
+    min_var = (VARIANCE_RATIO_MIN_SD * pooled_sd) ** 2
+    if var_t < min_var and var_c < min_var:
+        return np.nan
+    if var_c == 0:
+        return np.inf
+    return float(var_t / var_c)
+
+
 def balance_verdict(smd):
     """A standardized mean difference of 0.2 or less after matching indicates
     that a covariate is balanced (Feng et al. 2022). Constant covariates with
@@ -209,6 +237,12 @@ def evaluate_covariate_balance(match_df, cells_df):
             pooled_sd,
             weights=match_weights,
         )
+        variance_ratio = calc_variance_ratio(
+            matched_treat[covariate],
+            matched_control[covariate],
+            pooled_sd,
+            weights=match_weights,
+        )
         balanced = balance_verdict(smd_after)
         improvement = calc_improvement(smd_before, smd_after)
         rows.append(
@@ -217,6 +251,7 @@ def evaluate_covariate_balance(match_df, cells_df):
                 "smd_before": smd_before,
                 "smd_after": smd_after,
                 "pair_diff": pair_diff,
+                "variance_ratio": variance_ratio,
                 "balanced": balanced,
                 "improvement": improvement,
             }
@@ -299,9 +334,10 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             "n_covariates_improved": n_covariates_improved,
         }
     )
-    abs_smds = covariate_results.set_index("covariate")["smd_after"].abs()
+    by_covariate = covariate_results.set_index("covariate")
     for cov in COVARIATES:
-        row[f"abs_smd_after_{cov}"] = abs_smds.get(cov, np.nan)
+        row[f"abs_smd_after_{cov}"] = abs(by_covariate.loc[cov, "smd_after"])
+        row[f"variance_ratio_{cov}"] = by_covariate.loc[cov, "variance_ratio"]
     return row
 
 

@@ -417,6 +417,10 @@ FENG_BALANCED_SMD = 0.2
 # at or below this target, without reducing the number of matched treatment cells.
 # "None" turns balance constraints off. Supports N_NEIGHBORS_MDM <= 2
 BALANCE_SMD_TARGET = FENG_BALANCED_SMD
+# Variance ratios (matched treatment / matched control variance) are left
+# blank when both groups have almost no spread (SD below this fraction of the pre-match
+# pooled SD), since a ratio of two near-zero variances is meaningless
+VARIANCE_RATIO_MIN_SD = 0.1
 
 # Parameters for the per-site report card ("assessable": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
