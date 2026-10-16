@@ -25,8 +25,77 @@ GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
 GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
 HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
 
-# WDPAID numbers of selected test PAs and OECMs
-TEST_SITE_IDS = [
+# WDPAID numbers of selected test PAs and OECMs, one list per site group
+TEST_SITE_IDS_65 = [
+    555714961,
+    1543,
+    555557937,
+    93538,
+    2008,
+    916,
+    303317,
+    352159,
+    555626124,
+    7949,
+    214,
+    306522,
+    555786096,
+    555599263,
+    555759266,
+    9436,
+    1250,
+    68399,
+    11116292,
+    67967,
+    555512003,
+    166970,
+    26654,
+    101664,
+    2017,
+    10711,
+    164,
+    555784006,
+    1293,
+    93500,
+    555719309,
+    883,
+    2236,
+    186,
+    317205,
+    19385,
+    317260,
+    555756384,
+    301834,
+    17157,
+    107806,
+    167051,
+    36058,
+    2349,
+    33951,
+    352412,
+    34845,
+    34000,
+    34004,
+    352396,
+    352371,
+    354001,
+    1080,
+    317056,
+    555781112,
+    555512077,
+    349,
+    7450,
+    2253,
+    779,
+    308685,
+    555784007,
+    1240,
+    2580,
+    13704,
+]
+
+
+TEST_SITE_IDS_OG30 = [
     555714961,
     1543,
     555557937,
@@ -58,6 +127,91 @@ TEST_SITE_IDS = [
     164,
     555784006,
 ]
+
+# Held-out group for validating the method on sites not used to tune it. Random draw
+# (numpy seed 42) of terrestrial WDPA/WDOECM sites that are Designated, Inscribed or
+# Established, have STATUS_YR <= ANALYSIS_END_YR - 1 and GIS_AREA >= 20 km², and are not
+# in OG30 or 65; one site per country (first ISO3), first 65 countries in draw order.
+# Sites are much smaller than group 65 (median 91 vs ~2,000 km²), as most PAs are
+TEST_SITE_IDS_HOLDOUT65 = [
+    555703814,  # MLI
+    555573476,  # JPN
+    837,  # PAK
+    11111300,  # USA
+    29484,  # GIN
+    62635,  # KAZ
+    555785745,  # YEM
+    19422,  # BRA
+    301516,  # TZA
+    555523562,  # ESP
+    556123516,  # IND
+    478106,  # DOM
+    555557763,  # CAN
+    18251,  # MYS
+    2423,  # KEN
+    555713523,  # RUS
+    555786568,  # GBR
+    555570466,  # ZAF
+    11491,  # BGR
+    555722186,  # SWE
+    300838,  # CIV
+    300083,  # ARG
+    555579026,  # ROU
+    555558544,  # DEU
+    36823,  # NGA
+    341555,  # GRC
+    555547169,  # FRA
+    555624255,  # TUN
+    555580747,  # LVA
+    555787293,  # UKR
+    27034,  # ZMB
+    555722667,  # ITA
+    555549398,  # AZE
+    309678,  # AUS
+    555540767,  # POL
+    903089,  # CMR
+    68201,  # LKA
+    10110,  # VNM
+    902849,  # DZA
+    4727,  # IDN
+    555579905,  # NLD
+    102910,  # GTM
+    555527419,  # HUN
+    555571310,  # TJK
+    555590782,  # EST
+    17229,  # JOR
+    61942,  # THA
+    555622905,  # KOR
+    19174,  # AUT
+    555569962,  # MAR
+    555722305,  # BEL
+    555622082,  # ARE
+    12159,  # SVK
+    555580203,  # FIN
+    555757185,  # LTU
+    11676,  # ALB
+    33147,  # UGA
+    300807,  # TGO
+    40774,  # GHA
+    555588627,  # SRB
+    18887,  # LAO
+    310901,  # NZL
+    555547343,  # NAM
+    101139,  # VEN
+    1631,  # ARM
+]
+
+# Site groups, keyed by group ID. To add a group, define its list above and add it here
+SITE_GROUPS = {
+    "OG30": TEST_SITE_IDS_OG30,
+    "65": TEST_SITE_IDS_65,
+    "holdout65": TEST_SITE_IDS_HOLDOUT65,
+}
+# Active site group: change this one value to switch groups. The cleaned sites, treatment
+# and control cells, and experiment outputs are all tagged with it, so groups never
+# overwrite each other
+SITE_GROUP = "OG30"
+TEST_SITE_IDS = SITE_GROUPS[SITE_GROUP]
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018
@@ -301,12 +455,22 @@ PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GC
 STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for MDM
-MDM_EXPERIMENTS_PREFIX = (
-    "mdm_experiments/"  # prefix for MDM experiment results in GCS bucket
-)
-REPORT_CARDS_PREFIX = "report_cards/"  # prefix for MDM report cards in GCS bucket
+# GCS prefixes for MDM experiment results and report cards, one folder per site group
+MDM_EXPERIMENTS_PREFIX = f"mdm_experiments/{SITE_GROUP}/"
+REPORT_CARDS_PREFIX = f"report_cards/{SITE_GROUP}/"
 CALIPER_MDM = 2.0
-N_NEIGHBORS_MDM = 2  # number of control cells for every treatment cell
+N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
+# How in-caliper candidates are assigned under the reuse cap:
+# "greedy": hardest-to-match treatment cells first, each takes its nearest available controls
+# "optimal": most matched treatment cells, then covariate balance (see BALANCE_SMD_TARGET),
+# then most pairs, then least total distance
+MATCHING_ALGORITHM = "optimal"
+# Optimal matching only considers each treatment cell's nearest N in-caliper candidates
+OPTIMAL_MAX_CANDIDATES = 20
+# Each optimal matching solve stops after this many branch-and-bound nodes or seconds and
+# keeps the best solution found.
+OPTIMAL_NODE_LIMIT = 2000
+OPTIMAL_TIME_LIMIT_S = 60
 # Reuse cap: min(reuse_ceiling, max(1, ceil(reuse_frac × n_treat × k)))
 MAX_CONTROL_REUSE_FRAC = (
     0.05  # reuse_frac: max share of matched pairs from any one control
@@ -317,11 +481,23 @@ MAX_CONTROL_REUSE_CEILING = (
 # Per-covariate calipers: a control must also be within this many pooled SDs of the
 # treatment cell on each listed covariate (on top of the Mahalanobis caliper)
 PER_COVARIATE_CALIPERS = {
-    "elevation": 0.75,
-    "travel_time": 0.75,
-    "treecover2000": 0.75,
+    "elevation": 1,
+    "travel_time": 1,
+    "treecover2000": 1,
+    "human_footprint": 1,
+    "ag_suitability": 1,
+    "log_pop_density": 1,
+    "slope": 1,
 }
 FENG_BALANCED_SMD = 0.2
+# Optimal matching aims to get every covariate's |SMD|
+# at or below this target, without reducing the number of matched treatment cells.
+# "None" turns balance constraints off. Supports N_NEIGHBORS_MDM <= 2
+BALANCE_SMD_TARGET = FENG_BALANCED_SMD
+# Variance ratios (matched treatment / matched control variance) are left
+# blank when both groups have almost no spread (SD below this fraction of the pre-match
+# pooled SD), since a ratio of two near-zero variances is meaningless
+VARIANCE_RATIO_MIN_SD = 0.1
 
 # Parameters for the per-site report card ("assessable": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
@@ -380,17 +556,27 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
-# Geojson of 30 test PAs
-TEST_SITES_GEOJSON = REPO_DATA_DIR + "test_sites_cleaned.geojson"
+# Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_test_sites.py
+SITES_PREFIX = "sites/"  # stored in the GCS bucket
+TEST_SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}test_sites_{SITE_GROUP}.parquet"
 
 # Outputs:
 # ----------
 # global_psm.ipynb
 STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
+# Treatment and control cells for the active site group, stored in the GCS bucket
+CELLS_PREFIX = "cells/"
 # get_treatment_cells.py
-TREATMENT_CELLS = REPO_DATA_DIR + "treatment_cells.parquet"
-# get_control_cells.ipynb
-CONTROL_CELLS = REPO_DATA_DIR + "control_cells.parquet"
+TREATMENT_CELLS = (
+    f"gs://{GCS_BUCKET}/{CELLS_PREFIX}treatment_cells_{SITE_GROUP}.parquet"
+)
+# get_control_cells.py
+CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.parquet"
+# extract_cell_covariates.py: covariates for each site's candidate cells, one file per
+# site, read by mahalanobis_experiment.py
+CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
+# Earth Engine request timeout (ms), so a stalled request fails instead of hanging
+EE_DEADLINE_MS = 300_000
 
 # Archived:
 # ----------

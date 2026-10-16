@@ -9,18 +9,25 @@ import ee
 import geemap
 import numpy as np
 import pandas as pd
+from scipy.optimize import Bounds, LinearConstraint, milp
+from scipy.sparse import csr_matrix, hstack, identity
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
 from psm.diagnostics import calc_pooled_sd
 from psm.predict import load_propensity_artifacts, predict_propensity
 from utils.variables import (
+    BALANCE_SMD_TARGET,
     CALIPER_MDM,
     CALIPER_PSM,
     COVARIATES,
     MAX_CONTROL_REUSE_CEILING,
     MAX_CONTROL_REUSE_FRAC,
+    MATCHING_ALGORITHM,
     N_NEIGHBORS_MDM,
+    OPTIMAL_MAX_CANDIDATES,
+    OPTIMAL_NODE_LIMIT,
+    OPTIMAL_TIME_LIMIT_S,
     N_NEIGHBORS_PSM,
     PER_COVARIATE_CALIPERS,
 )
@@ -259,6 +266,210 @@ def calc_control_reuse_cap(
     return min(reuse_ceiling, max(1, int(np.ceil(reuse_frac * n_treat * k))))
 
 
+def _assign_greedy(pending, k, cap):
+    """Hardest-to-match treatment cells first; each takes its nearest available controls.
+
+    Returns [(treat_row, fallback, [(dist, control_id), ...]), ...].
+    """
+    control_uses = Counter()
+    assigned = []
+    for _, treat_row, fallback, candidates in sorted(pending, key=lambda item: item[0]):
+        chosen = []
+        for dist, control_id in candidates:
+            if control_uses[control_id] >= cap:
+                continue
+            control_uses[control_id] += 1
+            chosen.append((dist, control_id))
+            if len(chosen) >= k:
+                break
+        assigned.append((treat_row, fallback, chosen))
+    return assigned
+
+
+def _assign_optimal(
+    pending,
+    k,
+    cap,
+    max_candidates=OPTIMAL_MAX_CANDIDATES,
+    std_covariates=None,
+    balance_smd_target=None,
+):
+    """Assign all candidates at once, under the same reuse cap, in priority order:
+    1. most treatment cells matched
+    2. if balance_smd_target is set: every covariate's |SMD| at or below the target, or
+       as close as possible (least total excess over the target, summed over covariates)
+    3. most matched pairs (up to k per cell), then least total Mahalanobis distance
+
+    SMDs are measured exactly as in the report card: pairs weighted 1/k, differences in
+    pre-match pooled SDs. std_covariates holds each cell's covariates divided by that
+    SD, indexed by cell_ID. The weighting is exact for k <= 2.
+
+    Solved as integer programs (HiGHS via scipy), each holding the previous optimum
+    fixed. If the best match without priority 2 already meets the balance target, it is
+    also the best balanced match, so the (slower) balance step is skipped. Only each
+    cell's nearest max_candidates candidates are considered, to keep large sites fast.
+    Returns the same structure as _assign_greedy.
+    """
+    balance = balance_smd_target is not None
+    if balance and k > 2:
+        raise ValueError("Balance-constrained matching supports n_neighbors <= 2")
+
+    edges = [
+        (i, dist, control_id)
+        for i, (_, _, _, candidates) in enumerate(pending)
+        for dist, control_id in candidates[:max_candidates]  # sorted by distance
+    ]
+    if not edges:
+        return [(treat_row, fallback, []) for _, treat_row, fallback, _ in pending]
+
+    n_treat, n_edges = len(pending), len(edges)
+    treat_idx = np.array([e[0] for e in edges])
+    dists = np.array([e[1] for e in edges], dtype=float)
+    control_ids, control_idx = np.unique([e[2] for e in edges], return_inverse=True)
+    edge_range = np.arange(n_edges)
+    ones = np.ones(n_edges)
+
+    # Variables, in order:
+    #   x: one per candidate pair, 1 = matched
+    #   y: one per treatment cell, 1 = has at least one match
+    # and with balance constraints:
+    #   u: one per candidate pair, = x * z (linearized)
+    #   z: one per treatment cell, 1 = has two matches
+    #   s: one per covariate, |SMD| excess over the target
+    n_balance_covs = std_covariates.shape[1] if balance else 0
+    sizes = {"x": n_edges, "y": n_treat}
+    if balance:
+        sizes.update(u=n_edges, z=n_treat, s=n_balance_covs)
+    starts = dict(zip(sizes, np.cumsum([0, *sizes.values()])))
+    n_vars = sum(sizes.values())
+    var = {name: slice(starts[name], starts[name] + n) for name, n in sizes.items()}
+
+    def rows(n_rows, **blocks):
+        """Constraint rows over all variables, from {variable name: block matrix}."""
+        empty = {name: csr_matrix((n_rows, n)) for name, n in sizes.items()}
+        return hstack([blocks.get(name, empty[name]) for name in sizes]).tocsr()
+
+    def on(name, values=1.0):
+        """Cost or constraint vector with values on one variable and 0 elsewhere."""
+        vec = np.zeros(n_vars)
+        vec[var[name]] = values
+        return vec
+
+    treat_x = csr_matrix((ones, (treat_idx, edge_range)), shape=(n_treat, n_edges))
+    control_x = csr_matrix(
+        (ones, (control_idx, edge_range)), shape=(len(control_ids), n_edges)
+    )
+    constraints = [
+        # At most k per cell
+        LinearConstraint(rows(n_treat, x=treat_x), ub=k),
+        # y <= matches
+        LinearConstraint(rows(n_treat, x=-treat_x, y=identity(n_treat)), ub=0),
+        # Reuse cap
+        LinearConstraint(rows(len(control_ids), x=control_x), ub=cap),
+    ]
+    integrality = on("x") + on("y")
+    upper = np.ones(n_vars)
+
+    if balance:
+        cell_of_pair = treat_x.T.tocsr()
+        pair_eye, cell_eye = identity(n_edges), identity(n_treat)
+        constraints += [
+            # x <= y
+            LinearConstraint(rows(n_edges, x=pair_eye, y=-cell_of_pair), ub=0),
+            # z = matches - y, i.e. 1 if the cell has two matches
+            LinearConstraint(
+                rows(n_treat, x=treat_x, y=-cell_eye, z=-cell_eye), lb=0, ub=0
+            ),
+            # u <= x, u <= z, u >= x + z - 1
+            LinearConstraint(rows(n_edges, u=pair_eye, x=-pair_eye), ub=0),
+            LinearConstraint(rows(n_edges, u=pair_eye, z=-cell_of_pair), ub=0),
+            LinearConstraint(
+                rows(n_edges, u=-pair_eye, x=pair_eye, z=cell_of_pair), ub=1
+            ),
+        ]
+        upper[var["s"]] = np.inf
+        # Treatment minus control in pooled SDs: one row per pair, one column per
+        # covariate
+        treat_ids = [pending[i][1].cell_ID for i in treat_idx]
+        diffs = (
+            std_covariates.loc[treat_ids].to_numpy()
+            - std_covariates.loc[control_ids[control_idx]].to_numpy()
+        )
+        # Keep float round-off on the passing side of the report card threshold
+        target = balance_smd_target - 1e-6
+
+    def smd_excess(x):
+        """Each covariate's |SMD| excess over the target for a 0/1 pair selection x,
+        with pairs weighted 1/(matches of their treatment cell)."""
+        matches = (treat_x @ x)[treat_idx]
+        weights = np.divide(x, matches, out=np.zeros(n_edges), where=x > 0)
+        smd = weights @ diffs / n_covered
+        return np.maximum(np.abs(smd) - target, 0)
+
+    def solve(cost, previous=None):
+        """Best solution within the node and time limits; if none was found, the
+        previous step's solution, which still satisfies every earlier priority."""
+        result = milp(
+            cost,
+            constraints=constraints,
+            integrality=integrality,
+            bounds=Bounds(0, upper),
+            options={
+                "node_limit": OPTIMAL_NODE_LIMIT,
+                "time_limit": OPTIMAL_TIME_LIMIT_S,
+            },
+        )
+        if result.x is not None:
+            return result.x
+        if previous is None:
+            raise RuntimeError(f"Optimal matching failed: {result.message}")
+        return previous
+
+    # 1. Maximize matched treatment cells, then hold that fixed
+    solution = solve(-on("y"))
+    n_covered = round(solution[var["y"]].sum())
+    constraints.append(LinearConstraint(on("y"), lb=n_covered))
+
+    # 3. (objective) Maximize matched pairs, then minimize total distance, in one
+    #    solve: each pair is worth 1 and all distances together are worth less than 1
+    eps = 1 / (k * n_treat * dists.max() + 1)
+    pairs_cost = on("x", -1 + eps * dists)
+
+    # Shortcut: if the best match without the balance step already meets the target,
+    # no balanced match can beat it on pairs or distance, so it is the answer
+    skip_balance = False
+    if balance:
+        solution = solve(pairs_cost, previous=solution)
+        x = np.round(solution[var["x"]])
+        skip_balance = not smd_excess(x).any()
+
+    # 2. Minimize total |SMD| excess over the target, then hold that fixed.
+    #    Pair weight w = x - u/2 is 1 if its cell has one match and 1/2 if two, so
+    #    SMD_j = sum(w * diffs_j) / n_covered, and |SMD_j| <= target + s_j
+    if balance and not skip_balance:
+        d = csr_matrix(diffs.T)
+        excess = -n_covered * identity(n_balance_covs)
+        for sign in (1, -1):
+            smd_rows = rows(n_balance_covs, x=sign * d, u=-sign * d / 2, s=excess)
+            constraints.append(LinearConstraint(smd_rows, ub=target * n_covered))
+        solution = solve(on("s"), previous=solution)
+        total_excess = smd_excess(np.round(solution[var["x"]])).sum()
+        constraints.append(LinearConstraint(on("s"), ub=total_excess + 1e-7))
+
+    # 3. Maximize matched pairs, then minimize total distance
+    if not skip_balance:
+        solution = solve(pairs_cost, previous=solution)
+        x = np.round(solution[var["x"]])
+
+    chosen = [[] for _ in range(n_treat)]
+    for e in np.flatnonzero(x > 0.5):
+        chosen[treat_idx[e]].append((dists[e], control_ids[control_idx[e]]))
+    return [
+        (treat_row, fallback, sorted(chosen[i]))
+        for i, (_, treat_row, fallback, _) in enumerate(pending)
+    ]
+
+
 def match_treatment_control_mdm(
     cells_df,
     covariates=None,
@@ -267,11 +478,17 @@ def match_treatment_control_mdm(
     reuse_frac=MAX_CONTROL_REUSE_FRAC,
     reuse_ceiling=MAX_CONTROL_REUSE_CEILING,
     per_covariate_calipers=None,
+    matching_algorithm=MATCHING_ALGORITHM,
+    balance_smd_target=BALANCE_SMD_TARGET,
 ):
     """Match each treatment cell to control cells by Mahalanobis Distance Matching (MDM).
 
     per_covariate_calipers: {covariate: n_sd}; controls must also be within
     n_sd pooled SDs of the treatment cell on each listed covariate.
+    matching_algorithm: "greedy" or "optimal" (see _assign_greedy / _assign_optimal).
+    balance_smd_target: optimal matching aims for every covariate's |SMD| at or below
+    this, after maximizing matched treatment cells. None (or greedy matching) turns
+    balance constraints off.
     """
     if covariates is None:
         covariates = COVARIATES
@@ -324,29 +541,52 @@ def match_treatment_control_mdm(
     )
     _print_waterfall_pools(pending, len(treat_df))
 
-    pending.sort(key=lambda item: item[0])
+    if matching_algorithm == "greedy":
+        assigned = _assign_greedy(pending, n_neighbors, cap)
+        balance_smd_target = None
+    elif matching_algorithm == "optimal":
+        # Balance is measured as in the report card SMD: covariates in pre-match pooled
+        # SDs. Covariates with no variation can't be imbalanced, so they are skipped
+        std_covariates = None
+        if balance_smd_target is not None:
+            all_cells = pd.concat([treat_df, control_df]).set_index("cell_ID")
+            pooled_sds = pd.Series(
+                [calc_pooled_sd(treat_df[col], control_df[col]) for col in covariates],
+                index=covariates,
+            )
+            balance_cols = pooled_sds.index[np.isfinite(pooled_sds) & (pooled_sds > 0)]
+            if len(balance_cols):
+                std_covariates = all_cells[balance_cols] / pooled_sds[balance_cols]
+            else:
+                balance_smd_target = None
+        assigned = _assign_optimal(
+            pending,
+            n_neighbors,
+            cap,
+            std_covariates=std_covariates,
+            balance_smd_target=balance_smd_target,
+        )
+    else:
+        raise ValueError(f"Unknown matching_algorithm: {matching_algorithm!r}")
+    print(
+        f"Matching algorithm: {matching_algorithm}; balance |SMD| target: {balance_smd_target}"
+    )
+
     matches = []
-    for _, treat_row, fallback, candidates in pending:
-        n_matched = 0
-        k = min(n_neighbors, len(candidates))
-        for dist, control_id in candidates:
-            if control_uses.get(control_id, 0) >= cap:
-                continue
+    for treat_row, fallback, chosen in assigned:
+        for rank, (dist, control_id) in enumerate(chosen, start=1):
             control_uses[control_id] = control_uses.get(control_id, 0) + 1
-            n_matched += 1
             matches.append(
                 {
                     "treat_cell_id": treat_row.cell_ID,
                     "control_cell_id": control_id,
                     "mahalanobis_distance": float(dist),
-                    "match_rank": n_matched,
+                    "match_rank": rank,
                     "match_country": treat_row.country,
                     "match_ecoregion": treat_row.ecoregion,
                     "match_fallback": fallback,
                 }
             )
-            if n_matched >= k:
-                break
 
     if matches:
         match_df = (

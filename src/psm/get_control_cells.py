@@ -18,7 +18,7 @@ from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
-    TEST_SITES_GEOJSON,
+    TEST_SITES,
     TREATMENT_CELLS,
     CONTROL_CELLS,
     EE_CRS_METERS,
@@ -189,7 +189,7 @@ def get_control_cells(
     Iterate through sites and extract control cells for each.
     """
     init_ee(PROJECT)
-    pa_gdf = gpd.read_file(test_sites)
+    pa_gdf = gpd.read_parquet(test_sites)
     all_pas = get_all_pas()
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)
@@ -262,4 +262,4 @@ def get_control_cells(
 
 
 if __name__ == "__main__":
-    get_control_cells(TEST_SITES_GEOJSON)
+    get_control_cells(TEST_SITES)

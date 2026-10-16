@@ -23,7 +23,7 @@ from utils.variables import (
     EE_CRS_METERS,
     SCALE,
     MAX_PIXELS,
-    TEST_SITES_GEOJSON,
+    TEST_SITES,
     TREATMENT_CELLS,
     GPD_CRS_METERS,
     GPD_CRS_PARQUET,
@@ -96,7 +96,7 @@ def get_treatment_cells(test_sites):
     """
     init_ee(PROJECT)
     # Read in PAs (EPSG:4326 for Earth Engine) and convert to 6933
-    pa_gdf_4326 = gpd.read_file(test_sites)
+    pa_gdf_4326 = gpd.read_parquet(test_sites)
     pa_gdf = pa_gdf_4326.to_crs(GPD_CRS_METERS)
 
     all_cells = []
@@ -133,4 +133,4 @@ def get_treatment_cells(test_sites):
 
 
 if __name__ == "__main__":
-    get_treatment_cells(TEST_SITES_GEOJSON)
+    get_treatment_cells(TEST_SITES)
