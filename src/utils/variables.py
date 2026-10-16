@@ -547,6 +547,11 @@ CONTROL_N_SAMPLES_MAX = (
 )
 CONTROL_SAMPLES_PER_TREAT = 10  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
 
+# Parameters for regression adjustment of relative effectiveness scores
+REG_ADJ_MIN_CONTROLS_PER_COVARIATE = 10
+# A regression model is fitted on a PA's matched control cells only if there are at least this many per covariate;
+# otherwise the PA's scores are left unadjusted.
+
 # ------------------------------------------------------------------------------------------------
 # FILE PATHS
 # ------------------------------------------------------------------------------------------------
