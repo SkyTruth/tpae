@@ -325,13 +325,15 @@ FENG_BALANCED_SMD = 0.2
 
 # Parameters for the per-site report card ("assessable": Yes / Caution / No)
 # No if any: match coverage too low, or any covariate very imbalanced
-REPORT_NO_MIN_COVERAGE = 0.25
+REPORT_NO_MIN_COVERAGE = 0.50
 REPORT_NO_MAX_SMD = 0.5
-# Yes if all: enough matched treatment cells, high enough match coverage, every
-# covariate within the |SMD| 0.25 guideline for reliable adjustment (Stuart 2010), few cross-border pairs
+# Yes if all: enough matched treatment cells, high enough match coverage,
+# every covariate balanced, matched cells representative of the whole PA,
+# few cross-border pairs
 REPORT_YES_MIN_MATCHED_TREAT = 10
 REPORT_YES_MIN_COVERAGE = 0.75
-REPORT_YES_MAX_SMD = 0.25
+REPORT_YES_MAX_SMD = FENG_BALANCED_SMD
+REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD = FENG_BALANCED_SMD
 REPORT_YES_MAX_CROSS_BORDER = 0.10
 # Caution otherwise
 
@@ -339,9 +341,12 @@ REPORT_CARD_COLUMNS = [
     "site_id",
     "n_matched_treat",
     "match_coverage_pct",
+    "common_support_pct",
+    "matched_vs_all_treat_smd",
     "max_abs_smd_after",
     "worst_covariate",
     "avg_abs_smd_after",
+    "avg_abs_pair_diff",
     "n_covariates_balanced",
     "cross_border_pct",
     "reason",
@@ -349,8 +354,10 @@ REPORT_CARD_COLUMNS = [
 ]
 
 # Parameters for treatment cell sampling
-PA_AREA_THRESHOLD = 500000000  # 500 km2
-SAMPLE_AREA_PCT = 0.03  # sample this percentage of the PA's area
+# Treatment cells per PA follow Cochran (1977, section 4.6): n = n0 / (1 + n0 / N), where
+# n0 = 1 / e^2, N is the PA's number of valid interior land cells, and e is the target
+# standard error of the PA's treatment-cell mean, in units of that PA's standard deviation
+TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large PAs
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 
 # Parameters for control cell sampling
@@ -358,11 +365,11 @@ CONTROL_INNER_BUFFER = 10_000  # minimum distance (m) from PA
 CONTROL_OUTER_BUFFER = 200_000  # maximum distance (m) from PA
 CONTROL_SPACING = 3000  # minimum distance (m) between control cells
 # number of control cells to sample for each PA
-CONTROL_N_SAMPLES_MIN = 2000  # floor on control cells per PA (small PAs still need plenty of samples to find rare matches)
+CONTROL_N_SAMPLES_MIN = 4000  # floor on control cells per PA (small PAs still need plenty of samples to find rare matches)
 CONTROL_N_SAMPLES_MAX = (
-    5000  # cap on control cells per PA so large parks do not over-sample
+    10000  # cap on control cells per PA so large parks do not over-sample
 )
-CONTROL_SAMPLES_PER_TREAT = 5  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
+CONTROL_SAMPLES_PER_TREAT = 10  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
 
 # ------------------------------------------------------------------------------------------------
 # FILE PATHS

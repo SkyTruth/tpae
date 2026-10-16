@@ -1,8 +1,8 @@
 """
 Creates a set of treatment cells for each PA.
 Treatment cells are 1km x 1km cells that are fully within the PA's geometry.
-If the PA is small, a grid of all valid interior cells is returned.
-If the PA is large, a random sample of valid interior cells is returned.
+Each PA gets a simple random sample of its grid of valid interior cells
+Sample size is calculated dynamically so that every PA's treatment-cell mean has the same standard error.
 """
 
 from pathlib import Path
@@ -11,26 +11,31 @@ import sys
 _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
+import ee
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-from shapely.geometry import box, Point
+from shapely.geometry import box
+from psm.get_control_cells import init_ee
 from utils.variables import (
+    PROJECT,
+    HGFC_ASSET_ID,
+    EE_CRS_METERS,
+    SCALE,
+    MAX_PIXELS,
     TEST_SITES_GEOJSON,
     TREATMENT_CELLS,
     GPD_CRS_METERS,
     GPD_CRS_PARQUET,
     PSM_CELL_SIZE,
     RAND_SEED,
-    PA_AREA_THRESHOLD,
-    SAMPLE_AREA_PCT,
+    TREATMENT_SE_TARGET,
 )
 
 
 def draw_grid(pa_geom, cell_size):
     """
     Create a grid of all valid treatment cells within a PA geometry.
-    Used for small PAs.
     """
     # Draw a grid from the PA's bounding box
     minx, miny, maxx, maxy = pa_geom.bounds
@@ -55,70 +60,58 @@ def draw_grid(pa_geom, cell_size):
     return valid_grid
 
 
-def sample_cells(pa_geom, n_samples, seed, cell_size):
+def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
     """
-    Randomly sample valid treatment cells within a PA geometry.
-    Used for large PAs.
+    Calculate treatment sample size so the PA's treatment-cell mean has a standard
+    error of se_target standard deviations.
     """
-    half = cell_size / 2.0
-    minx, miny, maxx, maxy = pa_geom.bounds
-    boundary = pa_geom.boundary
+    if n_land_cells <= 0:
+        return 0
+    n0 = 1 / se_target**2
+    return int(np.ceil(n0 / (1 + n0 / n_land_cells)))
 
-    cells = []
-    rng = np.random.default_rng(seed)
-    max_attempts = max(n_samples * 500, 50_000)
-    attempts = 0
 
-    while len(cells) < n_samples and attempts < max_attempts:
-        attempts += 1
-        # Randomly sample a point within the PA's bounding box
-        x = float(rng.uniform(minx, maxx))
-        y = float(rng.uniform(miny, maxy))
-        point = Point(x, y)
-        # Reject the point if it is not within the PA
-        if not pa_geom.contains(point):
-            continue
-        # Draw a 1km x 1km cell around the point
-        cell = box(x - half, y - half, x + half, y + half)
-        # Reject the cell if it is not fully within the PA
-        if cell.disjoint(pa_geom) or cell.intersects(boundary):
-            continue
-        # Reject the cell if it overlaps any previously accepted cell.
-        if any(
-            cell.intersects(existing) and not cell.touches(existing)
-            for existing in cells
-        ):
-            continue
-        cells.append(cell)
-
-    cells = gpd.GeoDataFrame({"geometry": cells}, crs=GPD_CRS_METERS)
-
-    return cells
+def get_land_fraction(pa_geom_4326):
+    """Calculate fraction of a PA that is land."""
+    land = ee.Image(HGFC_ASSET_ID).select("datamask").eq(1)
+    land_frac = (
+        land.reduceRegion(
+            reducer=ee.Reducer.mean(),
+            geometry=ee.Geometry(pa_geom_4326.__geo_interface__),
+            scale=SCALE,
+            crs=EE_CRS_METERS,
+            maxPixels=MAX_PIXELS,
+        )
+        .get("datamask")
+        .getInfo()
+    )
+    return 1.0 if land_frac is None else land_frac
 
 
 def get_treatment_cells(test_sites):
     """
     Iterate through a set of PAs and return a set of valid treatment cells for each.
-    If the PA is less than 500 km2, return a grid of all valid interior cells.
-    If the PA is greater than 500 km2, return a random sample of valid interior cells.
+    Each PA's grid of valid interior cells is randomly subsampled to the size given by
+    calc_n_treatment (or all cells if the grid is smaller than that).
     """
-    # Read in PAs and convert to 6933
-    pa_gdf = gpd.read_file(test_sites)
-    pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
+    init_ee(PROJECT)
+    # Read in PAs (EPSG:4326 for Earth Engine) and convert to 6933
+    pa_gdf_4326 = gpd.read_file(test_sites)
+    pa_gdf = pa_gdf_4326.to_crs(GPD_CRS_METERS)
 
     all_cells = []
 
     # Iterate through PAs and get a set of valid treatment cells for each
-    for _, row in pa_gdf.iterrows():
+    for (_, row), geom_4326 in zip(pa_gdf.iterrows(), pa_gdf_4326.geometry):
         pa_geom = row.geometry
-        area = pa_geom.area
-        # Apply the appropriate function based on the PA's size
-        if area < PA_AREA_THRESHOLD:
-            cells = draw_grid(pa_geom, PSM_CELL_SIZE)
-        else:
-            cells = sample_cells(
-                pa_geom, (area / 1000000) * SAMPLE_AREA_PCT, RAND_SEED, PSM_CELL_SIZE
-            )
+        land_frac = get_land_fraction(geom_4326)
+        cells = draw_grid(pa_geom, PSM_CELL_SIZE)
+        # Size the sample on land cells; water cells are dropped at extraction,
+        # so draw extra to keep ~n land cells
+        n = calc_n_treatment(len(cells) * land_frac)
+        n_draw = int(np.ceil(n / land_frac)) if land_frac > 0 else 0
+        if len(cells) > n_draw:
+            cells = cells.sample(n=n_draw, random_state=RAND_SEED)
         # Add attributes to cells
         cells["WDPAID"] = str(row.get("WDPAID"))
         cells["protected"] = 1
