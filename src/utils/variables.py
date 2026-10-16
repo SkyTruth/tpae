@@ -580,6 +580,8 @@ CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.par
 # extract_cell_covariates.py: covariates for each site's candidate cells, one file per
 # site, read by mahalanobis_experiment.py
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
+# mahalanobis_experiment.py (optional): each site's match table and matched cells
+MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging
 EE_DEADLINE_MS = 300_000
 

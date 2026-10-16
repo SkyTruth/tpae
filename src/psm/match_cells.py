@@ -6,7 +6,6 @@ from collections import Counter
 from pathlib import Path
 
 import ee
-import geemap
 import numpy as np
 import pandas as pd
 from scipy.optimize import Bounds, LinearConstraint, milp
@@ -21,6 +20,8 @@ from utils.variables import (
     CALIPER_MDM,
     CALIPER_PSM,
     COVARIATES,
+    GCS_BUCKET,
+    MATCHES_PREFIX,
     MAX_CONTROL_REUSE_CEILING,
     MAX_CONTROL_REUSE_FRAC,
     MATCHING_ALGORITHM,
@@ -655,15 +656,43 @@ def filter_matched_grids(grid_fc, match_df):
     return grid_fc.filter(ee.Filter.inList("cell_ID", valid_ids))
 
 
+def match_output_paths(site_id, match_method: str = "mdm"):
+    """GCS paths of a site's saved match table and matched cells (active site group)."""
+    folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
+    return (
+        f"{folder}match_table_{match_method}_{site_id}.parquet",
+        f"{folder}matched_grids_{match_method}_{site_id}.parquet",
+    )
+
+
 def save_matching_outputs(
-    matched_grids, match_df, pa_id, match_method: str = "mdm", data_dir="data"
+    site_cells, cells_df, match_df, site_id, match_method: str = "mdm"
 ):
-    """Write matched grids and match pairs to parquet."""
-    matched_grids_gdf = geemap.ee_to_gdf(matched_grids)
-    matched_grids_gdf.to_parquet(
-        f"{data_dir}/{match_method}/matched_grids_{match_method}_{pa_id}.parquet"
+    """Write a site's match table and matched cells to GCS (see match_output_paths).
+
+    Matched cells keep their geometry, cell_ID, protected flag and covariates.
+    site_cells: the site's cells with cell_IDs (build_site_cells); cells_df: the
+    site's cell covariates, keyed by the same cell_IDs.
+    """
+    matched_ids = pd.concat(
+        [match_df["treat_cell_id"], match_df["control_cell_id"]]
+    ).unique()
+    covariates = cells_df[["cell_ID", "protected", *COVARIATES]]
+    matched = site_cells[["cell_ID", "protected", "geometry"]].merge(
+        covariates, on="cell_ID", suffixes=("_cells", "")
     )
-    match_df.to_parquet(
-        f"{data_dir}/{match_method}/match_table_{match_method}_{pa_id}.parquet",
-        index=False,
-    )
+    matched = matched[matched["cell_ID"].isin(matched_ids)]
+    # cell_IDs are rebuilt from the cell files, so check they still match the covariates
+    same_protected = matched["protected_cells"].astype(int) == matched["protected"]
+    if len(matched) != len(matched_ids) or not same_protected.all():
+        raise ValueError(
+            f"Site {site_id}: cell files and cell covariates disagree; "
+            "re-run extract_cell_covariates.py"
+        )
+
+    table_path, grids_path = match_output_paths(site_id, match_method)
+    # attrs hold in-memory matching details, which parquet metadata can't store
+    match_table = match_df.copy()
+    match_table.attrs = {}
+    match_table.to_parquet(table_path, index=False)
+    matched.drop(columns="protected_cells").to_parquet(grids_path, index=False)
