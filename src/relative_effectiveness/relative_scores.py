@@ -2,8 +2,6 @@
 PA-level relative effectiveness from matched treatment and control cell scores.
 """
 
-from pathlib import Path
-
 import geemap
 import numpy as np
 import pandas as pd
@@ -25,24 +23,10 @@ __all__ = [
     "SCORE_COLS",
     "DIFF_COLS",
     "ADJ_DIFF_COLS",
-    "load_match_table",
     "build_match_df_with_score_diffs",
     "regression_adjust_score_diffs",
     "aggregate_pa_relative_scores",
 ]
-
-
-def load_match_table(
-    site_id: int, match_method: str = "mdm", data_dir: str | Path = "data"
-) -> pd.DataFrame:
-    """Load the MDM/PSM match table for a site."""
-    path = (
-        Path(data_dir) / match_method / f"match_table_{match_method}_{site_id}.parquet"
-    )
-    mt = pd.read_parquet(path)
-    mt["treat_cell_id"] = mt["treat_cell_id"].astype(int)
-    mt["control_cell_id"] = mt["control_cell_id"].astype(int)
-    return mt
 
 
 def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.DataFrame:
