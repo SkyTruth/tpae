@@ -47,6 +47,35 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
 
         return with_areas.map(add_score)
 
+    def calc_start_habitat_proportion_per_cell(self, habitat_start_raster, fc):
+        """Proportion of each cell that was habitat at the start year."""
+        cell_area_image = ee.Image.pixelArea().rename("cell_area")
+        start_area_image = cell_area_image.updateMask(habitat_start_raster).rename(
+            "start_habitat_area"
+        )
+        combined = start_area_image.addBands(cell_area_image)
+
+        with_areas = combined.reduceRegions(
+            collection=fc,
+            reducer=ee.Reducer.sum(),
+            scale=self.scale,
+            crs=self.crs,
+        )
+
+        def add_proportion(feature):
+            start_area = ee.Number(
+                ee.Algorithms.If(
+                    feature.get("start_habitat_area"),
+                    feature.get("start_habitat_area"),
+                    0,
+                )
+            )
+            cell_area = ee.Number(feature.get("cell_area"))
+            proportion = start_area.divide(cell_area).min(1)
+            return feature.set("start_habitat_proportion", proportion)
+
+        return with_areas.map(add_proportion)
+
 
 class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
     """Per-cell habitat extent, intactness, and overall condition metrics.
