@@ -1,6 +1,7 @@
 import ee
 from utils.variables import (
     ANALYSIS_END_YR,
+    FORTY_ASSET_IDS,
     GLC_ASSET_ID,
     GLC_CLASSES,
     GPW_ASSET_ID,
@@ -21,6 +22,7 @@ class DataProcessor:
         gpw_collection,
         nfw_collection,
         hgfc_image,
+        forty_collections,
         analysis_end_yr=ANALYSIS_END_YR,
         glc_classes=GLC_CLASSES,
         nfw_threshold=NFW_THRESHOLD,
@@ -29,6 +31,7 @@ class DataProcessor:
         self.gpw_collection = gpw_collection
         self.nfw_collection = nfw_collection
         self.hgfc_image = hgfc_image
+        self.forty_collections = forty_collections
         self.analysis_end_yr = analysis_end_yr
         self.glc_classes = glc_classes
         self.nfw_threshold = nfw_threshold
@@ -43,6 +46,10 @@ class DataProcessor:
             gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
             nfw_collection=ee.ImageCollection(NFW_ASSET_ID),
             hgfc_image=ee.Image(HGFC_ASSET_ID),
+            forty_collections={
+                year: ee.ImageCollection(asset_id)
+                for year, asset_id in FORTY_ASSET_IDS.items()
+            },
         )
 
     def get_land_mask(self):
@@ -115,3 +122,30 @@ class DataProcessor:
         hgfc_masked = hgfc_selected.updateMask(analysis_mask)
         hgfc = hgfc_masked.unmask()
         return self._apply_land_mask(hgfc) if land_masked else hgfc
+
+    def process_forty(self, test_sites, start_yr, land_masked=True):
+        """
+        Process Forest Typology (ForTy) data for the analysis period.
+        """
+        analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
+        missing = [
+            year for year in analysis_years if year not in self.forty_collections
+        ]
+        if missing:
+            available = sorted(self.forty_collections)
+            raise ValueError(
+                f"No ForTy collection for year(s) {missing}. Available years: {available}."
+            )
+
+        def class_image(year):
+            mosaic = self.forty_collections[year].filterBounds(test_sites).mosaic()
+            return (
+                mosaic.toArray()
+                .arrayArgmax()
+                .arrayGet([0])
+                .add(1)
+                .rename(f"FORTY_{year}")
+            )
+
+        forty = ee.Image.cat([class_image(year) for year in analysis_years])
+        return self._apply_land_mask(forty) if land_masked else forty
