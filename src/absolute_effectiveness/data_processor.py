@@ -6,8 +6,6 @@ from utils.variables import (
     GLC_CLASSES,
     GPW_ASSET_ID,
     HGFC_ASSET_ID,
-    NFW_ASSET_ID,
-    NFW_THRESHOLD,
 )
 
 
@@ -20,21 +18,17 @@ class DataProcessor:
         self,
         glc_collection,
         gpw_collection,
-        nfw_collection,
         hgfc_image,
         forty_collections,
         analysis_end_yr=ANALYSIS_END_YR,
         glc_classes=GLC_CLASSES,
-        nfw_threshold=NFW_THRESHOLD,
     ):
         self.glc_collection = glc_collection
         self.gpw_collection = gpw_collection
-        self.nfw_collection = nfw_collection
         self.hgfc_image = hgfc_image
         self.forty_collections = forty_collections
         self.analysis_end_yr = analysis_end_yr
         self.glc_classes = glc_classes
-        self.nfw_threshold = nfw_threshold
 
     @classmethod
     def from_gee_defaults(cls):
@@ -44,7 +38,6 @@ class DataProcessor:
         return cls(
             glc_collection=ee.ImageCollection(GLC_ASSET_ID),
             gpw_collection=ee.ImageCollection(GPW_ASSET_ID),
-            nfw_collection=ee.ImageCollection(NFW_ASSET_ID),
             hgfc_image=ee.Image(HGFC_ASSET_ID),
             forty_collections={
                 year: ee.ImageCollection(asset_id)
@@ -102,14 +95,6 @@ class DataProcessor:
         gpw_renamed = gpw_filtered.rename([f"GPW_{year}" for year in year_strings])
         gpw = gpw_renamed.unmask()
         return self._apply_land_mask(gpw) if land_masked else gpw
-
-    def process_nfw(self, test_sites, land_masked=True):
-        """
-        Process Natural Forests of the World (2020) data.
-        """
-        nfw_mosaic = self.nfw_collection.filterBounds(test_sites).mosaic()
-        nfw = nfw_mosaic.gte(self.nfw_threshold)
-        return self._apply_land_mask(nfw) if land_masked else nfw
 
     def process_hgfc(self, start_yr, land_masked=True):
         """

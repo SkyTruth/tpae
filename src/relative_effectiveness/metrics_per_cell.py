@@ -81,7 +81,7 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
     """Per-cell habitat extent, intactness, and overall condition metrics.
 
     Reuses the raster-building methods from `HabitatConditionAnalyzer`
-    (`get_habitat_raster`, `build_kernel`, `get_intactness_raster`) and adds
+    (`get_habitat_binary_end`, `build_kernel`, `get_intactness_raster`) and adds
     server-side `reduceRegions`-based scoring for an entire FeatureCollection
     of cells in a single pass per metric.
     """

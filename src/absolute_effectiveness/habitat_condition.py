@@ -1,7 +1,6 @@
 import ee
 import math
 from utils.variables import (
-    ANALYSIS_END_YR,
     EE_CRS_METERS,
     MAX_PIXELS,
     SCALE,
@@ -22,7 +21,6 @@ class HabitatConditionAnalyzer:
 
     def __init__(
         self,
-        analysis_end_yr=ANALYSIS_END_YR,
         crs=EE_CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
@@ -34,7 +32,6 @@ class HabitatConditionAnalyzer:
         kernel_size=KERNEL_SIZE,
         tile_scale=TILE_SCALE,
     ):
-        self.analysis_end_yr = analysis_end_yr
         self.crs = crs
         self.scale = scale
         self.max_pixels = max_pixels
@@ -46,48 +43,69 @@ class HabitatConditionAnalyzer:
         self.kernel_size = kernel_size
         self.tile_scale = tile_scale
 
-    def get_habitat_raster(
-        self, glc_processed, hgfc_processed, gpw_processed, nfw_processed
-    ):
+    def get_land_cover(self, glc_processed, gpw_processed, forty_processed, year):
         """
-        Create habitat extent raster for analysis_end_yr.
+        Combine land cover products into a single classification for a given year.
         """
-        # Get GLC raster for analysis_end_yr
-        glc_current = glc_processed.select(f"GLC_{self.analysis_end_yr}")
-        # Mask anthropogenic land covers
-        anthro_classes = ee.List([1, 2, 3, 4, 30])
-        anthro_mask = glc_current.remap(
-            anthro_classes, ee.List.repeat(1, anthro_classes.size()), defaultValue=0
+        # Start with GLC
+        glc = glc_processed.select(f"GLC_{year}")
+        # Use GPW to differentiate between natural and anthropogenic grassland
+        gpw = gpw_processed.select(f"GPW_{year}")
+        grassland_classes = ee.List([15, 16, 17, 18, 20, 21, 22])
+        is_grassland = glc.remap(
+            grassland_classes,
+            ee.List.repeat(1, grassland_classes.size()),
+            0,
+        ).eq(1)
+        # GPW = cultivated grassland (pasture) on GLC grassland, shrubland, or sparse
+        lc = glc.where(gpw.eq(1).And(is_grassland), 37)
+
+        # Use ForTy to differentiate between natural and anthropogenic forest
+        forty = forty_processed.select(f"FORTY_{year}")
+        forty_planted_classes = ee.List([4, 5])
+        forest_classes = ee.List([5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+        is_planted = forty.remap(
+            forty_planted_classes,
+            ee.List.repeat(1, forty_planted_classes.size()),
+            0,
+        ).eq(1)
+        is_forest = glc.remap(
+            forest_classes,
+            ee.List.repeat(1, forest_classes.size()),
+            0,
+        ).eq(1)
+        # ForTy = plantation forest or tree crops on GLC forest
+        lc = lc.where(is_planted.And(is_forest), 38)
+        return lc
+
+    def _remap_habitat_binary(self, lc):
+        """Remap anthropogenic classes to 0 and all other classes to 1."""
+        anthro_classes = ee.List([1, 2, 3, 4, 30, 37, 38])
+        return lc.remap(
+            anthro_classes,
+            ee.List.repeat(0, anthro_classes.size()),
+            defaultValue=1,
         )
-        # Mask areas of forest loss
-        forest_loss_mask = hgfc_processed.gt(0)
-        # Mask areas of pasture
-        gpw_current = gpw_processed.select(f"GPW_{self.analysis_end_yr}")
-        pasture_mask = gpw_current.eq(1)
-        # Mask areas of planted forests
-        # (closed forests that were not classified as natural forest in 2020)
-        closed_forest_classes = ee.List([6, 8, 10, 12, 14])
-        planted_forest_mask = (
-            glc_current.remap(
-                closed_forest_classes,
-                ee.List.repeat(1, closed_forest_classes.size()),
-                defaultValue=0,
-            ).updateMask(nfw_processed.eq(0))
-        ).unmask(0)
-        # Remove natural grasslands from anthro and planted forest masks
-        grassland_mask = gpw_current.eq(2)
-        grassland_override = grassland_mask.And(
-            anthro_mask.add(planted_forest_mask).gt(0)
-        )
-        anthro_mask = anthro_mask.where(grassland_override, 0)
-        planted_forest_mask = planted_forest_mask.where(grassland_override, 0)
-        # Combine masks into a single non-habitat mask
-        non_habitat_mask = (
-            anthro_mask.add(forest_loss_mask).add(pasture_mask).add(planted_forest_mask)
-        )
-        # Invert non-habitat mask to get habitat extent layer
-        habitat_mask = non_habitat_mask.eq(0).Or(grassland_override)
-        return glc_current.where(grassland_override, 18).updateMask(habitat_mask)
+
+    def get_habitat_binary_end(self, lc, hgfc_processed):
+        """
+        Create a habitat/non-habitat binary raster for the analysis end year.
+
+        1 = natural, 0 = anthropogenic. Forest loss during the analysis period
+        is set to anthropogenic.
+        """
+        habitat_binary_end = self._remap_habitat_binary(lc)
+        forest_loss = hgfc_processed.unmask(0).gt(0)
+        return habitat_binary_end.where(forest_loss, 0)
+
+    def get_habitat_binary_start(self, lc):
+        """
+        Create a habitat/non-habitat binary raster for the analysis start year.
+
+        1 = natural, 0 = anthropogenic. Pass land cover built for the start year.
+        Forest loss is not applied.
+        """
+        return self._remap_habitat_binary(lc)
 
     def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
         """

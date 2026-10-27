@@ -7,7 +7,7 @@ This repository contains preliminary code related to the development of a Terres
 - **notebooks/**: Notebooks currently used for developing and testing methods on individual PAs; will later be converted into scripts.
 - **src/absolute_effectiveness/**: Functions for evaluating absolute effectiveness.
   - **`SiteSelector`**: Retrieves selected test sites and derives site-specific variables.
-  - **`DataProcessor`**: Loads and processes Earth Engine datasets (GLC, GPW, NFW, HGFC) for the selected sites and analysis period.
+  - **`DataProcessor`**: Loads and processes Earth Engine datasets (GLC, GPW, ForTy, HGFC) for the selected sites and analysis period.
   - **`HabitatConditionAnalyzer`**: Calculates habitat extent, intactness, and overall habitat condition score.
   - **`HabitatLossAnalyzer`**: Calculates habitat loss score and summarizes the drivers and types of habitat loss.
   - **`VisualizationService`**: Builds cloud-masked Sentinel-2 composites to aid map visualization.
