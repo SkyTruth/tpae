@@ -148,10 +148,16 @@ def points_to_cells(points_fc):
     # so it is not limited to 5000 features like getInfo()
     points_gdf = ee.data.computeFeatures(
         {"expression": points_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
-    ).set_crs("EPSG:4326")
+    )
+
+    # If a site has no control points, return an empty GeoDataFrame
+    if points_gdf.empty:
+        return gpd.GeoDataFrame(
+            {"WDPAID": [], "protected": [], "geometry": []}, crs=GPD_CRS_METERS
+        )
 
     # Reproject to meter-based CRS for cell construction
-    points_gdf = points_gdf.to_crs(GPD_CRS_METERS)
+    points_gdf = points_gdf.set_crs("EPSG:4326").to_crs(GPD_CRS_METERS)
 
     # Draw a cell around each point
     cell_size = float(PSM_CELL_SIZE)
