@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from archive.PSM_predict import load_propensity_artifacts, predict_propensity
-from psm.match_cells import _print_waterfall_pools, waterfall_in_caliper_neighbors
+from matching.match_cells import _print_waterfall_pools, waterfall_in_caliper_neighbors
 from utils.variables import CALIPER_PSM, N_NEIGHBORS_PSM
 
 

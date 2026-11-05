@@ -6,7 +6,7 @@ import geemap
 import numpy as np
 import pandas as pd
 
-from psm.diagnostics import calc_match_weights
+from matching.diagnostics import calc_match_weights
 from utils.variables import COVARIATES, REG_ADJ_MIN_CONTROLS_PER_COVARIATE
 
 SCORE_COLS = ["extent_score", "intactness_score", "condition_score", "loss_score"]

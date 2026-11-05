@@ -16,7 +16,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import box
-from psm.get_control_cells import init_ee
+from cells.get_control_cells import init_ee
 from utils.variables import (
     PROJECT,
     HGFC_ASSET_ID,

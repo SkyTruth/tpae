@@ -55,10 +55,10 @@ def extract_site_covariates(site_ids=TEST_SITE_IDS, overwrite=False):
     """Extract and save each site's cell covariates; return the sites that failed."""
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
-    from absolute_effectiveness.site_selector import SiteSelector
-    from psm.prepare_pa_grid import load_pa_candidate_cells
-    from psm.covariates import build_resampled_covariates
-    from psm.cell_features import extract_cells_with_covariates
+    from sites.site_selector import SiteSelector
+    from cells.prepare_pa_grid import load_pa_candidate_cells
+    from covariates.covariates import build_resampled_covariates
+    from covariates.cell_features import extract_cells_with_covariates
 
     ee.Authenticate()
     ee.Initialize(project=PROJECT)

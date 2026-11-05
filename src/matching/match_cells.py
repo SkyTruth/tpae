@@ -12,7 +12,7 @@ from scipy.sparse import csr_matrix, hstack, identity
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-from psm.diagnostics import calc_pooled_sd
+from matching.diagnostics import calc_pooled_sd
 from utils.variables import (
     BALANCE_SMD_TARGET,
     CALIPER_MDM,

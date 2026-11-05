@@ -9,14 +9,14 @@ WDPAID, and dissolves multi-part sites into one row per site.
 from pathlib import Path
 import sys
 
-_SRC = Path(__file__).resolve().parent
+_SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
 import ee
 from shapely import make_valid
 from shapely.ops import unary_union
 
-from psm.get_control_cells import init_ee
+from cells.get_control_cells import init_ee
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,

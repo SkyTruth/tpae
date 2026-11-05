@@ -41,10 +41,10 @@ from utils.variables import (
     CONTROL_CELLS,
 )
 
-from psm.extract_cell_covariates import cell_covariates_path
-from psm.prepare_pa_grid import build_site_cells
-from psm.match_cells import match_treatment_control_mdm, save_matching_outputs
-from psm.diagnostics import (
+from covariates.extract_cell_covariates import cell_covariates_path
+from cells.prepare_pa_grid import build_site_cells
+from matching.match_cells import match_treatment_control_mdm, save_matching_outputs
+from matching.diagnostics import (
     DIAGNOSTIC_COLUMNS,
     site_diagnostics_row,
     build_report_card,
