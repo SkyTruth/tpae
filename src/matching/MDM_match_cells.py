@@ -32,8 +32,8 @@ sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 from utils.variables import (
     SITE_IDS,
     GCS_BUCKET,
-    MDM_EXPERIMENTS_PREFIX,
-    REPORT_CARDS_PREFIX,
+    MATCH_DIAGNOSTICS_PREFIX,
+    MATCH_REPORT_CARDS_PREFIX,
     MATCHES_PREFIX,
     TREATMENT_CELLS,
     CONTROL_CELLS,
@@ -50,8 +50,10 @@ from matching.diagnostics import (
     save_report_card,
 )
 
-diagnostics_path = f"gs://{GCS_BUCKET}/{MDM_EXPERIMENTS_PREFIX}{run_id}.csv"
-report_card_path = f"gs://{GCS_BUCKET}/{REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
+diagnostics_path = f"gs://{GCS_BUCKET}/{MATCH_DIAGNOSTICS_PREFIX}{run_id}.csv"
+report_card_path = (
+    f"gs://{GCS_BUCKET}/{MATCH_REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
+)
 matches_folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
 
 # Cell geometries for the saved matched cells (cell_IDs are rebuilt from these files)

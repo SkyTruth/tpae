@@ -1,7 +1,7 @@
 import math
 
-PROJECT = "skytruth-tech"
-GCS_BUCKET = "code_name_capybara"
+PROJECT = "tpara-512319"
+GCS_BUCKET = "tpara"
 
 # Earth Engine asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
@@ -477,9 +477,9 @@ COVARIATES = [
 ]
 
 # Parameters for MDM
-# GCS prefixes for MDM experiment results and report cards, one folder per site group
-MDM_EXPERIMENTS_PREFIX = f"mdm_experiments/{SITE_GROUP}/"
-REPORT_CARDS_PREFIX = f"report_cards/{SITE_GROUP}/"
+# GCS prefixes for match diagnostics and report cards, one folder per site group
+MATCH_DIAGNOSTICS_PREFIX = f"match_diagnostics/{SITE_GROUP}/"
+MATCH_REPORT_CARDS_PREFIX = f"match_report_cards/{SITE_GROUP}/"
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
@@ -585,8 +585,8 @@ REPO_DATA_DIR = "data/"
 # Inputs:
 # ----------
 # Cleaned geometries of the active site group (SITE_IDS), written by clean_sites.py
-SITES_PREFIX = "sites/"  # stored in the GCS bucket
-SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}sites_{SITE_GROUP}.parquet"
+SITE_GEOMS_PREFIX = "site_geoms/"  # stored in the GCS bucket
+SITE_GEOMS = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.parquet"
 
 # Outputs:
 # ----------

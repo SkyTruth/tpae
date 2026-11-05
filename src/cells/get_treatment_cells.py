@@ -23,7 +23,7 @@ from utils.variables import (
     EE_CRS_METERS,
     SCALE_M,
     MAX_PIXELS,
-    SITES,
+    SITE_GEOMS,
     TREATMENT_CELLS,
     GPD_CRS_METERS,
     GPD_CRS_PARQUET,
@@ -145,4 +145,4 @@ def get_treatment_cells(sites_path):
 
 
 if __name__ == "__main__":
-    get_treatment_cells(SITES)
+    get_treatment_cells(SITE_GEOMS)

@@ -1,6 +1,6 @@
 """
 Extract a set of sites (SITE_IDS) from the WDPA and WDOECM feature collections in
-Earth Engine, clean their geometries, and save them to SITES (GeoParquet in GCS).
+Earth Engine, clean their geometries, and save them to SITE_GEOMS (GeoParquet in GCS).
 
 Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
 site_id, and dissolves multi-part sites into one row per site.
@@ -22,7 +22,7 @@ from utils.variables import (
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
     SITE_IDS,
-    SITES,
+    SITE_GEOMS,
 )
 
 
@@ -62,7 +62,7 @@ def clean_sites(sites):
     return sites.dissolve(by="site_id", aggfunc="first", as_index=False)
 
 
-def save_sites(site_ids=SITE_IDS, output_path=SITES):
+def save_sites(site_ids=SITE_IDS, output_path=SITE_GEOMS):
     """Extract, clean, and save the given sites."""
     init_ee(PROJECT)
     raw = fetch_sites(site_ids)

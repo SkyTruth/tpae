@@ -18,7 +18,7 @@ from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
-    SITES,
+    SITE_GEOMS,
     TREATMENT_CELLS,
     CONTROL_CELLS,
     EE_CRS_METERS,
@@ -268,4 +268,4 @@ def get_control_cells(
 
 
 if __name__ == "__main__":
-    get_control_cells(SITES)
+    get_control_cells(SITE_GEOMS)

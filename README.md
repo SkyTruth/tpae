@@ -42,7 +42,7 @@ Site lists, cell files, covariates, and match outputs are stored in GCS under pr
 
 Relative effectiveness, for the active `SITE_GROUP`:
 
-1. `src/sites/clean_sites.py`: Write `sites/sites_{SITE_GROUP}.parquet`.
+1. `src/sites/clean_sites.py`: Write `site_geoms/site_geoms_{SITE_GROUP}.parquet`.
 2. `src/cells/get_treatment_cells.py`: Write `cells/treatment_cells_{SITE_GROUP}.parquet`.
 3. `src/cells/get_control_cells.py`: Write `cells/control_cells_{SITE_GROUP}.parquet`.
 4. `src/covariates/extract_cell_covariates.py`: Write one covariate file per site under `cell_covariates/{SITE_GROUP}/`.

@@ -15,7 +15,7 @@ _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
 from utils.variables import (
-    SITES,
+    SITE_GEOMS,
     BUFFER_10KM,
     BUFFER_50KM,
     EXCLUSION_ZONE,
@@ -51,7 +51,7 @@ def save_intermediate_gdf(gdf, output_path, save_intermediates):
 
 def create_psm_cells(save_intermediates: bool = False):
     # Read in test_site file, convert to 4087
-    pa_gdf = gpd.read_parquet(SITES)
+    pa_gdf = gpd.read_parquet(SITE_GEOMS)
     pa_gdf = pa_gdf.to_crs(GPD_CRS_METERS)
 
     # Make Copies for Buffering, to maintain attributes
