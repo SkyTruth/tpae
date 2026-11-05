@@ -28,6 +28,7 @@ from utils.variables import (
     RAND_SEED,
     CONTROL_INNER_BUFFER_M,
     CONTROL_OUTER_BUFFER_M,
+    CONTROL_SIMPLIFY_M,
     CONTROL_SPACING_M,
     CONTROL_N_SAMPLES_MIN,
     CONTROL_N_SAMPLES_MAX,
@@ -196,6 +197,12 @@ def get_control_cells(
     """
     init_ee(PROJECT)
     sites_gdf = gpd.read_parquet(sites_path)
+    # Simplify site boundaries before buffering
+    sites_gdf["geometry"] = (
+        sites_gdf.geometry.to_crs(GPD_CRS_METERS)
+        .simplify(CONTROL_SIMPLIFY_M)
+        .to_crs(sites_gdf.crs)
+    )
     all_pas = get_all_pas()
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)

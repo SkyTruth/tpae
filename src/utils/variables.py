@@ -562,6 +562,7 @@ MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly wa
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER_M = 10_000  # minimum distance (m) from site
 CONTROL_OUTER_BUFFER_M = 200_000  # maximum distance (m) from site
+CONTROL_SIMPLIFY_M = 100  # tolerance (m) for simplifying site boundaries
 CONTROL_SPACING_M = 3000  # minimum distance (m) between control cells
 # number of control cells to sample for each site
 CONTROL_N_SAMPLES_MIN = 4000  # floor on control cells per site (small sites still need plenty of samples to find rare matches)
