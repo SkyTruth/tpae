@@ -38,7 +38,8 @@ def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km):
                 ee.Filter.lt("cell_ID", start + EE_GETINFO_LIMIT),
             )
         )
-        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km)
+        n_cells = min(EE_GETINFO_LIMIT, n - start)
+        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km, n_cells)
         reduced_chunks.append(reduced)
         if len(cells_df) > 0:
             df_chunks.append(cells_df)
@@ -65,8 +66,11 @@ def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km):
     return cells_fc, cells_df
 
 
-def _extract_chunk(cells_fc, covariates, ee_crs_1km):
-    """Run reduceRegions, spatial joins, and getInfo on one <=5000-feature chunk."""
+def _extract_chunk(cells_fc, covariates, ee_crs_1km, n_cells):
+    """Run reduceRegions, spatial joins, and getInfo on one <=5000-feature chunk.
+
+    n_cells: number of cells in the chunk, to count cells dropped by the joins.
+    """
     cells_fc = covariates.reduceRegions(
         collection=cells_fc,
         reducer=ee.Reducer.mean(),
@@ -78,8 +82,6 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km):
         "land_frac",
         "protected",
     )
-
-    n_before = cells_fc.size().getInfo()
 
     centroids = cells_fc.map(lambda cell: ee.Feature(cell).centroid())
 
@@ -106,12 +108,6 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km):
         )
     )
 
-    # Print a warning message if any centroids were not joined to a country
-    n_dropped = n_before - centroids.size().getInfo()
-    if n_dropped > 0:
-        print(f"Dropped {n_dropped} cell(s) with no matching country.")
-    n_before = centroids.size().getInfo()
-
     centroids = (
         ee.Join.saveFirst("_match")
         .apply(
@@ -128,14 +124,15 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km):
         )
     )
 
-    # Print a warning message if any centroids were not joined to an ecoregion
-    n_dropped = n_before - centroids.size().getInfo()
-    if n_dropped > 0:
-        print(f"Dropped {n_dropped} cell(s) with no matching ecoregion.")
-
     cells_list = centroids.getInfo()["features"]
     cells_df = pd.DataFrame([feature["properties"] for feature in cells_list])
     # print(cells_df.head())
+
+    # The joins drop cells with no matching country or ecoregion. Counted here rather
+    # than with size().getInfo(), which recomputes the whole chunk on each call
+    n_dropped = n_cells - len(cells_df)
+    if n_dropped > 0:
+        print(f"Dropped {n_dropped} cell(s) with no matching country or ecoregion.")
 
     # Drop any cells that are mostly water
     is_water = ~(cells_df["land_frac"] >= MIN_LAND_FRACTION)
