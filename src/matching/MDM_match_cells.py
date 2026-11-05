@@ -42,7 +42,7 @@ from utils.variables import (
 )
 
 from covariates.extract_cell_covariates import cell_covariates_path
-from cells.prepare_pa_grid import build_site_cells
+from cells.load_all_cells import build_site_cells
 from matching.match_cells import match_treatment_control_mdm, save_matching_outputs
 from matching.diagnostics import (
     DIAGNOSTIC_COLUMNS,

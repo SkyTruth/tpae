@@ -590,7 +590,7 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
-# Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_test_sites.py
+# Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_sites.py
 SITES_PREFIX = "sites/"  # stored in the GCS bucket
 TEST_SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}test_sites_{SITE_GROUP}.parquet"
 
@@ -607,9 +607,9 @@ TREATMENT_CELLS = (
 # get_control_cells.py
 CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.parquet"
 # extract_cell_covariates.py: covariates for each site's candidate cells, one file per
-# site, read by mahalanobis_experiment.py
+# site, read by MDM_match_cells.py
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
-# mahalanobis_experiment.py (optional): each site's match table and matched cells
+# MDM_match_cells.py (optional): each site's match table and matched cells
 MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging
 EE_DEADLINE_MS = 300_000

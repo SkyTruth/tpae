@@ -3,7 +3,7 @@ Extract covariate values for every candidate cell of each site in the active SIT
 and save them to GCS, one parquet file per site.
 
 This is the slow Earth Engine step. Run it once per site group, after
-get_treatment_cells.py and get_control_cells.py; mahalanobis_experiment.py then reads
+get_treatment_cells.py and get_control_cells.py; MDM_match_cells.py then reads
 the saved files, so matching can be re-run quickly.
 
 A site is skipped if its file is newer than both the treatment and control cell files,
@@ -56,7 +56,7 @@ def extract_site_covariates(site_ids=TEST_SITE_IDS, overwrite=False):
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
     from sites.site_selector import SiteSelector
-    from cells.prepare_pa_grid import load_pa_candidate_cells
+    from cells.load_all_cells import load_pa_candidate_cells
     from covariates.covariates import build_resampled_covariates
     from covariates.cell_features import extract_cells_with_covariates
 
