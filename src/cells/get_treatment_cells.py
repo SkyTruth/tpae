@@ -78,7 +78,7 @@ def get_land_fraction(site_geom_4326):
         land.reduceRegion(
             reducer=ee.Reducer.mean(),
             geometry=ee.Geometry(site_geom_4326.__geo_interface__),
-            scale_m=SCALE_M,
+            scale=SCALE_M,
             crs=EE_CRS_METERS,
             maxPixels=MAX_PIXELS,
         )
