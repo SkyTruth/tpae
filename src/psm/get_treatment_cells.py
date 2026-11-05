@@ -102,16 +102,22 @@ def get_treatment_cells(test_sites):
     all_cells = []
 
     # Iterate through PAs and get a set of valid treatment cells for each
+    failed = []
     for (_, row), geom_4326 in zip(pa_gdf.iterrows(), pa_gdf_4326.geometry):
         pa_geom = row.geometry
-        land_frac = get_land_fraction(geom_4326)
-        cells = draw_grid(pa_geom, PSM_CELL_SIZE)
-        # Size the sample on land cells; water cells are dropped at extraction,
-        # so draw extra to keep ~n land cells
-        n = calc_n_treatment(len(cells) * land_frac)
-        n_draw = int(np.ceil(n / land_frac)) if land_frac > 0 else 0
-        if len(cells) > n_draw:
-            cells = cells.sample(n=n_draw, random_state=RAND_SEED)
+        try:
+            land_frac = get_land_fraction(geom_4326)
+            cells = draw_grid(pa_geom, PSM_CELL_SIZE)
+            # Size the sample on land cells; water cells are dropped at extraction,
+            # so draw extra to keep ~n land cells
+            n = calc_n_treatment(len(cells) * land_frac)
+            n_draw = int(np.ceil(n / land_frac)) if land_frac > 0 else 0
+            if len(cells) > n_draw:
+                cells = cells.sample(n=n_draw, random_state=RAND_SEED)
+        except Exception as exc:
+            print(f"FAILED: WDPAID {row['WDPAID']}: {exc}")
+            failed.append(row["WDPAID"])
+            continue
         # Add attributes to cells
         cells["WDPAID"] = str(row.get("WDPAID"))
         cells["protected"] = 1
@@ -122,6 +128,11 @@ def get_treatment_cells(test_sites):
             print(f"Warning: WDPAID {row['WDPAID']}: no valid cells")
             continue
         all_cells.append(cells)
+
+    if failed:
+        print(f"Failed (re-run to retry): {failed}")
+    if not all_cells:
+        raise RuntimeError("No treatment cells generated for any site.")
 
     all_cells = gpd.GeoDataFrame(
         pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
