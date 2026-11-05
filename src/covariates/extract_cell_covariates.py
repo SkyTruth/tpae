@@ -86,8 +86,9 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False):
             site_ctx = load_site_cells(
                 site_id, site_selector, treatment_cells, control_cells
             )
+            n_cells = len(site_ctx["treatment_cells"]) + len(site_ctx["control_cells"])
             _, cells_df = extract_cells_with_covariates(
-                site_ctx["cells_fc"], covariates, ee_crs_1km
+                site_ctx["cells_fc"], covariates, ee_crs_1km, n_cells
             )
             # Sites with no cells are saved as empty tables, so they count as done
             cells_df.to_parquet(path, index=False)

@@ -23,23 +23,25 @@ REQUIRED_COLS = COVARIATES + [
 EE_GETINFO_LIMIT = 5000
 
 
-def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km):
-    """Aggregate covariates within cells and join country / ecoregion / biome."""
-    n = cells_fc.size().getInfo()
-    if n == 0:
+def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km, n_cells):
+    """Aggregate covariates within cells and join country / ecoregion / biome.
+
+    n_cells: number of cells in cells_fc.
+    """
+    if n_cells == 0:
         return cells_fc, pd.DataFrame()
 
     reduced_chunks = []
     df_chunks = []
-    for start in range(0, n, EE_GETINFO_LIMIT):
+    for start in range(0, n_cells, EE_GETINFO_LIMIT):
         chunk = cells_fc.filter(
             ee.Filter.And(
                 ee.Filter.gte("cell_ID", start),
                 ee.Filter.lt("cell_ID", start + EE_GETINFO_LIMIT),
             )
         )
-        n_cells = min(EE_GETINFO_LIMIT, n - start)
-        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km, n_cells)
+        n_chunk = min(EE_GETINFO_LIMIT, n_cells - start)
+        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km, n_chunk)
         reduced_chunks.append(reduced)
         if len(cells_df) > 0:
             df_chunks.append(cells_df)
