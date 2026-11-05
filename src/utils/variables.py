@@ -374,7 +374,7 @@ DRIVER_LABELS = {
     2: "Built-up Land",
     3: "Pasture",
     4: "Deforestation without conversion",
-    5: "Planted Forest",
+    5: "Tree plantations",
 }
 
 # RESOLVE Ecoregions biome palette

@@ -1,20 +1,18 @@
 """
-Mahalanobis Distance Matching — Experiment
+Mahalanobis Distance Matching
 -------------------------------------------
 Runs MDM iteratively on every site in the active SITE_GROUP and, optionally, writes one
-site-level diagnostics CSV (and report card) so experiment runs can be compared, and
-each site's match table and matched cells.
+site-level diagnostics CSV (and report card), and each site's match table and matched cells.
 
 Reads each site's cell covariates from GCS, so run extract_cell_covariates.py first.
 """
 
-# Change this for each experiment so results are not overwritten.
-# Should be a unique identifier for the experiment so we know which changes caused which results.
+# If modifying parameters, change run_id so results are not overwritten.
+# Provides a unique identifier for the experiment so we know which changes caused which results.
 run_id = "v3.1_holdout_set"
 # Save the diagnostics CSV and report card to GCS; otherwise only print the summary
 save_diagnostics = False
-# Save each site's match table and matched cells to GCS (matches/<group>/), replacing
-# any saved by an earlier run
+# Save each site's match table and matched cells to GCS (matches/<group>/), replacing any saved by an earlier run
 save_match_outputs = True
 
 from pathlib import Path
