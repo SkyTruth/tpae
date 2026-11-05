@@ -26,6 +26,7 @@ sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 
 import ee
 import gcsfs
+import geopandas as gpd
 
 from utils.variables import (
     PROJECT,
@@ -70,6 +71,9 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False):
 
     fs = gcsfs.GCSFileSystem()
     inputs_modified = max(fs.modified(TREATMENT_CELLS), fs.modified(CONTROL_CELLS))
+    # Read the cell files once, not once per site
+    treatment_cells = gpd.read_parquet(TREATMENT_CELLS)
+    control_cells = gpd.read_parquet(CONTROL_CELLS)
 
     failed = []
     for i, site_id in enumerate(site_ids, start=1):
@@ -79,7 +83,9 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False):
             print(f"Up to date, skipping: {path}")
             continue
         try:
-            site_ctx = load_site_cells(site_id, site_selector)
+            site_ctx = load_site_cells(
+                site_id, site_selector, treatment_cells, control_cells
+            )
             _, cells_df = extract_cells_with_covariates(
                 site_ctx["cells_fc"], covariates, ee_crs_1km
             )

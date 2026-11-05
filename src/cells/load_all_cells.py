@@ -27,17 +27,25 @@ def build_site_cells(site_id, treatment_cells, control_cells):
     return all_cells
 
 
-def load_site_cells(site_id, site_selector):
-    """Load treatment and control cells for a site and assign sequential cell_IDs."""
+def load_site_cells(site_id, site_selector, treatment_cells=None, control_cells=None):
+    """Load treatment and control cells for a site and assign sequential cell_IDs.
+
+    treatment_cells / control_cells: cells from TREATMENT_CELLS / CONTROL_CELLS (all
+    sites), so a loop over sites reads them once; read from GCS if not given.
+    """
     site_id = str(site_id)
 
     sites = site_selector.get_sites()
     site_geom = site_selector.get_site_geom(sites, site_id)
 
-    treatment_cells = gpd.read_parquet(TREATMENT_CELLS).to_crs(epsg=4326)
+    if treatment_cells is None:
+        treatment_cells = gpd.read_parquet(TREATMENT_CELLS)
+    if control_cells is None:
+        control_cells = gpd.read_parquet(CONTROL_CELLS)
     treatment_cells = treatment_cells[treatment_cells["site_id"] == site_id]
-    control_cells = gpd.read_parquet(CONTROL_CELLS).to_crs(epsg=4326)
+    treatment_cells = treatment_cells.to_crs(epsg=4326)
     control_cells = control_cells[control_cells["site_id"] == site_id]
+    control_cells = control_cells.to_crs(epsg=4326)
 
     print(f"Number of candidate treatment cells: {len(treatment_cells)}")
     print(f"Number of candidate control cells: {len(control_cells)}")
