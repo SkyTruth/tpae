@@ -19,8 +19,8 @@ sys.path.insert(0, str(_SRC))
 from utils.variables import (
     GPD_CRS_METERS,
     GPD_CRS_PARQUET,
-    PSM_CELL_SIZE,
-    CONTROL_INNER_BUFFER,
+    CELL_SIZE_M,
+    CONTROL_INNER_BUFFER_M,
     PSM_TEST_AOI,
     PSM_TEST_PAS,
     PSM_GLOBAL_GRID,
@@ -126,11 +126,11 @@ def main() -> None:
     pa_union = pa_gdf.union_all()
 
     print("Creating globally aligned 1 km grid over AOI extent...")
-    grid = make_grid(aoi_union, PSM_CELL_SIZE)
+    grid = make_grid(aoi_union, CELL_SIZE_M)
     grid = add_grid_metadata(grid)
 
     print("Classifying cells as protected / unprotected...")
-    grid = classify_cells(grid, aoi_union, pa_union, CONTROL_INNER_BUFFER)
+    grid = classify_cells(grid, aoi_union, pa_union, CONTROL_INNER_BUFFER_M)
 
     # 1 m precision
     grid["geometry"] = grid.geometry.set_precision(1.0)

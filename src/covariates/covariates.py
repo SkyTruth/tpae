@@ -1,5 +1,5 @@
 """
-Build 1 km resampled covariate stack for cell-level PSM.
+Build 1 km resampled covariate stack for cell-level matching.
 """
 
 import ee

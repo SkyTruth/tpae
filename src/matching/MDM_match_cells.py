@@ -32,7 +32,7 @@ for parent in [cur] + list(cur.parents):
 sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 
 from utils.variables import (
-    TEST_SITE_IDS,
+    SITE_IDS,
     GCS_BUCKET,
     MDM_EXPERIMENTS_PREFIX,
     REPORT_CARDS_PREFIX,
@@ -52,7 +52,7 @@ from matching.diagnostics import (
     save_report_card,
 )
 
-output_path = f"gs://{GCS_BUCKET}/{MDM_EXPERIMENTS_PREFIX}{run_id}.csv"
+diagnostics_path = f"gs://{GCS_BUCKET}/{MDM_EXPERIMENTS_PREFIX}{run_id}.csv"
 report_card_path = f"gs://{GCS_BUCKET}/{REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
 matches_folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
 
@@ -65,9 +65,9 @@ if save_match_outputs:
 
 site_rows = []
 
-for i, site_id in enumerate(TEST_SITE_IDS, start=1):
+for i, site_id in enumerate(SITE_IDS, start=1):
     print(f"\n{'=' * 70}")
-    print(f"Site {site_id} ({i}/{len(TEST_SITE_IDS)})")
+    print(f"Site {site_id} ({i}/{len(SITE_IDS)})")
     print("=" * 70)
     try:
         covariates_path = cell_covariates_path(site_id)
@@ -89,7 +89,7 @@ for i, site_id in enumerate(TEST_SITE_IDS, start=1):
 
     # Rewrite the CSV after every site, so a stalled run keeps its results so far
     if save_diagnostics:
-        save_experiment_diagnostics(site_rows, output_path)
+        save_experiment_diagnostics(site_rows, diagnostics_path)
 
 results_df = pd.DataFrame(site_rows).reindex(columns=DIAGNOSTIC_COLUMNS)
 if save_diagnostics:
@@ -107,7 +107,7 @@ print(
     f"  Mean covariates balanced: {results_df['n_covariates_balanced'].mean():.1f} / 7"
 )
 if save_diagnostics:
-    print(f"\nSaved to {output_path} and {report_card_path}")
+    print(f"\nSaved to {diagnostics_path} and {report_card_path}")
 else:
     print("\nDiagnostics not saved (save_diagnostics = False)")
 if save_match_outputs:

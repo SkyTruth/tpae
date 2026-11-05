@@ -15,7 +15,7 @@ from utils.variables import (
     REPORT_YES_MIN_MATCHED_TREAT,
     REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
-    FENG_BALANCED_SMD,
+    BALANCED_SMD_THRESHOLD,
     VARIANCE_RATIO_MIN_SD,
 )
 
@@ -66,7 +66,7 @@ def calc_common_support(n_candidates_by_treat):
     """Share of treatment cells with at least one control within the matching calipers.
 
     Support is defined by the matching rules themselves (Mahalanobis and per-covariate
-    calipers, any geographic pool), so it is the share of the PA that can be matched at
+    calipers, any geographic pool), so it is the share of the site that can be matched at
     all. Coverage can never exceed it; the gap is cells lost to the control reuse cap.
     """
     if not n_candidates_by_treat:
@@ -80,7 +80,7 @@ def calc_avg_matches_per_treat(match_df):
     return match_df.groupby("treat_cell_id").size().mean()
 
 
-def calc_control_reuse(match_df):
+def calc_avg_control_reuse(match_df):
     """Calculate average number of times a control cell is reused."""
     return match_df.groupby("control_cell_id").size().mean()
 
@@ -89,7 +89,7 @@ def calc_match_weights(match_df):
     """Weight each matched pair 1/k, where k is its treatment cell's number of matches.
 
     Each matched treatment cell then counts once, and its controls share its weight
-    (Stuart 2010, p. 14). This matches how aggregate_pa_relative_scores averages outcomes.
+    (Stuart 2010, p. 14). This matches how aggregate_site_relative_scores averages outcomes.
     """
     k = match_df.groupby("treat_cell_id")["treat_cell_id"].transform("size")
     return 1.0 / k
@@ -103,45 +103,47 @@ def calc_cross_border_share(match_df, cells_df):
     return float((treat_country != control_country).mean())
 
 
-def calc_pooled_sd(t_vals, c_vals):
+def calc_pooled_sd(treat_vals, control_vals):
     """Pooled standard deviation formula."""
-    var_t, var_c = t_vals.var(), c_vals.var()  # sample variances
-    pooled_sd = np.sqrt((var_t + var_c) / 2)
+    var_treat, var_control = treat_vals.var(), control_vals.var()  # sample variances
+    pooled_sd = np.sqrt((var_treat + var_control) / 2)
     if pooled_sd == 0:
         return 0.0
     return pooled_sd
 
 
-def calc_smd(t_vals, c_vals, pooled_sd, weights=None):
+def calc_smd(treat_vals, control_vals, pooled_sd, weights=None):
     """Standardized mean difference formula.
 
     weights: optional per-row weights applied to both groups' means (e.g. match weights,
-    where row i of t_vals and c_vals is the same matched pair).
+    where row i of treat_vals and control_vals is the same matched pair).
     If a covariate has no variation (pooled SD is 0) and the two groups have the
     same mean, treat SMD as 0 (balanced). If the means differ, SMD is undefined.
     """
-    mean_t = float(np.average(t_vals, weights=weights))
-    mean_c = float(np.average(c_vals, weights=weights))
+    mean_treat = float(np.average(treat_vals, weights=weights))
+    mean_control = float(np.average(control_vals, weights=weights))
     if pooled_sd == 0 or not np.isfinite(pooled_sd):
-        return 0.0 if np.isclose(mean_t, mean_c) else np.nan
-    return (mean_t - mean_c) / pooled_sd
+        return 0.0 if np.isclose(mean_treat, mean_control) else np.nan
+    return (mean_treat - mean_control) / pooled_sd
 
 
-def calc_pair_diff(t_vals, c_vals, pooled_sd, weights=None):
+def calc_pair_diff(treat_vals, control_vals, pooled_sd, weights=None):
     """Mean absolute within-pair difference, in pooled SDs (0 = identical pairs).
 
-    Row i of t_vals and c_vals is the same matched pair. Unlike the SMD, differences
+    Row i of treat_vals and control_vals is the same matched pair. Unlike the SMD, differences
     can't cancel out across pairs, so this shows whether individual pairs are close,
     not just the group means. Two random draws from the same normal distribution
     differ by about 1.13 SD on average.
     """
-    diffs = np.abs(np.asarray(t_vals, dtype=float) - np.asarray(c_vals, dtype=float))
+    diffs = np.abs(
+        np.asarray(treat_vals, dtype=float) - np.asarray(control_vals, dtype=float)
+    )
     if pooled_sd == 0 or not np.isfinite(pooled_sd):
         return 0.0 if np.allclose(diffs, 0) else np.nan
     return float(np.average(diffs, weights=weights) / pooled_sd)
 
 
-def calc_variance_ratio(t_vals, c_vals, pooled_sd, weights=None):
+def calc_variance_ratio(treat_vals, control_vals, pooled_sd, weights=None):
     """Variance of the treatment group / variance of the control group (1 = equal spread).
 
     Complements the SMD, which compares only means. weights are applied
@@ -155,24 +157,24 @@ def calc_variance_ratio(t_vals, c_vals, pooled_sd, weights=None):
         mean = np.average(vals, weights=weights)
         return np.average((vals - mean) ** 2, weights=weights)
 
-    var_t, var_c = variance(t_vals), variance(c_vals)
+    var_treat, var_control = variance(treat_vals), variance(control_vals)
     if pooled_sd == 0 or not np.isfinite(pooled_sd):
         return np.nan
     min_var = (VARIANCE_RATIO_MIN_SD * pooled_sd) ** 2
-    if var_t < min_var and var_c < min_var:
+    if var_treat < min_var and var_control < min_var:
         return np.nan
-    if var_c == 0:
+    if var_control == 0:
         return np.inf
-    return float(var_t / var_c)
+    return float(var_treat / var_control)
 
 
-def balance_verdict(smd):
-    """A standardized mean difference of 0.2 or less after matching indicates
-    that a covariate is balanced (Feng et al. 2022). Constant covariates with
-    equal means are treated as balanced (SMD = 0)."""
+def is_balanced(smd):
+    """1 if a covariate's |SMD| after matching is at or below BALANCED_SMD_THRESHOLD
+    (Feng et al. 2022), else 0. Constant covariates with equal means are treated as
+    balanced (SMD = 0)."""
     if pd.isna(smd):
         return 0
-    if abs(smd) <= FENG_BALANCED_SMD:
+    if abs(smd) <= BALANCED_SMD_THRESHOLD:
         return 1
     return 0
 
@@ -186,7 +188,7 @@ def calc_matched_vs_all_treat_smd(match_df, cells_df):
     """Largest single covariate |SMD| between matched and all treatment cells.
 
     Shows how similar the pre-match treatment group is to the post-match treatment
-    group, i.e. whether the matched cells are still representative of the whole PA.
+    group, i.e. whether the matched cells are still representative of the whole site.
     """
     all_treat = cells_df[cells_df["protected"] == 1]
     all_control = cells_df[cells_df["protected"] == 0]
@@ -243,7 +245,7 @@ def evaluate_covariate_balance(match_df, cells_df):
             pooled_sd,
             weights=match_weights,
         )
-        balanced = balance_verdict(smd_after)
+        balanced = is_balanced(smd_after)
         improvement = calc_improvement(smd_before, smd_after)
         rows.append(
             {
@@ -263,16 +265,16 @@ def evaluate_covariate_balance(match_df, cells_df):
 
 def evaluate_overall_balance(covariate_results):
     """Evaluate overall site balance across all covariates."""
-    avg_abs_SDM_before = covariate_results["smd_before"].abs().mean()
-    avg_abs_SDM_after = covariate_results["smd_after"].abs().mean()
+    avg_abs_smd_before = covariate_results["smd_before"].abs().mean()
+    avg_abs_smd_after = covariate_results["smd_after"].abs().mean()
     n_covariates_balanced = covariate_results["balanced"].sum()
-    avg_abs_SDM_improvement = covariate_results["improvement"].mean()
+    avg_abs_smd_improvement = covariate_results["improvement"].mean()
     n_covariates_improved = (covariate_results["improvement"] > 0).sum()
     return (
-        avg_abs_SDM_before,
-        avg_abs_SDM_after,
+        avg_abs_smd_before,
+        avg_abs_smd_after,
         n_covariates_balanced,
-        avg_abs_SDM_improvement,
+        avg_abs_smd_improvement,
         n_covariates_improved,
     )
 
@@ -325,7 +327,7 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             ),
             "cross_border_share": calc_cross_border_share(match_df, cells_df),
             "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
-            "avg_control_reuse": calc_control_reuse(match_df),
+            "avg_control_reuse": calc_avg_control_reuse(match_df),
             "avg_abs_smd_before": avg_abs_smd_before,
             "avg_abs_smd_after": avg_abs_smd_after,
             "avg_abs_pair_diff": covariate_results["pair_diff"].mean(),
@@ -359,9 +361,9 @@ Report card: the key diagnostics per site and whether an effectiveness assessmen
 def classify_site(row):
     """Return ("Yes" | "Caution" | "No", reason) for one site's diagnostics row.
 
-    No: results cannot be meaningful (too little of the PA matched, or a covariate
+    No: results cannot be meaningful (too little of the site matched, or a covariate
     too imbalanced).
-    Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the PA,
+    Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the site,
     cross-border pairs, or few matched cells).
     """
     coverage = row["match_coverage"]

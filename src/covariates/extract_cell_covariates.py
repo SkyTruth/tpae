@@ -30,8 +30,8 @@ import gcsfs
 from utils.variables import (
     PROJECT,
     EE_CRS_METERS,
-    PSM_CELL_SIZE,
-    TEST_SITE_IDS,
+    CELL_SIZE_M,
+    SITE_IDS,
     SITE_GROUP,
     GCS_BUCKET,
     CELL_COVARIATES_PREFIX,
@@ -51,12 +51,12 @@ def is_up_to_date(fs, path, inputs_modified):
     return fs.exists(path) and fs.modified(path) > inputs_modified
 
 
-def extract_site_covariates(site_ids=TEST_SITE_IDS, overwrite=False):
+def extract_site_covariates(site_ids=SITE_IDS, overwrite=False):
     """Extract and save each site's cell covariates; return the sites that failed."""
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
     from sites.site_selector import SiteSelector
-    from cells.load_all_cells import load_pa_candidate_cells
+    from cells.load_all_cells import load_site_cells
     from covariates.covariates import build_resampled_covariates
     from covariates.cell_features import extract_cells_with_covariates
 
@@ -65,7 +65,7 @@ def extract_site_covariates(site_ids=TEST_SITE_IDS, overwrite=False):
     ee.data.setDeadline(EE_DEADLINE_MS)
 
     site_selector = SiteSelector()
-    ee_crs_1km = ee.Projection(EE_CRS_METERS).atScale(PSM_CELL_SIZE)
+    ee_crs_1km = ee.Projection(EE_CRS_METERS).atScale(CELL_SIZE_M)
     covariates = build_resampled_covariates(ee_crs_1km)
 
     fs = gcsfs.GCSFileSystem()
@@ -79,9 +79,9 @@ def extract_site_covariates(site_ids=TEST_SITE_IDS, overwrite=False):
             print(f"Up to date, skipping: {path}")
             continue
         try:
-            pa_ctx = load_pa_candidate_cells(site_id, site_selector)
+            site_ctx = load_site_cells(site_id, site_selector)
             _, cells_df = extract_cells_with_covariates(
-                pa_ctx["grid_fc"], covariates, ee_crs_1km
+                site_ctx["cells_fc"], covariates, ee_crs_1km
             )
             # Sites with no cells are saved as empty tables, so they count as done
             cells_df.to_parquet(path, index=False)

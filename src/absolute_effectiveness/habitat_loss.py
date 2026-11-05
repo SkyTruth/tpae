@@ -2,8 +2,8 @@ import ee
 from utils.variables import (
     EE_CRS_METERS,
     MAX_PIXELS,
-    OPENING_RADIUS_LOSS,
-    SCALE,
+    LOSS_OPENING_RADIUS_M,
+    SCALE_M,
 )
 
 ee.Initialize()
@@ -24,14 +24,14 @@ class HabitatLossAnalyzer:
 
     def __init__(
         self,
-        opening_radius_loss=OPENING_RADIUS_LOSS,
+        loss_opening_radius_m=LOSS_OPENING_RADIUS_M,
         crs=EE_CRS_METERS,
-        scale=SCALE,
+        scale_m=SCALE_M,
         max_pixels=MAX_PIXELS,
     ):
-        self.opening_radius_loss = opening_radius_loss
+        self.loss_opening_radius_m = loss_opening_radius_m
         self.crs = crs
-        self.scale = scale
+        self.scale_m = scale_m
         self.max_pixels = max_pixels
 
     def get_habitat_loss_raster(self, habitat_binary_start, habitat_binary_end):
@@ -51,7 +51,7 @@ class HabitatLossAnalyzer:
         Calculate overall habitat loss metrics and habitat loss score.
 
         Returns area of habitat loss (km2), area of habitat at start year (km2),
-        total PA area (km2), habitat loss as percent of total PA area, habitat
+        total site area (km2), habitat loss as percent of total site area, habitat
         loss as percent of habitat at start year, and habitat loss score (0-1,
         where 1 = no habitat loss).
         """
@@ -82,7 +82,7 @@ class HabitatLossAnalyzer:
         self, class_image, site_geom, site_area, habitat_start_area, top_n=4
     ):
         """
-        Calculate area (km2), percent of total PA area, and percent of habitat
+        Calculate area (km2), percent of total site area, and percent of habitat
         at start year for each class in a classified image.
         """
         class_dict = self.top_class_areas(class_image, site_geom, top_n)
@@ -171,11 +171,11 @@ class HabitatLossAnalyzer:
     ):
         """
         Print habitat loss metrics: area and a reference percentage, with an
-        optional percent of total PA area.
+        optional percent of total site area.
         """
         parts = [f"{label}: {area_km2:.2f} km2"]
         if pct_site is not None:
-            parts.append(f"{pct_site:.2f}% of total PA area")
+            parts.append(f"{pct_site:.2f}% of total site area")
         parts.append(f"{pct_reference:.2f}% {reference_label}")
         print(", ".join(parts))
 
@@ -201,7 +201,7 @@ class HabitatLossAnalyzer:
                 continue
 
             if pct_reference_key == "pct_class":
-                reference_label = f"of PA {label.lower()} at start year"
+                reference_label = f"of site {label.lower()} at start year"
                 pct_site = None
             else:
                 reference_label = "of habitat at start year"
@@ -215,7 +215,7 @@ class HabitatLossAnalyzer:
 
     def open_binary_raster(self, binary):
         kwargs = {
-            "radius": self.opening_radius_loss,
+            "radius": self.loss_opening_radius_m,
             "kernelType": "square",
             "units": "meters",
         }
@@ -229,7 +229,7 @@ class HabitatLossAnalyzer:
             area_img.reduceRegion(
                 ee.Reducer.sum(),
                 geometry,
-                scale=self.scale,
+                scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
             )
@@ -250,7 +250,7 @@ class HabitatLossAnalyzer:
                     groupName=class_name,
                 ),
                 geometry=site_geom,
-                scale=self.scale,
+                scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
             )

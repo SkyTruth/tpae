@@ -1,8 +1,8 @@
 """
-Creates a set of treatment cells for each PA.
-Treatment cells are 1km x 1km cells that are fully within the PA's geometry.
-Each PA gets a simple random sample of its grid of valid interior cells
-Sample size is calculated dynamically so that every PA's treatment-cell mean has the same standard error.
+Creates a set of treatment cells for each site.
+Treatment cells are 1km x 1km cells that are fully within the site's geometry.
+Each site gets a simple random sample of its grid of valid interior cells
+Sample size is calculated dynamically so that every site's treatment-cell mean has the same standard error.
 """
 
 from pathlib import Path
@@ -21,38 +21,38 @@ from utils.variables import (
     PROJECT,
     HGFC_ASSET_ID,
     EE_CRS_METERS,
-    SCALE,
+    SCALE_M,
     MAX_PIXELS,
-    TEST_SITES,
+    SITES,
     TREATMENT_CELLS,
     GPD_CRS_METERS,
     GPD_CRS_PARQUET,
-    PSM_CELL_SIZE,
+    CELL_SIZE_M,
     RAND_SEED,
     TREATMENT_SE_TARGET,
 )
 
 
-def draw_grid(pa_geom, cell_size):
+def draw_grid(site_geom, cell_size_m):
     """
-    Create a grid of all valid treatment cells within a PA geometry.
+    Create a grid of all valid treatment cells within a site geometry.
     """
-    # Draw a grid from the PA's bounding box
-    minx, miny, maxx, maxy = pa_geom.bounds
+    # Draw a grid from the site's bounding box
+    minx, miny, maxx, maxy = site_geom.bounds
 
-    xs = np.arange(minx, maxx, cell_size)
-    ys = np.arange(miny, maxy, cell_size)
+    xs = np.arange(minx, maxx, cell_size_m)
+    ys = np.arange(miny, maxy, cell_size_m)
 
-    cells = [box(x, y, x + cell_size, y + cell_size) for x in xs for y in ys]
+    cells = [box(x, y, x + cell_size_m, y + cell_size_m) for x in xs for y in ys]
     grid = gpd.GeoDataFrame(geometry=cells, crs=GPD_CRS_METERS)
     grid = grid.drop_duplicates(subset="geometry")
 
-    # Exclude cells that are not fully within the PA
-    pa_boundary = pa_geom.boundary
+    # Exclude cells that are not fully within the site
+    site_boundary = site_geom.boundary
 
     grid["exclude"] = False
-    grid["exclude"] |= grid.geometry.intersects(pa_boundary)
-    grid["exclude"] |= grid.geometry.disjoint(pa_geom)
+    grid["exclude"] |= grid.geometry.intersects(site_boundary)
+    grid["exclude"] |= grid.geometry.disjoint(site_geom)
 
     valid_grid = grid[~grid["exclude"]]
     valid_grid = valid_grid.drop("exclude", axis=1)
@@ -62,7 +62,7 @@ def draw_grid(pa_geom, cell_size):
 
 def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
     """
-    Calculate treatment sample size so the PA's treatment-cell mean has a standard
+    Calculate treatment sample size so the site's treatment-cell mean has a standard
     error of se_target standard deviations.
     """
     if n_land_cells <= 0:
@@ -71,14 +71,14 @@ def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
     return int(np.ceil(n0 / (1 + n0 / n_land_cells)))
 
 
-def get_land_fraction(pa_geom_4326):
-    """Calculate fraction of a PA that is land."""
+def get_land_fraction(site_geom_4326):
+    """Calculate fraction of a site that is land."""
     land = ee.Image(HGFC_ASSET_ID).select("datamask").eq(1)
     land_frac = (
         land.reduceRegion(
             reducer=ee.Reducer.mean(),
-            geometry=ee.Geometry(pa_geom_4326.__geo_interface__),
-            scale=SCALE,
+            geometry=ee.Geometry(site_geom_4326.__geo_interface__),
+            scale_m=SCALE_M,
             crs=EE_CRS_METERS,
             maxPixels=MAX_PIXELS,
         )
@@ -88,44 +88,45 @@ def get_land_fraction(pa_geom_4326):
     return 1.0 if land_frac is None else land_frac
 
 
-def get_treatment_cells(test_sites):
+def get_treatment_cells(sites_path):
     """
-    Iterate through a set of PAs and return a set of valid treatment cells for each.
-    Each PA's grid of valid interior cells is randomly subsampled to the size given by
+    Iterate through a set of sites and return a set of valid treatment cells for each.
+    Each site's grid of valid interior cells is randomly subsampled to the size given by
     calc_n_treatment (or all cells if the grid is smaller than that).
     """
     init_ee(PROJECT)
-    # Read in PAs (EPSG:4326 for Earth Engine) and convert to 6933
-    pa_gdf_4326 = gpd.read_parquet(test_sites)
-    pa_gdf = pa_gdf_4326.to_crs(GPD_CRS_METERS)
+    # Read in sites (EPSG:4326 for Earth Engine) and convert to 6933
+    sites_gdf_4326 = gpd.read_parquet(sites_path)
+    sites_gdf = sites_gdf_4326.to_crs(GPD_CRS_METERS)
 
     all_cells = []
 
-    # Iterate through PAs and get a set of valid treatment cells for each
+    # Iterate through sites and get a set of valid treatment cells for each
     failed = []
-    for (_, row), geom_4326 in zip(pa_gdf.iterrows(), pa_gdf_4326.geometry):
-        pa_geom = row.geometry
+    for (_, row), geom_4326 in zip(sites_gdf.iterrows(), sites_gdf_4326.geometry):
+        site_geom = row.geometry
+        site_id = str(row["site_id"])
         try:
             land_frac = get_land_fraction(geom_4326)
-            cells = draw_grid(pa_geom, PSM_CELL_SIZE)
+            cells = draw_grid(site_geom, CELL_SIZE_M)
             # Size the sample on land cells; water cells are dropped at extraction,
-            # so draw extra to keep ~n land cells
-            n = calc_n_treatment(len(cells) * land_frac)
-            n_draw = int(np.ceil(n / land_frac)) if land_frac > 0 else 0
+            # so draw extra to keep ~n_target land cells
+            n_target = calc_n_treatment(len(cells) * land_frac)
+            n_draw = int(np.ceil(n_target / land_frac)) if land_frac > 0 else 0
             if len(cells) > n_draw:
                 cells = cells.sample(n=n_draw, random_state=RAND_SEED)
         except Exception as exc:
-            print(f"FAILED: WDPAID {row['WDPAID']}: {exc}")
-            failed.append(row["WDPAID"])
+            print(f"FAILED: site {site_id}: {exc}")
+            failed.append(site_id)
             continue
         # Add attributes to cells
-        cells["WDPAID"] = str(row.get("WDPAID"))
+        cells["site_id"] = site_id
         cells["protected"] = 1
-        # Warning for PAs with few or 0 valid cells
+        # Warning for sites with few or 0 valid cells
         if len(cells) < 50 and len(cells) > 0:
-            print(f"Warning: WDPAID {row['WDPAID']}: only {len(cells)} valid cells")
+            print(f"Warning: site {site_id}: only {len(cells)} valid cells")
         if len(cells) == 0:
-            print(f"Warning: WDPAID {row['WDPAID']}: no valid cells")
+            print(f"Warning: site {site_id}: no valid cells")
             continue
         all_cells.append(cells)
 
@@ -144,4 +145,4 @@ def get_treatment_cells(test_sites):
 
 
 if __name__ == "__main__":
-    get_treatment_cells(TEST_SITES)
+    get_treatment_cells(SITES)

@@ -394,9 +394,9 @@ def match_treatment_control_mdm(
     control_only = cells_df[cells_df["protected"] == 0]
     scaler, inv_cov = fit_control_scaler_and_inv_cov(control_only, covariates)
 
-    X_pa = scaler.transform(cells_df[covariates].values)
+    X_cells = scaler.transform(cells_df[covariates].values)
     for i, col in enumerate(covariates):
-        cells_df[f"_scaled_{col}"] = X_pa[:, i]
+        cells_df[f"_scaled_{col}"] = X_cells[:, i]
 
     treat_df = cells_df[cells_df["protected"] == 1].copy().reset_index(drop=True)
     control_df = cells_df[cells_df["protected"] == 0].copy().reset_index(drop=True)
@@ -541,13 +541,13 @@ Save matched outputs
 """
 
 
-def filter_matched_grids(grid_fc, match_df):
-    """Filter the grid FeatureCollection to cells that appear in the match table."""
+def filter_matched_cells(cells_fc, match_df):
+    """Filter the cells FeatureCollection to cells that appear in the match table."""
     valid_ids = pd.concat(
         [match_df["treat_cell_id"], match_df["control_cell_id"]]
     ).unique()
     valid_ids = ee.List(valid_ids.astype(int).tolist())
-    return grid_fc.filter(ee.Filter.inList("cell_ID", valid_ids))
+    return cells_fc.filter(ee.Filter.inList("cell_ID", valid_ids))
 
 
 def match_output_paths(site_id, match_method: str = "mdm"):
@@ -555,7 +555,7 @@ def match_output_paths(site_id, match_method: str = "mdm"):
     folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
     return (
         f"{folder}match_table_{match_method}_{site_id}.parquet",
-        f"{folder}matched_grids_{match_method}_{site_id}.parquet",
+        f"{folder}matched_cells_{match_method}_{site_id}.parquet",
     )
 
 
@@ -584,9 +584,9 @@ def save_matching_outputs(
             "re-run extract_cell_covariates.py"
         )
 
-    table_path, grids_path = match_output_paths(site_id, match_method)
+    table_path, cells_path = match_output_paths(site_id, match_method)
     # attrs hold in-memory matching details, which parquet metadata can't store
     match_table = match_df.copy()
     match_table.attrs = {}
     match_table.to_parquet(table_path, index=False)
-    matched.drop(columns="protected_cells").to_parquet(grids_path, index=False)
+    matched.drop(columns="protected_cells").to_parquet(cells_path, index=False)

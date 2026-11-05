@@ -1,5 +1,5 @@
 """
-Extract per-cell covariates and spatial attributes for propensity scoring.
+Extract per-cell covariates and spatial attributes for matching.
 """
 
 import ee
@@ -8,7 +8,7 @@ import pandas as pd
 from utils.variables import (
     COUNTRIES_ASSET_ID,
     BIOME_ASSET_ID,
-    PSM_CELL_SIZE,
+    CELL_SIZE_M,
     COVARIATES,
     MIN_LAND_FRACTION,
 )
@@ -23,16 +23,16 @@ REQUIRED_COLS = COVARIATES + [
 EE_GETINFO_LIMIT = 5000
 
 
-def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
-    """Aggregate covariates within grid cells and join country / ecoregion / biome."""
-    n = grid_fc.size().getInfo()
+def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km):
+    """Aggregate covariates within cells and join country / ecoregion / biome."""
+    n = cells_fc.size().getInfo()
     if n == 0:
-        return grid_fc, pd.DataFrame()
+        return cells_fc, pd.DataFrame()
 
     reduced_chunks = []
     df_chunks = []
     for start in range(0, n, EE_GETINFO_LIMIT):
-        chunk = grid_fc.filter(
+        chunk = cells_fc.filter(
             ee.Filter.And(
                 ee.Filter.gte("cell_ID", start),
                 ee.Filter.lt("cell_ID", start + EE_GETINFO_LIMIT),
@@ -43,11 +43,11 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
         if len(cells_df) > 0:
             df_chunks.append(cells_df)
 
-    grid_fc = ee.FeatureCollection(reduced_chunks).flatten()
+    cells_fc = ee.FeatureCollection(reduced_chunks).flatten()
     cells_df = pd.concat(df_chunks, ignore_index=True) if df_chunks else pd.DataFrame()
 
     if len(cells_df) == 0:
-        return grid_fc, cells_df
+        return cells_fc, cells_df
 
     n_before = len(cells_df)
     n_missing_by_col = cells_df[REQUIRED_COLS].isna().sum()
@@ -62,15 +62,15 @@ def extract_cells_with_covariates(grid_fc, covariates, ee_crs_1km):
             if n_missing > 0:
                 print(f"    {col}: {n_missing}")
 
-    return grid_fc, cells_df
+    return cells_fc, cells_df
 
 
-def _extract_chunk(grid_fc, covariates, ee_crs_1km):
+def _extract_chunk(cells_fc, covariates, ee_crs_1km):
     """Run reduceRegions, spatial joins, and getInfo on one <=5000-feature chunk."""
-    grid_fc = covariates.reduceRegions(
-        collection=grid_fc,
+    cells_fc = covariates.reduceRegions(
+        collection=cells_fc,
         reducer=ee.Reducer.mean(),
-        scale=PSM_CELL_SIZE,
+        scale=CELL_SIZE_M,
         crs=ee_crs_1km,
     ).select(
         "cell_ID",
@@ -79,9 +79,9 @@ def _extract_chunk(grid_fc, covariates, ee_crs_1km):
         "protected",
     )
 
-    n_before = grid_fc.size().getInfo()
+    n_before = cells_fc.size().getInfo()
 
-    centroids = grid_fc.map(lambda cell: ee.Feature(cell).centroid())
+    centroids = cells_fc.map(lambda cell: ee.Feature(cell).centroid())
 
     countries = ee.FeatureCollection(COUNTRIES_ASSET_ID)
     ecoregions = ee.FeatureCollection(BIOME_ASSET_ID)
@@ -160,4 +160,4 @@ def _extract_chunk(grid_fc, covariates, ee_crs_1km):
             if n > 0:
                 print(f"    {col}: {n}")
 
-    return grid_fc, cells_df
+    return cells_fc, cells_df

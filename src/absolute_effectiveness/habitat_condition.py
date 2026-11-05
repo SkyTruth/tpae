@@ -3,13 +3,13 @@ import math
 from utils.variables import (
     EE_CRS_METERS,
     MAX_PIXELS,
-    SCALE,
-    INTERACTION_DISTANCE,
+    SCALE_M,
+    INTERACTION_DISTANCE_M,
     BETA,
-    KERNEL_RADIUS_METERS,
-    INTACTNESS_SCALE,
+    KERNEL_RADIUS_M,
+    INTACTNESS_SCALE_M,
     KERNEL_RADIUS_PIXELS,
-    KERNEL_SIZE,
+    KERNEL_SIZE_PIXELS,
     TILE_SCALE,
 )
 
@@ -22,25 +22,25 @@ class HabitatConditionAnalyzer:
     def __init__(
         self,
         crs=EE_CRS_METERS,
-        scale=SCALE,
+        scale_m=SCALE_M,
         max_pixels=MAX_PIXELS,
-        interaction_distance=INTERACTION_DISTANCE,
+        interaction_distance_m=INTERACTION_DISTANCE_M,
         beta=BETA,
-        kernel_radius_meters=KERNEL_RADIUS_METERS,
-        intactness_scale=INTACTNESS_SCALE,
+        kernel_radius_m=KERNEL_RADIUS_M,
+        intactness_scale_m=INTACTNESS_SCALE_M,
         kernel_radius_pixels=KERNEL_RADIUS_PIXELS,
-        kernel_size=KERNEL_SIZE,
+        kernel_size_pixels=KERNEL_SIZE_PIXELS,
         tile_scale=TILE_SCALE,
     ):
         self.crs = crs
-        self.scale = scale
+        self.scale_m = scale_m
         self.max_pixels = max_pixels
-        self.interaction_distance = interaction_distance
+        self.interaction_distance_m = interaction_distance_m
         self.beta = beta
-        self.kernel_radius_meters = kernel_radius_meters
-        self.intactness_scale = intactness_scale
+        self.kernel_radius_m = kernel_radius_m
+        self.intactness_scale_m = intactness_scale_m
         self.kernel_radius_pixels = kernel_radius_pixels
-        self.kernel_size = kernel_size
+        self.kernel_size_pixels = kernel_size_pixels
         self.tile_scale = tile_scale
 
     def get_land_cover(self, glc_processed, gpw_processed, forty_processed, year):
@@ -109,24 +109,24 @@ class HabitatConditionAnalyzer:
 
     def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
         """
-        Calculate Habitat Extent score for analysis_end_yr within a PA.
+        Calculate Habitat Extent score for analysis_end_yr within a site.
         Extent score = habitat area / site area
         """
-        # Calculate area of habitat within PA
+        # Calculate area of habitat within site
         habitat_area = (
             ee.Image.pixelArea()
             .updateMask(habitat_raster)
             .reduceRegion(
                 ee.Reducer.sum(),
                 site_geom,
-                scale=self.scale,
+                scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
             )
             .get("area")
             .getInfo()
         )
-        # Calculate total PA area (land only when land_mask is provided)
+        # Calculate total site area (land only when land_mask is provided)
         site_area_img = ee.Image.pixelArea()
         if land_mask is not None:
             site_area_img = site_area_img.updateMask(land_mask)
@@ -134,7 +134,7 @@ class HabitatConditionAnalyzer:
             site_area_img.reduceRegion(
                 ee.Reducer.sum(),
                 site_geom,
-                scale=self.scale,
+                scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
             )
@@ -150,27 +150,27 @@ class HabitatConditionAnalyzer:
         """
         # Create 2-D array of weights for kernel
         weights = []
-        for row in range(self.kernel_size):
+        for row in range(self.kernel_size_pixels):
             row_weights = []
-            for col in range(self.kernel_size):
+            for col in range(self.kernel_size_pixels):
                 dx = (
                     col - self.kernel_radius_pixels
-                ) * self.intactness_scale  # horizontal distance from center pixel
+                ) * self.intactness_scale_m  # horizontal distance from center pixel
                 dy = (
                     row - self.kernel_radius_pixels
-                ) * self.intactness_scale  # vertical distance from center pixel
+                ) * self.intactness_scale_m  # vertical distance from center pixel
                 d = math.sqrt(
                     dx * dx + dy * dy
                 )  # hypotenuse distance from center pixel
                 w = (
-                    math.exp(-self.beta * d) if d <= self.kernel_radius_meters else 0
+                    math.exp(-self.beta * d) if d <= self.kernel_radius_m else 0
                 )  # apply exponential decay and clip to kernel radius
                 row_weights.append(w)
             weights.append(row_weights)
         # Build custom kernel using weights
         exp_kernel = ee.Kernel.fixed(
-            width=self.kernel_size,
-            height=self.kernel_size,
+            width=self.kernel_size_pixels,
+            height=self.kernel_size_pixels,
             weights=weights,
             normalize=True,  # sum of all weights is 1; this normalizes the intactness values to be between 0 and 1
         )
@@ -191,10 +191,10 @@ class HabitatConditionAnalyzer:
         )
         habitat_binary_reproj = habitat_binary.reproject(
             crs=self.crs,
-            scale=self.scale,
+            scale=self.scale_m,
         )
         habitat_binary_clipped = habitat_binary_reproj.clip(
-            site_geom.buffer(self.kernel_radius_meters)
+            site_geom.buffer(self.kernel_radius_m)
         )
         habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
@@ -206,14 +206,14 @@ class HabitatConditionAnalyzer:
 
     def calc_intactness_score(self, intactness_raster, site_geom):
         """
-        Calculate Habitat Intactness score within a PA from intactness raster.
+        Calculate Habitat Intactness score within a site from intactness raster.
         """
-        # Calculate average intactness of habitat pixels within PA
+        # Calculate average intactness of habitat pixels within site
         intactness_score = (
             intactness_raster.reduceRegion(
                 ee.Reducer.mean(),
                 site_geom,
-                scale=self.intactness_scale,
+                scale=self.intactness_scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
                 tileScale=self.tile_scale,

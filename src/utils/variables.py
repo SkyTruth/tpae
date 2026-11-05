@@ -42,8 +42,8 @@ GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
 GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
 HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
 
-# WDPAID numbers of selected test PAs and OECMs, one list per site group
-TEST_SITE_IDS_65 = [
+# Site IDs (WDPA SITE_ID) of the selected sites (PAs and OECMs), one list per site group
+SITE_IDS_65 = [
     555714961,
     1543,
     555557937,
@@ -112,7 +112,7 @@ TEST_SITE_IDS_65 = [
 ]
 
 
-TEST_SITE_IDS_OG30 = [
+SITE_IDS_OG30 = [
     555714961,
     1543,
     555557937,
@@ -150,7 +150,7 @@ TEST_SITE_IDS_OG30 = [
 # Established, have STATUS_YR <= ANALYSIS_END_YR - 1 and GIS_AREA >= 20 km², and are not
 # in OG30 or 65; one site per country (first ISO3), first 65 countries in draw order.
 # Sites are much smaller than group 65 (median 91 vs ~2,000 km²), as most PAs are
-TEST_SITE_IDS_HOLDOUT65 = [
+SITE_IDS_HOLDOUT65 = [
     555703814,  # MLI
     555573476,  # JPN
     837,  # PAK
@@ -220,15 +220,15 @@ TEST_SITE_IDS_HOLDOUT65 = [
 
 # Site groups, keyed by group ID. To add a group, define its list above and add it here
 SITE_GROUPS = {
-    "OG30": TEST_SITE_IDS_OG30,
-    "65": TEST_SITE_IDS_65,
-    "holdout65": TEST_SITE_IDS_HOLDOUT65,
+    "OG30": SITE_IDS_OG30,
+    "65": SITE_IDS_65,
+    "holdout65": SITE_IDS_HOLDOUT65,
 }
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
 # overwrite each other
 SITE_GROUP = "OG30"
-TEST_SITE_IDS = SITE_GROUPS[SITE_GROUP]
+SITE_IDS = SITE_GROUPS[SITE_GROUP]
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018
@@ -442,32 +442,30 @@ WKT_6933 = """
 
 # Parameters for reduceRegion raster calculations
 EE_CRS_METERS = WKT_6933
-SCALE = 30
+SCALE_M = 30
 MAX_PIXELS = 1e13
 
 # Parameters for habitat intactness calculations
-INTERACTION_DISTANCE = 500  # meters
-BETA = 1 / INTERACTION_DISTANCE  # controls the rate of exponential decay
-KERNEL_RADIUS_METERS = (
-    5 * INTERACTION_DISTANCE
+INTERACTION_DISTANCE_M = 500  # meters
+BETA = 1 / INTERACTION_DISTANCE_M  # controls the rate of exponential decay
+KERNEL_RADIUS_M = (
+    5 * INTERACTION_DISTANCE_M
 )  # should be proportional to beta to truncate the tail and reduce unnessary computation expense
-INTACTNESS_SCALE = 60  # pixel size in meters
-KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_METERS / INTACTNESS_SCALE)
-KERNEL_SIZE = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
+INTACTNESS_SCALE_M = 60  # pixel size in meters
+KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_M / INTACTNESS_SCALE_M)
+KERNEL_SIZE_PIXELS = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
 TILE_SCALE = 4
 
 # Parameters for habitat loss calculations
-OPENING_RADIUS_LOSS = 30  # meters
+LOSS_OPENING_RADIUS_M = 30  # meters
 
-# General PSM parameters
-PSM_CELL_SIZE = 1000
+# General parameters for treatment and control cells
+CELL_SIZE_M = 1000
 GPD_CRS_PARQUET = "EPSG:4326"
 GPD_CRS_METERS = "EPSG:6933"
 RAND_SEED = 42
-CALIPER_PSM = 0.2
-N_NEIGHBORS_PSM = 4  # number of control cells for every treatment cell
 
-# Parameters for global propensity score model
+# Covariates used to match treatment and control cells
 COVARIATES = [
     "elevation",
     "slope",
@@ -477,11 +475,6 @@ COVARIATES = [
     "human_footprint",
     "ag_suitability",
 ]
-TOTAL_POINTS = 100000  # total number of samples to collect globally
-TREAT_CONTROL = (1, 2)  # ratio of protected to unprotected samples
-MIN_PER_STRATUM = 50  # minimum number of samples per stratum
-PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GCS bucket
-STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
 
 # Parameters for MDM
 # GCS prefixes for MDM experiment results and report cards, one folder per site group
@@ -518,11 +511,12 @@ PER_COVARIATE_CALIPERS = {
     "log_pop_density": 1,
     "slope": 1,
 }
-FENG_BALANCED_SMD = 0.2
+# A covariate is balanced if its |SMD| after matching is at or below this (Feng et al. 2022)
+BALANCED_SMD_THRESHOLD = 0.2
 # Optimal matching aims to get every covariate's |SMD|
 # at or below this target, without reducing the number of matched treatment cells.
 # "None" turns balance constraints off. Supports N_NEIGHBORS_MDM <= 2
-BALANCE_SMD_TARGET = FENG_BALANCED_SMD
+BALANCE_SMD_TARGET = BALANCED_SMD_THRESHOLD
 # Variance ratios (matched treatment / matched control variance) are left
 # blank when both groups have almost no spread (SD below this fraction of the pre-match
 # pooled SD), since a ratio of two near-zero variances is meaningless
@@ -533,12 +527,12 @@ VARIANCE_RATIO_MIN_SD = 0.1
 REPORT_NO_MIN_COVERAGE = 0.50
 REPORT_NO_MAX_SMD = 0.5
 # Yes if all: enough matched treatment cells, high enough match coverage,
-# every covariate balanced, matched cells representative of the whole PA,
+# every covariate balanced, matched cells representative of the whole site,
 # few cross-border pairs
 REPORT_YES_MIN_MATCHED_TREAT = 10
 REPORT_YES_MIN_COVERAGE = 0.75
-REPORT_YES_MAX_SMD = FENG_BALANCED_SMD
-REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD = FENG_BALANCED_SMD
+REPORT_YES_MAX_SMD = BALANCED_SMD_THRESHOLD
+REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD = BALANCED_SMD_THRESHOLD
 REPORT_YES_MAX_CROSS_BORDER = 0.10
 # Caution otherwise
 
@@ -559,27 +553,27 @@ REPORT_CARD_COLUMNS = [
 ]
 
 # Parameters for treatment cell sampling
-# Treatment cells per PA follow Cochran (1977, section 4.6): n = n0 / (1 + n0 / N), where
-# n0 = 1 / e^2, N is the PA's number of valid interior land cells, and e is the target
-# standard error of the PA's treatment-cell mean, in units of that PA's standard deviation
-TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large PAs
+# Treatment cells per site follow Cochran (1977, section 4.6): n = n0 / (1 + n0 / N), where
+# n0 = 1 / e^2, N is the site's number of valid interior land cells, and e is the target
+# standard error of the site's treatment-cell mean, in units of that site's standard deviation
+TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large sites
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 
 # Parameters for control cell sampling
-CONTROL_INNER_BUFFER = 10_000  # minimum distance (m) from PA
-CONTROL_OUTER_BUFFER = 200_000  # maximum distance (m) from PA
-CONTROL_SPACING = 3000  # minimum distance (m) between control cells
-# number of control cells to sample for each PA
-CONTROL_N_SAMPLES_MIN = 4000  # floor on control cells per PA (small PAs still need plenty of samples to find rare matches)
+CONTROL_INNER_BUFFER_M = 10_000  # minimum distance (m) from site
+CONTROL_OUTER_BUFFER_M = 200_000  # maximum distance (m) from site
+CONTROL_SPACING_M = 3000  # minimum distance (m) between control cells
+# number of control cells to sample for each site
+CONTROL_N_SAMPLES_MIN = 4000  # floor on control cells per site (small sites still need plenty of samples to find rare matches)
 CONTROL_N_SAMPLES_MAX = (
-    10000  # cap on control cells per PA so large parks do not over-sample
+    10000  # cap on control cells per site so large parks do not over-sample
 )
-CONTROL_SAMPLES_PER_TREAT = 10  # target number of control cells per treatment cell (larger PAs with more treatment cells need more control cells)
+CONTROL_SAMPLES_PER_TREAT = 10  # target number of control cells per treatment cell (larger sites with more treatment cells need more control cells)
 
 # Parameters for regression adjustment of relative effectiveness scores
 REG_ADJ_MIN_CONTROLS_PER_COVARIATE = 10
-# A regression model is fitted on a PA's matched control cells only if there are at least this many per covariate;
-# otherwise the PA's scores are left unadjusted.
+# A regression model is fitted on a site's matched control cells only if there are at least this many per covariate;
+# otherwise the site's scores are left unadjusted.
 
 # ------------------------------------------------------------------------------------------------
 # FILE PATHS
@@ -590,14 +584,12 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
-# Cleaned geometries of the active site group (TEST_SITE_IDS), written by clean_sites.py
+# Cleaned geometries of the active site group (SITE_IDS), written by clean_sites.py
 SITES_PREFIX = "sites/"  # stored in the GCS bucket
-TEST_SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}test_sites_{SITE_GROUP}.parquet"
+SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}sites_{SITE_GROUP}.parquet"
 
 # Outputs:
 # ----------
-# global_psm.ipynb
-STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
 # Treatment and control cells for the active site group, stored in the GCS bucket
 CELLS_PREFIX = "cells/"
 # get_treatment_cells.py
@@ -616,14 +608,31 @@ EE_DEADLINE_MS = 300_000
 
 # Archived:
 # ----------
-# global_grid_creation.py
+# PSM_fit_global_model.ipynb
+STATE_FILE = REPO_DATA_DIR + "psm/psm_tile_state.json"
+# PSM_global_grid_creation.py
 PSM_GLOBAL_GRID = REPO_DATA_DIR + "Ghana_global_grid.parquet"
 PSM_TEST_AOI = REPO_DATA_DIR + "Ghana.geojson"
 PSM_TEST_PAS = REPO_DATA_DIR + "Ghana_PAs.geojson"
-# psm_grid_creation.py
+# PSM_grid_creation.py
 BUFFER_10KM = REPO_DATA_DIR + "test_sites_10km_4326.parquet"
 BUFFER_50KM = REPO_DATA_DIR + "test_sites_50km_4326.parquet"
 EXCLUSION_ZONE = REPO_DATA_DIR + "test_sites_exclusion_zone_4326.parquet"
 WIDER_LANDSCAPE = REPO_DATA_DIR + "test_sites_wider_landscape_4326.parquet"
 GRID_1KM = REPO_DATA_DIR + "test_sites_1km_grid_4326.parquet"
 PSM_GRID_1KM = REPO_DATA_DIR + "test_sites_TPA_PSM_GRID.parquet"
+
+# ------------------------------------------------------------------------------------------------
+# ARCHIVED PSM PARAMETERS (src/archive, notebooks/archive)
+# ------------------------------------------------------------------------------------------------
+
+# PSM_match_cells.py
+CALIPER_PSM = 0.2
+N_NEIGHBORS_PSM = 4  # number of control cells for every treatment cell
+
+# PSM_fit_global_model.ipynb: global propensity score model
+TOTAL_POINTS = 100000  # total number of samples to collect globally
+TREAT_CONTROL = (1, 2)  # ratio of protected to unprotected samples
+MIN_PER_STRATUM = 50  # minimum number of samples per stratum
+PSM_SAMPLES_PREFIX = "psm_samples/covariates_7/"  # prefix for PSM samples in GCS bucket
+STRATA_ASSET_ID = f"projects/{PROJECT}/assets/TPAE/strata_1km"
