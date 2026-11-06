@@ -9,9 +9,26 @@ OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
 GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
 HGFC_ASSET_ID = "UMD/hansen/global_forest_change_2025_v1_13"
 GPW_ASSET_ID = "projects/global-pasture-watch/assets/ggc-30m/v1/grassland_c"
-NFW_ASSET_ID = (
-    "projects/nature-trace/assets/forest_typology/natural_forest_2020_v1_0_collection"
-)
+FORTY_2017_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2017"
+FORTY_2018_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2018"
+FORTY_2019_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2019"
+FORTY_2020_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2020"
+FORTY_2021_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2021"
+FORTY_2022_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2022"
+FORTY_2023_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2023"
+FORTY_2024_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2024"
+FORTY_2025_ASSET_ID = "projects/nature-trace/assets/forest_typology/v2_beta/2025"
+FORTY_ASSET_IDS = {
+    2017: FORTY_2017_ASSET_ID,
+    2018: FORTY_2018_ASSET_ID,
+    2019: FORTY_2019_ASSET_ID,
+    2020: FORTY_2020_ASSET_ID,
+    2021: FORTY_2021_ASSET_ID,
+    2022: FORTY_2022_ASSET_ID,
+    2023: FORTY_2023_ASSET_ID,
+    2024: FORTY_2024_ASSET_ID,
+    2025: FORTY_2025_ASSET_ID,
+}
 COUNTRIES_ASSET_ID = "USDOS/LSIB_SIMPLE/2017"
 BIOME_ASSET_ID = "RESOLVE/ECOREGIONS/2017"
 GLO30_ASSET_ID = "COPERNICUS/DEM/GLO30_2024_1"
@@ -337,12 +354,27 @@ GLC_LABELS = {
     36: "Filled value",
 }
 
+# ForTy palette
+FORTY_PALETTE = ["1B7837", "7FBF7B", "1D91C0", "E65FA9", "E6AB02", "white", "a0522e"]
+
+# ForTy class labels
+FORTY_LABELS = {
+    1: "Primary forest: mature",
+    2: "Naturally regenerating forest",
+    3: "Planted forest",
+    4: "Plantation forest",
+    5: "Tree crops and agroforestry",
+    6: "Other land (non-forest)",
+    7: "Primary forest: regrowing",
+}
+
 # Driver of habitat loss class labels
 DRIVER_LABELS = {
     1: "Cropland",
     2: "Built-up Land",
     3: "Pasture",
     4: "Deforestation without conversion",
+    5: "Planted Forest",
 }
 
 # RESOLVE Ecoregions biome palette
@@ -380,9 +412,6 @@ BIOME_LABELS = {
     13: "Deserts & Xeric Shrublands",
     14: "Mangroves",
 }
-
-# Natural Forests of the World probability threshold
-NFW_THRESHOLD = 0.5
 
 # WKT for EPSG:6933 (NSIDC EASE-Grid 2.0 Global projection)
 # Earth Engine is unable to parse "EPSG:6933" directly

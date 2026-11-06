@@ -1,6 +1,5 @@
 import ee
 from utils.variables import (
-    ANALYSIS_END_YR,
     EE_CRS_METERS,
     MAX_PIXELS,
     OPENING_RADIUS_LOSS,
@@ -9,7 +8,6 @@ from utils.variables import (
 
 ee.Initialize()
 
-ANTHRO_CLASSES = ee.List([1, 2, 3, 4, 30, 37])
 KM2_PER_M2 = 1_000_000
 METRIC_SUFFIXES = (
     ("_pct_start", "pct_start"),
@@ -26,53 +24,25 @@ class HabitatLossAnalyzer:
 
     def __init__(
         self,
-        analysis_end_yr=ANALYSIS_END_YR,
         opening_radius_loss=OPENING_RADIUS_LOSS,
         crs=EE_CRS_METERS,
         scale=SCALE,
         max_pixels=MAX_PIXELS,
     ):
-        self.analysis_end_yr = analysis_end_yr
         self.opening_radius_loss = opening_radius_loss
         self.crs = crs
         self.scale = scale
         self.max_pixels = max_pixels
 
-    def get_habitat_start_raster(self, glc_processed, gpw_processed, start_yr):
-        """Create start-year habitat raster."""
-        lc_start = self.get_lc_at_year(glc_processed, gpw_processed, start_yr)
-        habitat_start = lc_start.remap(
-            ANTHRO_CLASSES,
-            ee.List.repeat(0, ANTHRO_CLASSES.size()),
-            defaultValue=1,
-        )
-        # Natural grasslands are habitat even where GLC maps an anthropogenic class,
-        # as in the habitat extent raster
-        natural_grassland = self.get_natural_grassland(gpw_processed, start_yr)
-        return habitat_start.where(natural_grassland, 1)
+    def get_habitat_loss_raster(self, habitat_binary_start, habitat_binary_end):
+        """
+        Create habitat loss raster.
 
-    def get_habitat_loss_raster(
-        self, glc_processed, gpw_processed, hgfc_processed, start_yr
-    ):
-        """Create habitat loss raster."""
-        habitat_start = self.get_habitat_start_raster(
-            glc_processed, gpw_processed, start_yr
-        )
-        lc_end = self.get_lc_at_year(glc_processed, gpw_processed, self.analysis_end_yr)
-        natural_grassland_end = self.get_natural_grassland(
-            gpw_processed, self.analysis_end_yr
-        )
-        anthro_end = (
-            lc_end.remap(
-                ANTHRO_CLASSES,
-                ee.List.repeat(1, ANTHRO_CLASSES.size()),
-                defaultValue=0,
-            )
-            .where(natural_grassland_end, 0)
-            .where(hgfc_processed.gt(0), 1)
-        )
-        habitat_loss = habitat_start.And(anthro_end)
-        return self.open_binary_raster(habitat_loss), habitat_start
+        Loss is every pixel that was natural at the start year and anthropogenic
+        at the end year, after a morphological opening.
+        """
+        habitat_loss = habitat_binary_start.eq(1).And(habitat_binary_end.eq(0))
+        return self.open_binary_raster(habitat_loss)
 
     def calc_overall_habitat_loss(
         self, habitat_loss_raster, habitat_start_raster, site_geom, land_mask=None
@@ -140,8 +110,7 @@ class HabitatLossAnalyzer:
         self,
         habitat_class_image,
         habitat_start_raster,
-        glc_processed,
-        start_yr,
+        lc_start,
         site_geom,
         top_n=4,
     ):
@@ -150,8 +119,7 @@ class HabitatLossAnalyzer:
         extent for lost habitat classes.
         """
         class_dict = self.top_class_areas(habitat_class_image, site_geom, top_n)
-        glc_start = glc_processed.select(f"GLC_{start_yr}")
-        habitat_at_start = glc_start.updateMask(habitat_start_raster).rename(
+        habitat_at_start = lc_start.updateMask(habitat_start_raster).rename(
             "habitat_class"
         )
         start_areas = self.calc_class_area_dict(habitat_at_start, site_geom)
@@ -170,25 +138,28 @@ class HabitatLossAnalyzer:
 
         return self.flatten_dict(class_dict.map(add_metrics)).getInfo()
 
-    def get_driver_class_image(self, glc_processed, gpw_processed, habitat_loss_raster):
+    def get_driver_class_image(self, lc_end, habitat_loss_raster):
         """
-        Create classified image of the 4 drivers of habitat loss:
+        Create classified image of the drivers of habitat loss:
             1: Cropland
             2: Built-up Land
             3: Pasture
             4: Deforestation without conversion
+            5: Planted Forest
         """
-        lc_end = self.get_lc_at_year(glc_processed, gpw_processed, self.analysis_end_yr)
         return (
             lc_end.updateMask(habitat_loss_raster)
-            .remap([1, 2, 3, 4, 30, 37], [1, 1, 1, 1, 2, 3], defaultValue=4)
+            .remap(
+                [1, 2, 3, 4, 30, 37, 38],
+                [1, 1, 1, 1, 2, 3, 5],
+                defaultValue=4,
+            )
             .rename("driver_class")
         )
 
-    def get_habitat_class_image(self, glc_processed, habitat_loss_raster, start_yr):
+    def get_habitat_class_image(self, lc_start, habitat_loss_raster):
         """Create classified image of habitat types that were lost."""
-        glc_start = glc_processed.select(f"GLC_{start_yr}")
-        return glc_start.updateMask(habitat_loss_raster).rename("habitat_class")
+        return lc_start.updateMask(habitat_loss_raster).rename("habitat_class")
 
     def print_habitat_loss_metrics(
         self,
@@ -241,14 +212,6 @@ class HabitatLossAnalyzer:
             self.print_habitat_loss_metrics(
                 label, area, pct_reference, reference_label, pct_site
             )
-
-    def get_lc_at_year(self, glc_processed, gpw_processed, year):
-        glc = glc_processed.select(f"GLC_{year}")
-        gpw = gpw_processed.select(f"GPW_{year}")
-        return glc.where(gpw.eq(1), 37)
-
-    def get_natural_grassland(self, gpw_processed, year):
-        return gpw_processed.select(f"GPW_{year}").eq(2)
 
     def open_binary_raster(self, binary):
         kwargs = {
