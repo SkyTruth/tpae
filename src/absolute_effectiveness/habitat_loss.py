@@ -41,11 +41,15 @@ class HabitatLossAnalyzer:
     def get_habitat_start_raster(self, glc_processed, gpw_processed, start_yr):
         """Create start-year habitat raster."""
         lc_start = self.get_lc_at_year(glc_processed, gpw_processed, start_yr)
-        return lc_start.remap(
+        habitat_start = lc_start.remap(
             ANTHRO_CLASSES,
             ee.List.repeat(0, ANTHRO_CLASSES.size()),
             defaultValue=1,
         )
+        # Natural grasslands are habitat even where GLC maps an anthropogenic class,
+        # as in the habitat extent raster
+        natural_grassland = self.get_natural_grassland(gpw_processed, start_yr)
+        return habitat_start.where(natural_grassland, 1)
 
     def get_habitat_loss_raster(
         self, glc_processed, gpw_processed, hgfc_processed, start_yr
@@ -55,11 +59,18 @@ class HabitatLossAnalyzer:
             glc_processed, gpw_processed, start_yr
         )
         lc_end = self.get_lc_at_year(glc_processed, gpw_processed, self.analysis_end_yr)
-        anthro_end = lc_end.remap(
-            ANTHRO_CLASSES,
-            ee.List.repeat(1, ANTHRO_CLASSES.size()),
-            defaultValue=0,
-        ).where(hgfc_processed.gt(0), 1)
+        natural_grassland_end = self.get_natural_grassland(
+            gpw_processed, self.analysis_end_yr
+        )
+        anthro_end = (
+            lc_end.remap(
+                ANTHRO_CLASSES,
+                ee.List.repeat(1, ANTHRO_CLASSES.size()),
+                defaultValue=0,
+            )
+            .where(natural_grassland_end, 0)
+            .where(hgfc_processed.gt(0), 1)
+        )
         habitat_loss = habitat_start.And(anthro_end)
         return self.open_binary_raster(habitat_loss), habitat_start
 
@@ -235,6 +246,9 @@ class HabitatLossAnalyzer:
         glc = glc_processed.select(f"GLC_{year}")
         gpw = gpw_processed.select(f"GPW_{year}")
         return glc.where(gpw.eq(1), 37)
+
+    def get_natural_grassland(self, gpw_processed, year):
+        return gpw_processed.select(f"GPW_{year}").eq(2)
 
     def open_binary_raster(self, binary):
         kwargs = {
