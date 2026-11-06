@@ -607,6 +607,8 @@ CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
 MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging
 EE_DEADLINE_MS = 300_000
+# Number of Earth Engine requests to run at once
+EE_N_WORKERS = 8
 
 # Archived:
 # ----------
