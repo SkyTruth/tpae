@@ -5,6 +5,7 @@ Each site gets a simple random sample of its grid of valid interior cells
 Sample size is calculated dynamically so that every site's treatment-cell mean has the same standard error.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
 
@@ -30,6 +31,7 @@ from utils.variables import (
     CELL_SIZE_M,
     RAND_SEED,
     TREATMENT_SE_TARGET,
+    EE_N_WORKERS,
 )
 
 
@@ -89,7 +91,9 @@ def get_land_fraction(site_geom_4326):
     return 1.0 if land_frac is None else land_frac
 
 
-def get_treatment_cells(sites_path):
+def get_treatment_cells(
+    sites_path, output_parquet=TREATMENT_CELLS, n_workers=EE_N_WORKERS
+):
     """
     Iterate through a set of sites and return a set of valid treatment cells for each.
     Each site's grid of valid interior cells is randomly subsampled to the size given by
@@ -100,15 +104,26 @@ def get_treatment_cells(sites_path):
     sites_gdf_4326 = gpd.read_parquet(sites_path)
     sites_gdf = sites_gdf_4326.to_crs(GPD_CRS_METERS)
 
+    # Land fraction of each site (or the error it raised), n_workers sites at a time
+    def land_fraction_or_error(geom_4326):
+        try:
+            return get_land_fraction(geom_4326)
+        except Exception as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        land_fracs = list(executor.map(land_fraction_or_error, sites_gdf_4326.geometry))
+
     all_cells = []
 
     # Iterate through sites and get a set of valid treatment cells for each
     failed = []
-    for (_, row), geom_4326 in zip(sites_gdf.iterrows(), sites_gdf_4326.geometry):
+    for (_, row), land_frac in zip(sites_gdf.iterrows(), land_fracs):
         site_geom = row.geometry
         site_id = str(row["site_id"])
         try:
-            land_frac = get_land_fraction(geom_4326)
+            if isinstance(land_frac, Exception):
+                raise land_frac
             cells = draw_grid(site_geom, CELL_SIZE_M)
             # Size the sample on land cells; water cells are dropped at extraction,
             # so draw extra to keep ~n_target land cells
@@ -142,7 +157,7 @@ def get_treatment_cells(sites_path):
     all_cells = all_cells.drop_duplicates(subset="geometry")
     all_cells["geometry"] = all_cells.geometry.set_precision(1.0)
     all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
-    all_cells.to_parquet(TREATMENT_CELLS)
+    all_cells.to_parquet(output_parquet)
 
 
 if __name__ == "__main__":
