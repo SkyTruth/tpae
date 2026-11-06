@@ -13,6 +13,7 @@ from utils.variables import (
     REPORT_YES_MAX_SMD,
     REPORT_YES_MIN_COVERAGE,
     REPORT_YES_MIN_MATCHED_TREAT,
+    REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
     FENG_BALANCED_SMD,
 )
@@ -22,17 +23,16 @@ ABS_SMD_AFTER_COLS = [f"abs_smd_after_{c}" for c in COVARIATES]
 DIAGNOSTIC_COLUMNS = [
     "site_id",
     "match_coverage",
+    "common_support",
     "n_matched_treat",
+    "matched_vs_all_treat_smd",
     "cross_border_share",
-    "frac_treat_0_neighbors",
-    "frac_treat_1_neighbor",
-    "frac_treat_2plus_neighbors",
     "control_supply_ratio",
     "avg_matches_per_treat",
     "avg_control_reuse",
-    "avg_extrapolation",
     "avg_abs_smd_before",
     "avg_abs_smd_after",
+    "avg_abs_pair_diff",
     *ABS_SMD_AFTER_COLS,
     "n_covariates_balanced",
     "avg_abs_smd_improvement",
@@ -59,16 +59,17 @@ def calc_control_supply_ratio(n_in_caliper_controls, n_treat, k, cap):
     return (n_in_caliper_controls * cap) / demand
 
 
-def calc_neighbor_count_shares(n_candidates_by_treat):
-    """Share of treatment cells with 0, 1, or 2+ in-caliper control neighbors."""
+def calc_common_support(n_candidates_by_treat):
+    """Share of treatment cells with at least one control within the matching calipers.
+
+    Support is defined by the matching rules themselves (Mahalanobis and per-covariate
+    calipers, any geographic pool), so it is the share of the PA that can be matched at
+    all. Coverage can never exceed it; the gap is cells lost to the control reuse cap.
+    """
     if not n_candidates_by_treat:
-        return np.nan, np.nan, np.nan
+        return np.nan
     counts = np.fromiter(n_candidates_by_treat.values(), dtype=float)
-    return (
-        float((counts == 0).mean()),
-        float((counts == 1).mean()),
-        float((counts >= 2).mean()),
-    )
+    return float((counts > 0).mean())
 
 
 def calc_avg_matches_per_treat(match_df):
@@ -81,25 +82,22 @@ def calc_control_reuse(match_df):
     return match_df.groupby("control_cell_id").size().mean()
 
 
+def calc_match_weights(match_df):
+    """Weight each matched pair 1/k, where k is its treatment cell's number of matches.
+
+    Each matched treatment cell then counts once, and its controls share its weight
+    (Stuart 2010, p. 14). This matches how aggregate_pa_relative_scores averages outcomes.
+    """
+    k = match_df.groupby("treat_cell_id")["treat_cell_id"].transform("size")
+    return 1.0 / k
+
+
 def calc_cross_border_share(match_df, cells_df):
     """Share of matched pairs whose control is in a different country than its treatment cell."""
     country = cells_df.set_index("cell_ID")["country"]
     treat_country = match_df["treat_cell_id"].map(country)
     control_country = match_df["control_cell_id"].map(country)
     return float((treat_country != control_country).mean())
-
-
-def calc_extrapolation(t_vals, c_vals):
-    """Calculate percentage of treatment cells that fall outside the range of control cells.
-    If treatment cells have covariate values outside the range of available control cells,
-    they cannot be properly matched and balanced by any method."""
-    c_min = c_vals.min()
-    c_max = c_vals.max()
-    n_below = (t_vals < c_min).sum()
-    n_above = (t_vals > c_max).sum()
-    n_total = n_below + n_above
-    pct = n_total / len(t_vals)
-    return pct
 
 
 def calc_pooled_sd(t_vals, c_vals):
@@ -111,16 +109,33 @@ def calc_pooled_sd(t_vals, c_vals):
     return pooled_sd
 
 
-def calc_smd(t_vals, c_vals, pooled_sd):
+def calc_smd(t_vals, c_vals, pooled_sd, weights=None):
     """Standardized mean difference formula.
 
+    weights: optional per-row weights applied to both groups' means (e.g. match weights,
+    where row i of t_vals and c_vals is the same matched pair).
     If a covariate has no variation (pooled SD is 0) and the two groups have the
     same mean, treat SMD as 0 (balanced). If the means differ, SMD is undefined.
     """
-    mean_t, mean_c = float(t_vals.mean()), float(c_vals.mean())
+    mean_t = float(np.average(t_vals, weights=weights))
+    mean_c = float(np.average(c_vals, weights=weights))
     if pooled_sd == 0 or not np.isfinite(pooled_sd):
         return 0.0 if np.isclose(mean_t, mean_c) else np.nan
     return (mean_t - mean_c) / pooled_sd
+
+
+def calc_pair_diff(t_vals, c_vals, pooled_sd, weights=None):
+    """Mean absolute within-pair difference, in pooled SDs (0 = identical pairs).
+
+    Row i of t_vals and c_vals is the same matched pair. Unlike the SMD, differences
+    can't cancel out across pairs, so this shows whether individual pairs are close,
+    not just the group means. Two random draws from the same normal distribution
+    differ by about 1.13 SD on average.
+    """
+    diffs = np.abs(np.asarray(t_vals, dtype=float) - np.asarray(c_vals, dtype=float))
+    if pooled_sd == 0 or not np.isfinite(pooled_sd):
+        return 0.0 if np.allclose(diffs, 0) else np.nan
+    return float(np.average(diffs, weights=weights) / pooled_sd)
 
 
 def balance_verdict(smd):
@@ -139,30 +154,43 @@ def calc_improvement(smd_before, smd_after):
     return abs(smd_before) - abs(smd_after)
 
 
+def calc_matched_vs_all_treat_smd(match_df, cells_df):
+    """Largest single covariate |SMD| between matched and all treatment cells.
+
+    Shows how similar the pre-match treatment group is to the post-match treatment
+    group, i.e. whether the matched cells are still representative of the whole PA.
+    """
+    all_treat = cells_df[cells_df["protected"] == 1]
+    all_control = cells_df[cells_df["protected"] == 0]
+    matched_treat = all_treat[all_treat["cell_ID"].isin(match_df["treat_cell_id"])]
+    smds = [
+        abs(
+            calc_smd(
+                matched_treat[cov],
+                all_treat[cov],
+                calc_pooled_sd(all_treat[cov], all_control[cov]),
+            )
+        )
+        for cov in COVARIATES
+    ]
+    return float(np.nanmax(smds))
+
+
 def evaluate_covariate_balance(match_df, cells_df):
     """Calculate balance diagnostics for each covariate."""
     # Before matching: full treatment and control pools
     unmatched_treat = cells_df[cells_df["protected"] == 1][COVARIATES]
     unmatched_control = cells_df[cells_df["protected"] == 0][COVARIATES]
 
-    # After matching: matched treatment and control cells
-    matched_treat = match_df.merge(
-        cells_df[["cell_ID"] + COVARIATES],
-        left_on="treat_cell_id",
-        right_on="cell_ID",
-    ).drop(columns="cell_ID")
-
-    matched_control = match_df.merge(
-        cells_df[["cell_ID"] + COVARIATES],
-        left_on="control_cell_id",
-        right_on="cell_ID",
-    ).drop(columns="cell_ID")
+    # After matching: one row per matched pair, weighted 1/k so balance is measured
+    # the same way outcomes are averaged
+    covs_by_id = cells_df.set_index("cell_ID")[COVARIATES]
+    matched_treat = covs_by_id.loc[match_df["treat_cell_id"]]
+    matched_control = covs_by_id.loc[match_df["control_cell_id"]]
+    match_weights = calc_match_weights(match_df).to_numpy()
 
     rows = []
     for covariate in COVARIATES:
-        extrapolation = calc_extrapolation(
-            unmatched_treat[covariate], unmatched_control[covariate]
-        )
         pooled_sd = calc_pooled_sd(
             unmatched_treat[covariate], unmatched_control[covariate]
         )
@@ -170,16 +198,25 @@ def evaluate_covariate_balance(match_df, cells_df):
             unmatched_treat[covariate], unmatched_control[covariate], pooled_sd
         )
         smd_after = calc_smd(
-            matched_treat[covariate], matched_control[covariate], pooled_sd
+            matched_treat[covariate],
+            matched_control[covariate],
+            pooled_sd,
+            weights=match_weights,
+        )
+        pair_diff = calc_pair_diff(
+            matched_treat[covariate],
+            matched_control[covariate],
+            pooled_sd,
+            weights=match_weights,
         )
         balanced = balance_verdict(smd_after)
         improvement = calc_improvement(smd_before, smd_after)
         rows.append(
             {
                 "covariate": covariate,
-                "extrapolation": extrapolation,
                 "smd_before": smd_before,
                 "smd_after": smd_after,
+                "pair_diff": pair_diff,
                 "balanced": balanced,
                 "improvement": improvement,
             }
@@ -191,14 +228,12 @@ def evaluate_covariate_balance(match_df, cells_df):
 
 def evaluate_overall_balance(covariate_results):
     """Evaluate overall site balance across all covariates."""
-    avg_extrapolation = covariate_results["extrapolation"].mean()
     avg_abs_SDM_before = covariate_results["smd_before"].abs().mean()
     avg_abs_SDM_after = covariate_results["smd_after"].abs().mean()
     n_covariates_balanced = covariate_results["balanced"].sum()
     avg_abs_SDM_improvement = covariate_results["improvement"].mean()
     n_covariates_improved = (covariate_results["improvement"] > 0).sum()
     return (
-        avg_extrapolation,
         avg_abs_SDM_before,
         avg_abs_SDM_after,
         n_covariates_balanced,
@@ -234,17 +269,13 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
             )
         n_candidates = match_df.attrs.get("n_candidates_by_treat")
         if n_candidates is not None:
-            frac0, frac1, frac2 = calc_neighbor_count_shares(n_candidates)
-            row["frac_treat_0_neighbors"] = frac0
-            row["frac_treat_1_neighbor"] = frac1
-            row["frac_treat_2plus_neighbors"] = frac2
+            row["common_support"] = calc_common_support(n_candidates)
 
     if not has_matches:
         return row
 
     covariate_results = evaluate_covariate_balance(match_df, cells_df)
     (
-        avg_extrapolation,
         avg_abs_smd_before,
         avg_abs_smd_after,
         n_covariates_balanced,
@@ -254,12 +285,15 @@ def site_diagnostics_row(match_df, treat_df, cells_df, site_id):
 
     row.update(
         {
+            "matched_vs_all_treat_smd": calc_matched_vs_all_treat_smd(
+                match_df, cells_df
+            ),
             "cross_border_share": calc_cross_border_share(match_df, cells_df),
             "avg_matches_per_treat": calc_avg_matches_per_treat(match_df),
             "avg_control_reuse": calc_control_reuse(match_df),
-            "avg_extrapolation": avg_extrapolation,
             "avg_abs_smd_before": avg_abs_smd_before,
             "avg_abs_smd_after": avg_abs_smd_after,
+            "avg_abs_pair_diff": covariate_results["pair_diff"].mean(),
             "n_covariates_balanced": n_covariates_balanced,
             "avg_abs_smd_improvement": avg_abs_smd_improvement,
             "n_covariates_improved": n_covariates_improved,
@@ -291,8 +325,8 @@ def classify_site(row):
 
     No: results cannot be meaningful (too little of the PA matched, or a covariate
     too imbalanced).
-    Caution: usable, but misses a Yes criterion (imbalance beyond the 0.25 guideline
-    for reliable adjustment, low coverage, cross-border pairs, or few matched cells).
+    Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the PA,
+    cross-border pairs, or few matched cells).
     """
     coverage = row["match_coverage"]
     if pd.isna(coverage) or coverage == 0:
@@ -319,6 +353,12 @@ def classify_site(row):
     if coverage < REPORT_YES_MIN_COVERAGE:
         caution_reasons.append(
             f"coverage {coverage:.0%} < {REPORT_YES_MIN_COVERAGE:.0%}"
+        )
+    treat_shift = row["matched_vs_all_treat_smd"]
+    if treat_shift > REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD:
+        caution_reasons.append(
+            f"matched vs all treatment max |SMD| {treat_shift:.3f} > "
+            f"{REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD}"
         )
     if max_smd > REPORT_YES_MAX_SMD:
         caution_reasons.append(f"{worst} |SMD| {max_smd:.3f} > {REPORT_YES_MAX_SMD}")
@@ -347,6 +387,7 @@ def build_report_card(results_df):
     for col in ("n_matched_treat", "n_covariates_balanced"):
         card[col] = card[col].round().astype("Int64")
     card["match_coverage_pct"] = (card["match_coverage"] * 100).round(1)
+    card["common_support_pct"] = (card["common_support"] * 100).round(1)
     card["cross_border_pct"] = (card["cross_border_share"] * 100).round(1)
     return card[REPORT_CARD_COLUMNS].round(3)
 

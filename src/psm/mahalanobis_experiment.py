@@ -6,7 +6,7 @@ Runs MDM iteratively on all 30 test sites and writes one site-level diagnostics 
 
 # Change this for each experiment so results are not overwritten.
 # Should be a unique identifier for the experiment so we know which changes caused which results.
-run_id = "land_mask"
+run_id = "refined_diagnostics"
 
 from pathlib import Path
 import sys
