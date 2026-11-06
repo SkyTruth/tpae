@@ -3,7 +3,7 @@ import math
 PROJECT = "tpara-512319"
 GCS_BUCKET = "tpara"
 
-# Earth Engine asset IDs
+# Earth Engine public asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
 OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
 GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
@@ -35,12 +35,13 @@ GLO30_ASSET_ID = "COPERNICUS/DEM/GLO30_2024_1"
 ATC_ASSET_ID = "projects/malariaatlasproject/assets/accessibility/accessibility_to_cities/2015_v1_0"
 POP_ASSET_ID = "JRC/GHSL/P2023A/GHS_POP/2000"
 
-TPAE_ASSET_FOLDER = "projects/skytruth-tech/assets/TPAE/"
-GAEZ_WHEAT_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_wheat"
-GAEZ_RICE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_dryland_rice"
-GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
-GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
-HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
+# GCS bucket paths for input data
+INPUT_DATA_PREFIX = f"gs://{GCS_BUCKET}/input_data/"
+GAEZ_WHEAT_PATH = INPUT_DATA_PREFIX + "GAEZ_wheat.tif"
+GAEZ_RICE_PATH = INPUT_DATA_PREFIX + "GAEZ_dryland_rice.tif"
+GAEZ_MAIZE_PATH = INPUT_DATA_PREFIX + "GAEZ_maize.tif"
+GAEZ_SOYBEAN_PATH = INPUT_DATA_PREFIX + "GAEZ_soybean.tif"
+HUMAN_FOOTPRINT_PATH = INPUT_DATA_PREFIX + "human_footprint_1993.tif"
 
 # Site IDs (WDPA SITE_ID) of the selected sites (PAs and OECMs), one list per site group
 SITE_IDS_65 = [

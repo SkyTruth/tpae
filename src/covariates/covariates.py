@@ -9,11 +9,11 @@ from utils.variables import (
     ATC_ASSET_ID,
     POP_ASSET_ID,
     HGFC_ASSET_ID,
-    GAEZ_WHEAT_ASSET_ID,
-    GAEZ_RICE_ASSET_ID,
-    GAEZ_MAIZE_ASSET_ID,
-    GAEZ_SOYBEAN_ASSET_ID,
-    HUMAN_FOOTPRINT_ASSET_ID,
+    GAEZ_WHEAT_PATH,
+    GAEZ_RICE_PATH,
+    GAEZ_MAIZE_PATH,
+    GAEZ_SOYBEAN_PATH,
+    HUMAN_FOOTPRINT_PATH,
 )
 
 
@@ -35,12 +35,14 @@ def build_resampled_covariates(ee_crs_1km):
         .log()
         .rename("log_pop_density")
     )
-    human_footprint = ee.Image(HUMAN_FOOTPRINT_ASSET_ID).rename("human_footprint")
+    human_footprint = ee.Image.loadGeoTIFF(HUMAN_FOOTPRINT_PATH).rename(
+        "human_footprint"
+    )
 
-    wheat = ee.Image(GAEZ_WHEAT_ASSET_ID).rename("wheat")
-    rice = ee.Image(GAEZ_RICE_ASSET_ID).rename("rice")
-    maize = ee.Image(GAEZ_MAIZE_ASSET_ID).rename("maize")
-    soybean = ee.Image(GAEZ_SOYBEAN_ASSET_ID).rename("soybean")
+    wheat = ee.Image.loadGeoTIFF(GAEZ_WHEAT_PATH).rename("wheat")
+    rice = ee.Image.loadGeoTIFF(GAEZ_RICE_PATH).rename("rice")
+    maize = ee.Image.loadGeoTIFF(GAEZ_MAIZE_PATH).rename("maize")
+    soybean = ee.Image.loadGeoTIFF(GAEZ_SOYBEAN_PATH).rename("soybean")
 
     ag_suitability = (
         wheat.addBands([rice, maize, soybean])
