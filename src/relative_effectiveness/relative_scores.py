@@ -1,44 +1,44 @@
 """
-PA-level relative effectiveness from matched treatment and control cell scores.
+Site-level relative effectiveness from matched treatment and control cell scores.
 """
 
 import geemap
 import numpy as np
 import pandas as pd
 
-from psm.diagnostics import calc_match_weights
+from matching.diagnostics import calc_match_weights
 from utils.variables import COVARIATES, REG_ADJ_MIN_CONTROLS_PER_COVARIATE
 
 SCORE_COLS = ["extent_score", "intactness_score", "condition_score", "loss_score"]
 DIFF_COLS = [f"{col}_diff" for col in SCORE_COLS]
 ADJ_DIFF_COLS = [f"{col}_diff_adj" for col in SCORE_COLS]
-PA_SCORE_NAMES = {
+SITE_SCORE_NAMES = {
     "extent_score": "extent",
     "intactness_score": "intactness",
     "condition_score": "condition",
     "loss_score": "loss",
 }
 # Per-cell share of habitat at the start year; the min over a pair weights its loss difference
-WEIGHT_COL = "start_habitat_proportion"
+START_HABITAT_COL = "start_habitat_proportion"
 
 __all__ = [
     "SCORE_COLS",
     "DIFF_COLS",
     "ADJ_DIFF_COLS",
-    "WEIGHT_COL",
+    "START_HABITAT_COL",
     "build_match_df_with_score_diffs",
     "regression_adjust_score_diffs",
-    "aggregate_pa_relative_scores",
+    "aggregate_site_relative_scores",
 ]
 
 
 def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.DataFrame:
     """Join per-cell scores to the match table and compute pairwise treatment–control differences.
 
-    Also adds pair_weight, the lower of the two cells' start-habitat proportions.
+    Also adds pair_habitat_weight, the lower of the two cells' start-habitat proportions.
     """
     score_gdf = geemap.ee_to_gdf(scored)
-    cell_cols = SCORE_COLS + [WEIGHT_COL]
+    cell_cols = SCORE_COLS + [START_HABITAT_COL]
     scores = score_gdf[["cell_ID"] + cell_cols].drop_duplicates("cell_ID").copy()
     scores["cell_ID"] = scores["cell_ID"].astype(int)
 
@@ -46,20 +46,20 @@ def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.Dat
         "cell_ID": "treat_cell_id",
         **{c: f"treat_{c}" for c in cell_cols},
     }
-    ctrl_renamed = {
+    control_renamed = {
         "cell_ID": "control_cell_id",
         **{c: f"control_{c}" for c in cell_cols},
     }
 
     match_df = match_table.merge(
         scores.rename(columns=treat_renamed), on="treat_cell_id", how="left"
-    ).merge(scores.rename(columns=ctrl_renamed), on="control_cell_id", how="left")
+    ).merge(scores.rename(columns=control_renamed), on="control_cell_id", how="left")
 
     for col in SCORE_COLS:
         match_df[f"{col}_diff"] = match_df[f"treat_{col}"] - match_df[f"control_{col}"]
 
-    match_df["pair_weight"] = match_df[
-        [f"treat_{WEIGHT_COL}", f"control_{WEIGHT_COL}"]
+    match_df["pair_habitat_weight"] = match_df[
+        [f"treat_{START_HABITAT_COL}", f"control_{START_HABITAT_COL}"]
     ].min(axis=1, skipna=False)
 
     return match_df
@@ -97,20 +97,20 @@ def regression_adjust_score_diffs(
         diff_adj = diff - slopes · (x_treat - x_control)
 
     cell_covariates: one row per cell with cell_ID and the covariate columns (e.g. the
-    matched grids). With fewer than min_controls_per_covariate matched controls per
+    matched cells). With fewer than min_controls_per_covariate matched controls per
     covariate, no model is fit and diff_adj equals diff. Whether the adjustment was
     applied is stored in match_df.attrs["regression_adjusted"].
     """
     match_df = match_df.copy()
     covs = cell_covariates.drop_duplicates("cell_ID").set_index("cell_ID")[covariates]
     X_treat = covs.loc[match_df["treat_cell_id"]].to_numpy(dtype=float)
-    X_ctrl = covs.loc[match_df["control_cell_id"]].to_numpy(dtype=float)
+    X_control = covs.loc[match_df["control_cell_id"]].to_numpy(dtype=float)
 
     # Each control's weight is the sum of its pairs' 1/k weights
-    pair_weights = pd.Series(
+    pair_match_weights = pd.Series(
         calc_match_weights(match_df).to_numpy(), index=match_df["control_cell_id"]
     )
-    control_weights = pair_weights.groupby(level=0).sum()
+    control_weights = pair_match_weights.groupby(level=0).sum()
     n_controls = len(control_weights)
     adjusted = n_controls >= min_controls_per_covariate * len(covariates)
 
@@ -130,7 +130,7 @@ def regression_adjust_score_diffs(
             controls.to_numpy(dtype=float),
             control_weights.loc[controls.index].to_numpy(),
         )
-        correction = 0.0 if slopes is None else (X_treat - X_ctrl) @ slopes
+        correction = 0.0 if slopes is None else (X_treat - X_control) @ slopes
         match_df[f"{col}_diff_adj"] = diff - correction
 
     match_df.attrs["regression_adjusted"] = adjusted
@@ -146,36 +146,38 @@ def _weighted_pair_mean(diff: pd.Series, weights: pd.Series) -> float:
     return (weights[valid] * diff[valid]).sum() / total_weight
 
 
-def aggregate_pa_relative_scores(
+def aggregate_site_relative_scores(
     match_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Average score differences in two steps to avoid weighting cells with more matches.
 
-    Loss differences are instead averaged over pairs, weighted by pair_weight (the
+    Loss differences are instead averaged over pairs, weighted by pair_habitat_weight (the
     lower start-habitat proportion of the two cells) times the 1/k match weight, so
     pairs where either cell had little habitat to lose count less. The plain mean
-    pair_weight is reported as "mean_pair_weight".
+    pair_habitat_weight is reported as "mean_pair_habitat_weight".
 
-    Returns per-treatment-cell mean differences and PA-level relative scores. If
+    Returns per-treatment-cell mean differences and site-level relative scores. If
     match_df has regression-adjusted differences (see regression_adjust_score_diffs),
-    adjusted PA scores are added as "{name}_adj" (e.g. "loss_adj").
+    adjusted site scores are added as "{name}_adj" (e.g. "loss_adj").
     """
     diff_cols = DIFF_COLS + [col for col in ADJ_DIFF_COLS if col in match_df]
     treat_means = match_df.groupby("treat_cell_id")[diff_cols].mean()
-    loss_weights = match_df["pair_weight"] * calc_match_weights(match_df)
+    loss_weights = match_df["pair_habitat_weight"] * calc_match_weights(match_df)
 
-    pa_scores = {}
-    for col, name in PA_SCORE_NAMES.items():
+    site_scores = {}
+    for col, name in SITE_SCORE_NAMES.items():
         if col == "loss_score":
-            pa_scores[name] = _weighted_pair_mean(match_df[f"{col}_diff"], loss_weights)
+            site_scores[name] = _weighted_pair_mean(
+                match_df[f"{col}_diff"], loss_weights
+            )
             if f"{col}_diff_adj" in match_df:
-                pa_scores[f"{name}_adj"] = _weighted_pair_mean(
+                site_scores[f"{name}_adj"] = _weighted_pair_mean(
                     match_df[f"{col}_diff_adj"], loss_weights
                 )
             continue
-        pa_scores[name] = treat_means[f"{col}_diff"].mean()
+        site_scores[name] = treat_means[f"{col}_diff"].mean()
         if f"{col}_diff_adj" in treat_means:
-            pa_scores[f"{name}_adj"] = treat_means[f"{col}_diff_adj"].mean()
-    pa_scores["mean_pair_weight"] = match_df["pair_weight"].mean()
+            site_scores[f"{name}_adj"] = treat_means[f"{col}_diff_adj"].mean()
+    site_scores["mean_pair_habitat_weight"] = match_df["pair_habitat_weight"].mean()
 
-    return treat_means, pa_scores
+    return treat_means, site_scores

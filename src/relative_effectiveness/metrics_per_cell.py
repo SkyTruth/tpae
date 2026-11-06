@@ -1,7 +1,7 @@
 """
 Computes relative effectiveness metrics per 1km2 cell.
 Reuses absolute effectiveness code, but uses reduceRegions to compute scores
-across a series of cells rather than within a single PA.
+across a series of cells rather than within a single site.
 """
 
 import ee
@@ -22,7 +22,7 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
     loss within each cell using a single reduceRegions pass.
     """
 
-    def calc_loss_score_per_cell(self, habitat_loss_raster, fc):
+    def calc_loss_score_per_cell(self, habitat_loss_raster, cells_fc):
         """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`."""
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
         loss_area_image = cell_area_image.updateMask(habitat_loss_raster).rename(
@@ -31,9 +31,9 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
         combined = loss_area_image.addBands(cell_area_image)
 
         with_areas = combined.reduceRegions(
-            collection=fc,
+            collection=cells_fc,
             reducer=ee.Reducer.sum(),
-            scale=self.scale,
+            scale=self.scale_m,
             crs=self.crs,
         )
 
@@ -47,7 +47,7 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
 
         return with_areas.map(add_score)
 
-    def calc_start_habitat_proportion_per_cell(self, habitat_start_raster, fc):
+    def calc_start_habitat_proportion_per_cell(self, habitat_start_raster, cells_fc):
         """Proportion of each cell that was habitat at the start year."""
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
         start_area_image = cell_area_image.updateMask(habitat_start_raster).rename(
@@ -56,9 +56,9 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
         combined = start_area_image.addBands(cell_area_image)
 
         with_areas = combined.reduceRegions(
-            collection=fc,
+            collection=cells_fc,
             reducer=ee.Reducer.sum(),
-            scale=self.scale,
+            scale=self.scale_m,
             crs=self.crs,
         )
 
@@ -86,8 +86,8 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
     of cells in a single pass per metric.
     """
 
-    def calc_extent_score_per_cell(self, habitat_raster, matched_grids):
-        """Score Habitat Extent within each cell of `matched_grids`."""
+    def calc_extent_score_per_cell(self, habitat_raster, cells_fc):
+        """Score Habitat Extent within each cell of `cells_fc`."""
 
         # Could just set cell area to 1000000 since that's what it should be,
         # but this might be more accurate given the projection
@@ -99,9 +99,9 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
         combined = habitat_area_image.addBands(cell_area_image)
 
         with_area = combined.reduceRegions(
-            collection=matched_grids,
+            collection=cells_fc,
             reducer=ee.Reducer.sum(),
-            scale=self.scale,
+            scale=self.scale_m,
             crs=self.crs,
         )
 
@@ -113,12 +113,12 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
 
         return with_area.map(add_score)
 
-    def calc_intactness_score_per_cell(self, intactness_raster, fc):
+    def calc_intactness_score_per_cell(self, intactness_raster, cells_fc):
         """Score Habitat Intactness within each cell as the mean of intactness."""
         with_intactness = intactness_raster.reduceRegions(
-            collection=fc,
+            collection=cells_fc,
             reducer=ee.Reducer.mean().setOutputs(["intactness_score"]),
-            scale=self.intactness_scale,
+            scale=self.intactness_scale_m,
             crs=self.crs,
             tileScale=self.tile_scale,
         )
@@ -130,7 +130,7 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
 
         return with_intactness.map(add_score)
 
-    def calc_condition_score_per_cell(self, fc):
+    def calc_condition_score_per_cell(self, cells_fc):
         """Combine per-cell extent and intactness scores into a Condition score."""
 
         def compute(feature):
@@ -138,4 +138,4 @@ class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
             intactness = ee.Number(feature.get("intactness_score"))
             return feature.set("condition_score", extent.multiply(intactness))
 
-        return fc.map(compute)
+        return cells_fc.map(compute)

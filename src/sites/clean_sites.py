@@ -1,28 +1,28 @@
 """
-Extract a set of sites (TEST_SITE_IDS) from the WDPA and WDOECM feature collections in
-Earth Engine, clean their geometries, and save them to TEST_SITES (GeoParquet in GCS).
+Extract a set of sites (SITE_IDS) from the WDPA and WDOECM feature collections in
+Earth Engine, clean their geometries, and save them to SITES (GeoParquet in GCS).
 
 Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
-WDPAID, and dissolves multi-part sites into one row per site.
+site_id, and dissolves multi-part sites into one row per site.
 """
 
 from pathlib import Path
 import sys
 
-_SRC = Path(__file__).resolve().parent
+_SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
 import ee
 from shapely import make_valid
 from shapely.ops import unary_union
 
-from psm.get_control_cells import init_ee
+from cells.get_control_cells import init_ee
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
-    TEST_SITE_IDS,
-    TEST_SITES,
+    SITE_IDS,
+    SITES,
 )
 
 
@@ -53,22 +53,22 @@ def polygonal_part(geom):
 
 
 def clean_sites(sites):
-    """Keep polygonal parts, rename SITE_ID to WDPAID, and dissolve to one row per site."""
+    """Keep polygonal parts, rename SITE_ID to site_id, and dissolve to one row per site."""
     sites = sites.copy()
     sites["geometry"] = sites.geometry.apply(polygonal_part)
     sites = sites[sites.geometry.notna() & ~sites.geometry.is_empty]
-    sites = sites.rename(columns={"SITE_ID": "WDPAID"})
+    sites = sites.rename(columns={"SITE_ID": "site_id"})
     # Keep the first feature's attributes for multi-part sites
-    return sites.dissolve(by="WDPAID", aggfunc="first", as_index=False)
+    return sites.dissolve(by="site_id", aggfunc="first", as_index=False)
 
 
-def save_sites(site_ids=TEST_SITE_IDS, output_path=TEST_SITES):
+def save_sites(site_ids=SITE_IDS, output_path=SITES):
     """Extract, clean, and save the given sites."""
     init_ee(PROJECT)
     raw = fetch_sites(site_ids)
     sites = clean_sites(raw)
 
-    missing = sorted(set(site_ids) - set(sites["WDPAID"]))
+    missing = sorted(set(site_ids) - set(sites["site_id"]))
     if missing:
         print(f"Warning: {len(missing)} SITE_ID(s) not found in WDPA/WDOECM: {missing}")
     print(

@@ -55,11 +55,11 @@ class DataProcessor:
     def _apply_land_mask(self, image):
         return image.updateMask(self.get_land_mask())
 
-    def process_glc(self, test_sites, start_yr, land_masked=True):
+    def process_glc(self, region, start_yr, land_masked=True):
         """
         Process Global Land Cover Change data for the analysis period.
         """
-        glc_mosaic = self.glc_collection.filterBounds(test_sites).mosaic()
+        glc_mosaic = self.glc_collection.filterBounds(region).mosaic()
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
         # Rename bands for clarity
         band_names = [f"b{year - 2000 + 1}" for year in analysis_years]
@@ -108,7 +108,7 @@ class DataProcessor:
         hgfc = hgfc_masked.unmask()
         return self._apply_land_mask(hgfc) if land_masked else hgfc
 
-    def process_forty(self, test_sites, start_yr, land_masked=True):
+    def process_forty(self, region, start_yr, land_masked=True):
         """
         Process Forest Typology (ForTy) data for the analysis period.
         """
@@ -123,7 +123,7 @@ class DataProcessor:
             )
 
         def class_image(year):
-            mosaic = self.forty_collections[year].filterBounds(test_sites).mosaic()
+            mosaic = self.forty_collections[year].filterBounds(region).mosaic()
             return (
                 mosaic.toArray()
                 .arrayArgmax()
