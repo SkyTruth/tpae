@@ -17,7 +17,7 @@ This repository contains preliminary code related to the development of a Terres
   - `get_control_cells.py`: Sample 1 km unprotected cells in a buffer around each site.
   - `load_all_cells.py`: Load one site's treatment and control cells and assign `cell_ID`s.
 - **src/covariates/**: Extract matching covariates.
-  - `covariates.py`: Build the 1 km resampled covariate stack.
+  - `export_covariate_stack.py`: Build the global 1 km covariate stack and export it to an Earth Engine asset (run once).
   - `cell_features.py`: Aggregate covariates within cells and join country / ecoregion / biome.
   - `extract_cell_covariates.py`: Run extraction for every site in the active group and save one parquet file per site.
 - **src/matching/**: Match treatment and control cells with MDM.
@@ -42,6 +42,7 @@ Site lists, cell files, covariates, and match outputs are stored in GCS under pr
 
 Relative effectiveness, for the active `SITE_GROUP`:
 
+0. `src/covariates/export_covariate_stack.py`: Write the global covariate stack to the `covariates_1km` Earth Engine asset (once for all site groups; re-run after changing a covariate).
 1. `src/sites/clean_sites.py`: Write `site_geoms/site_geoms_{SITE_GROUP}.parquet`.
 2. `src/cells/get_treatment_cells.py`: Write `cells/treatment_cells_{SITE_GROUP}.parquet`.
 3. `src/cells/get_control_cells.py`: Write `cells/control_cells_{SITE_GROUP}.parquet`.

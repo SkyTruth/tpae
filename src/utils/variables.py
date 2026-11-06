@@ -592,6 +592,13 @@ SITE_GEOMS = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.parq
 
 # Outputs:
 # ----------
+# export_covariate_stack.py: global 1 km covariate stack (Earth Engine asset), read by
+# extract_cell_covariates.py
+COVARIATE_STACK_ASSET_ID = f"projects/{PROJECT}/assets/covariates_1km"
+# GeoTIFF file name prefix the stack is exported to before ingestion into the asset
+COVARIATE_STACK_GCS_PREFIX = f"gs://{GCS_BUCKET}/covariate_stack/covariates_1km"
+# Band order of the stack
+COVARIATE_STACK_BANDS = COVARIATES + ["land_frac"]
 # Treatment and control cells for the active site group, stored in the GCS bucket
 CELLS_PREFIX = "cells/"
 # get_treatment_cells.py

@@ -3,15 +3,16 @@ Extract covariate values for every candidate cell of each site in the active SIT
 and save them to GCS, one parquet file per site.
 
 This is the slow Earth Engine step. Run it once per site group, after
-get_treatment_cells.py and get_control_cells.py; MDM_match_cells.py then reads
-the saved files, so matching can be re-run quickly.
+export_covariate_stack.py, get_treatment_cells.py and get_control_cells.py;
+MDM_match_cells.py then reads the saved files, so matching can be re-run quickly.
+Covariates are read from the exported 1 km covariate stack.
 
 Cells from all sites are pooled, so a cell shared by several sites is extracted once,
 and sent to Earth Engine in chunks, several at a time. A site is saved once all of its
 cells are extracted.
 
-A site is skipped if its file is newer than both the treatment and control cell files,
-so re-running picks up where a stalled or failed run left off, and regenerated cells are
+A site is skipped if its file is newer than the treatment and control cell files and the
+covariate stack, so re-running picks up where a stalled or failed run left off, and regenerated cells are
 re-extracted automatically. Use --overwrite to re-extract every site.
 """
 
@@ -65,7 +66,10 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False, n_workers=EE_N_W
     # without loading the Earth Engine pipeline
     import geemap
     from cells.load_all_cells import build_all_site_cells
-    from covariates.covariates import build_resampled_covariates
+    from covariates.export_covariate_stack import (
+        covariate_stack_updated,
+        load_covariate_stack,
+    )
     from covariates.cell_features import (
         EE_GETINFO_LIMIT,
         extract_covariates,
@@ -77,10 +81,14 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False, n_workers=EE_N_W
     ee.data.setDeadline(EE_DEADLINE_MS)
 
     ee_crs_1km = ee.Projection(EE_CRS_METERS).atScale(CELL_SIZE_M)
-    covariates = build_resampled_covariates(ee_crs_1km)
+    covariates = load_covariate_stack()
 
     fs = gcsfs.GCSFileSystem()
-    inputs_modified = max(fs.modified(TREATMENT_CELLS), fs.modified(CONTROL_CELLS))
+    inputs_modified = max(
+        fs.modified(TREATMENT_CELLS),
+        fs.modified(CONTROL_CELLS),
+        covariate_stack_updated(),
+    )
     todo = [
         str(site_id)
         for site_id in site_ids
