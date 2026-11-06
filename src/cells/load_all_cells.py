@@ -27,6 +27,20 @@ def build_site_cells(site_id, treatment_cells, control_cells):
     return all_cells
 
 
+def build_all_site_cells(site_ids, treatment_cells, control_cells):
+    """Every listed site's cells, with the same cell_IDs as build_site_cells (EPSG:4326).
+
+    cell_key numbers the unique cell geometries in order of first appearance; a control
+    cell can belong to more than one site.
+    """
+    site_ids = [str(site_id) for site_id in site_ids]
+    cells = pd.concat([treatment_cells, control_cells], ignore_index=True)
+    cells = cells[cells["site_id"].isin(site_ids)].to_crs(epsg=4326)
+    cells["cell_ID"] = cells.groupby("site_id").cumcount()
+    cells["cell_key"] = pd.factorize(cells.geometry.to_wkb())[0]
+    return cells.reset_index(drop=True)
+
+
 def load_site_cells(site_id, site_selector, treatment_cells=None, control_cells=None):
     """Load treatment and control cells for a site and assign sequential cell_IDs.
 

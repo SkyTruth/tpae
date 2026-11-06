@@ -23,55 +23,11 @@ REQUIRED_COLS = COVARIATES + [
 EE_GETINFO_LIMIT = 5000
 
 
-def extract_cells_with_covariates(cells_fc, covariates, ee_crs_1km, n_cells):
+def extract_covariates(cells_fc, covariates, ee_crs_1km):
     """Aggregate covariates within cells and join country / ecoregion / biome.
 
-    n_cells: number of cells in cells_fc.
-    """
-    if n_cells == 0:
-        return cells_fc, pd.DataFrame()
-
-    reduced_chunks = []
-    df_chunks = []
-    for start in range(0, n_cells, EE_GETINFO_LIMIT):
-        chunk = cells_fc.filter(
-            ee.Filter.And(
-                ee.Filter.gte("cell_ID", start),
-                ee.Filter.lt("cell_ID", start + EE_GETINFO_LIMIT),
-            )
-        )
-        n_chunk = min(EE_GETINFO_LIMIT, n_cells - start)
-        reduced, cells_df = _extract_chunk(chunk, covariates, ee_crs_1km, n_chunk)
-        reduced_chunks.append(reduced)
-        if len(cells_df) > 0:
-            df_chunks.append(cells_df)
-
-    cells_fc = ee.FeatureCollection(reduced_chunks).flatten()
-    cells_df = pd.concat(df_chunks, ignore_index=True) if df_chunks else pd.DataFrame()
-
-    if len(cells_df) == 0:
-        return cells_fc, cells_df
-
-    n_before = len(cells_df)
-    n_missing_by_col = cells_df[REQUIRED_COLS].isna().sum()
-    cells_df = cells_df.dropna(subset=REQUIRED_COLS).reset_index(drop=True)
-    n_dropped = n_before - len(cells_df)
-
-    if n_dropped > 0:
-        print(
-            f"⚠ Dropped {n_dropped}/{n_before} cell(s) ({n_dropped / n_before:.1%}) with missing covariate values:"
-        )
-        for col, n_missing in n_missing_by_col.items():
-            if n_missing > 0:
-                print(f"    {col}: {n_missing}")
-
-    return cells_fc, cells_df
-
-
-def _extract_chunk(cells_fc, covariates, ee_crs_1km, n_cells):
-    """Run reduceRegions, spatial joins, and getInfo on one <=5000-feature chunk.
-
-    n_cells: number of cells in the chunk, to count cells dropped by the joins.
+    cells_fc: up to EE_GETINFO_LIMIT cells with a cell_key property. Cells with no
+    matching country or ecoregion are dropped.
     """
     cells_fc = covariates.reduceRegions(
         collection=cells_fc,
@@ -79,10 +35,9 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km, n_cells):
         scale=CELL_SIZE_M,
         crs=ee_crs_1km,
     ).select(
-        "cell_ID",
+        "cell_key",
         *COVARIATES,
         "land_frac",
-        "protected",
     )
 
     centroids = cells_fc.map(lambda cell: ee.Feature(cell).centroid())
@@ -127,16 +82,13 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km, n_cells):
     )
 
     cells_list = centroids.getInfo()["features"]
-    cells_df = pd.DataFrame([feature["properties"] for feature in cells_list])
-    # print(cells_df.head())
+    if not cells_list:
+        return pd.DataFrame({"cell_key": pd.Series(dtype="int64")})
+    return pd.DataFrame([feature["properties"] for feature in cells_list])
 
-    # The joins drop cells with no matching country or ecoregion. Counted here rather
-    # than with size().getInfo(), which recomputes the whole chunk on each call
-    n_dropped = n_cells - len(cells_df)
-    if n_dropped > 0:
-        print(f"Dropped {n_dropped} cell(s) with no matching country or ecoregion.")
 
-    # Drop any cells that are mostly water
+def drop_invalid_cells(cells_df):
+    """Drop cells that are mostly water or are missing covariate values."""
     is_water = ~(cells_df["land_frac"] >= MIN_LAND_FRACTION)
     if is_water.any():
         n_water_treat = (is_water & (cells_df["protected"] == 1)).sum()
@@ -159,4 +111,4 @@ def _extract_chunk(cells_fc, covariates, ee_crs_1km, n_cells):
             if n > 0:
                 print(f"    {col}: {n}")
 
-    return cells_fc, cells_df
+    return cells_df
