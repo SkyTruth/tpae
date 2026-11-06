@@ -15,7 +15,7 @@ import ee
 import pandas as pd
 import geopandas as gpd
 import numpy as np
-from shapely.geometry import box
+import shapely
 from cells.get_control_cells import init_ee
 from utils.variables import (
     PROJECT,
@@ -40,24 +40,25 @@ def draw_grid(site_geom, cell_size_m):
     # Draw a grid from the site's bounding box
     minx, miny, maxx, maxy = site_geom.bounds
 
-    xs = np.arange(minx, maxx, cell_size_m)
-    ys = np.arange(miny, maxy, cell_size_m)
+    xs, ys = np.meshgrid(
+        np.arange(minx, maxx, cell_size_m),
+        np.arange(miny, maxy, cell_size_m),
+        indexing="ij",
+    )
+    xs, ys = xs.ravel(), ys.ravel()
+    cells = shapely.box(xs, ys, xs + cell_size_m, ys + cell_size_m)
 
-    cells = [box(x, y, x + cell_size_m, y + cell_size_m) for x in xs for y in ys]
-    grid = gpd.GeoDataFrame(geometry=cells, crs=GPD_CRS_METERS)
-    grid = grid.drop_duplicates(subset="geometry")
-
-    # Exclude cells that are not fully within the site
+    # Keep cells fully within the site
     site_boundary = site_geom.boundary
+    shapely.prepare(site_geom)
+    shapely.prepare(site_boundary)
+    keep = ~shapely.intersects(site_boundary, cells) & ~shapely.disjoint(
+        site_geom, cells
+    )
 
-    grid["exclude"] = False
-    grid["exclude"] |= grid.geometry.intersects(site_boundary)
-    grid["exclude"] |= grid.geometry.disjoint(site_geom)
-
-    valid_grid = grid[~grid["exclude"]]
-    valid_grid = valid_grid.drop("exclude", axis=1)
-
-    return valid_grid
+    return gpd.GeoDataFrame(
+        geometry=cells[keep], index=np.flatnonzero(keep), crs=GPD_CRS_METERS
+    )
 
 
 def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
