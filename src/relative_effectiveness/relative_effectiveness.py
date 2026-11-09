@@ -154,7 +154,10 @@ def analyze_site(site_id, designation_yr):
         )
 
         # Materialize scores once, so the table join doesn't recompute them
-        scored_gdf = geemap.ee_to_gdf(scored)
+        # (same as geemap.ee_to_gdf, without its extra request for the CRS)
+        scored_gdf = ee.data.computeFeatures(
+            {"expression": scored, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
+        ).set_crs(epsg=4326)
         scored = geemap.geopandas_to_ee(
             scored_gdf[["geometry", "cell_ID", *SCORE_COLS, START_HABITAT_COL]]
         )

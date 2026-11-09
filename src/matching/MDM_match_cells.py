@@ -9,7 +9,7 @@ Reads each site's cell covariates from GCS, so run extract_cell_covariates.py fi
 """
 
 # Save the diagnostics CSV and report card to GCS; otherwise only print the summary
-save_diagnostics = False
+save_diagnostics = True
 # Save each site's match table and matched cells to GCS (matches/<group>/), replacing any saved by an earlier run
 save_match_outputs = True
 # Number of sites matched at once, one process each (None = one per CPU core)
