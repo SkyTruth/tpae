@@ -58,7 +58,12 @@ class HabitatLossAnalyzer:
         habitat_loss_area = self.sum_area_km2(site_geom, habitat_loss_raster)
         habitat_start_area = self.sum_area_km2(site_geom, habitat_start_raster)
         site_area = self.sum_area_km2(site_geom, land_mask)
+        return self.habitat_loss_from_areas(
+            habitat_loss_area, habitat_start_area, site_area
+        )
 
+    def habitat_loss_from_areas(self, habitat_loss_area, habitat_start_area, site_area):
+        """calc_overall_habitat_loss's results from its three areas (km2)."""
         if not habitat_start_area:
             return 0, 0, 0, 0, 0, 0
 
@@ -234,6 +239,23 @@ class HabitatLossAnalyzer:
                 maxPixels=self.max_pixels,
             )
             .get("area")
+            .getInfo()
+        )
+
+    def sum_areas_km2(self, geometry, masks):
+        """Area (km2) within geometry under each mask in masks ({name: mask}), in one request."""
+        area_img = ee.Image.pixelArea().divide(KM2_PER_M2)
+        return (
+            ee.Image.cat(
+                [area_img.updateMask(mask).rename(name) for name, mask in masks.items()]
+            )
+            .reduceRegion(
+                ee.Reducer.sum(),
+                geometry,
+                scale=self.scale_m,
+                crs=self.crs,
+                maxPixels=self.max_pixels,
+            )
             .getInfo()
         )
 

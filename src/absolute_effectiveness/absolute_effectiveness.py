@@ -109,15 +109,47 @@ def analyze_site(site_id, sites):
         HGFC_processed = processor.process_hgfc(START_YR)
         land_mask = processor.get_land_mask()
 
-        # Calculate Habitat Extent score
+        # Build habitat rasters for the end and start years, and habitat loss
         lc_end = condition_analyzer.get_land_cover(
             GLC_processed, GPW_processed, FORTY_processed, ANALYSIS_END_YR
         )
         habitat_binary_end = condition_analyzer.get_habitat_binary_end(
             lc_end, HGFC_processed
         )
-        row["extent"] = condition_analyzer.calc_habitat_extent_score(
-            habitat_binary_end, site_geom, land_mask
+        lc_start = condition_analyzer.get_land_cover(
+            GLC_processed, GPW_processed, FORTY_processed, START_YR
+        )
+        habitat_binary_start = condition_analyzer.get_habitat_binary_start(lc_start)
+        habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
+            habitat_binary_start, habitat_binary_end
+        )
+
+        # Sum the areas for the extent and loss scores in one request
+        areas = loss_analyzer.sum_areas_km2(
+            site_geom,
+            {
+                "habitat_end": habitat_binary_end,
+                "land": land_mask,
+                "loss": habitat_loss_raster,
+                "habitat_start": habitat_binary_start,
+            },
+        )
+
+        # Calculate Habitat Extent score
+        row["extent"] = condition_analyzer.habitat_extent_from_areas(
+            areas["habitat_end"], areas["land"]
+        )
+
+        # Calculate Habitat Loss score
+        (
+            row["loss_area_km2"],
+            habitat_start_area_km2,
+            row["site_land_area_km2"],
+            row["loss_pct_site"],
+            row["loss_pct_habitat"],
+            row["loss"],
+        ) = loss_analyzer.habitat_loss_from_areas(
+            areas["loss"], areas["habitat_start"], areas["land"]
         )
 
         # Build unmasked habitat raster for intactness (water excluded inside kernel, not zeroed)
@@ -144,25 +176,6 @@ def analyze_site(site_id, sites):
         # Calculate overall Habitat Condition score
         row["condition"] = condition_analyzer.calc_habitat_condition_score(
             row["extent"], row["intactness"]
-        )
-
-        # Calculate Habitat Loss score
-        lc_start = condition_analyzer.get_land_cover(
-            GLC_processed, GPW_processed, FORTY_processed, START_YR
-        )
-        habitat_binary_start = condition_analyzer.get_habitat_binary_start(lc_start)
-        habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
-            habitat_binary_start, habitat_binary_end
-        )
-        (
-            row["loss_area_km2"],
-            habitat_start_area_km2,
-            row["site_land_area_km2"],
-            row["loss_pct_site"],
-            row["loss_pct_habitat"],
-            row["loss"],
-        ) = loss_analyzer.calc_overall_habitat_loss(
-            habitat_loss_raster, habitat_binary_start, site_geom, land_mask
         )
 
         # Analyze drivers of habitat loss (all classes; absent drivers are 0)

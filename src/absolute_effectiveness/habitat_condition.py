@@ -141,7 +141,10 @@ class HabitatConditionAnalyzer:
             .get("area")
             .getInfo()
         )
+        return self.habitat_extent_from_areas(habitat_area, site_area)
 
+    def habitat_extent_from_areas(self, habitat_area, site_area):
+        """Habitat Extent score from habitat area and site area (same units)."""
         return min(habitat_area / site_area, 1)
 
     def build_kernel(self):
