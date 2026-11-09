@@ -51,7 +51,23 @@ class SiteSelector:
             .get("STATUS_YR")
             .getInfo()
         )
+        return self.start_yr_from_designation(designation_yr)
+
+    def start_yr_from_designation(self, designation_yr):
+        """Start year for a site designated in designation_yr."""
         return max(self.analysis_start_yr, designation_yr)
+
+    def get_designation_yrs(self, sites):
+        """{site_id: designation year} for all sites, in one request (first feature per site)."""
+        pairs = (
+            sites.reduceColumns(ee.Reducer.toList(2), ["SITE_ID", "STATUS_YR"])
+            .get("list")
+            .getInfo()
+        )
+        designation_yrs = {}
+        for site_id, designation_yr in pairs:
+            designation_yrs.setdefault(int(site_id), designation_yr)
+        return designation_yrs
 
     def check_start_yr(self, start_yr):
         """

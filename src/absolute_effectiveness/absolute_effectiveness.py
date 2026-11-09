@@ -90,12 +90,17 @@ def by_class(results_dict):
     return classes
 
 
-def analyze_site(site_id, sites):
-    """Compute one site's results row; failed steps leave their columns blank."""
+def analyze_site(site_id, sites, designation_yr):
+    """Compute one site's results row; failed steps leave their columns blank.
+
+    designation_yr: from get_designation_yrs (None if the site was not found).
+    """
     row = {"site_id": site_id, "end_year": ANALYSIS_END_YR}
     try:
         # Get site-specific information
-        START_YR = site_selector.set_start_yr(sites, site_id)
+        if designation_yr is None:
+            raise ValueError("Site not found among terrestrial PAs and OECMs")
+        START_YR = site_selector.start_yr_from_designation(designation_yr)
         row["start_year"] = START_YR
         site_geom = site_selector.get_site_geom(sites, site_id)
 
@@ -226,10 +231,13 @@ def analyze_site(site_id, sites):
 
 def main(n_workers=N_WORKERS):
     sites = site_selector.get_sites()
+    designation_yrs = site_selector.get_designation_yrs(sites)
     rows = {}
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
-            executor.submit(analyze_site, site_id, sites): site_id
+            executor.submit(
+                analyze_site, site_id, sites, designation_yrs.get(site_id)
+            ): site_id
             for site_id in SITE_IDS
         }
         for i, future in enumerate(as_completed(futures), start=1):
