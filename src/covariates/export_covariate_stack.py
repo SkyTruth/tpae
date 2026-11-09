@@ -108,7 +108,9 @@ def build_covariate_stack(ee_crs_1km):
 
 def load_covariate_stack(asset_id=COVARIATE_STACK_ASSET_ID):
     """The exported stack, with COVARIATE_STACK_BANDS, on its 1 km grid."""
-    return ee.Image(asset_id).select(COVARIATE_STACK_BANDS)
+    stack = ee.Image(asset_id).select(COVARIATE_STACK_BANDS)
+    # Mask missing pixels, which are stored as NaN
+    return stack.updateMask(stack.eq(stack))
 
 
 def covariate_stack_updated(asset_id=COVARIATE_STACK_ASSET_ID):
