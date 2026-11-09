@@ -612,6 +612,10 @@ CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.par
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
 # MDM_match_cells.py (optional): each site's match table and matched cells
 MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
+# absolute_effectiveness.py: one row of habitat condition and loss results per site
+ABSOLUTE_RESULTS = (
+    f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{SITE_GROUP}.csv"
+)
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging
 EE_DEADLINE_MS = 300_000
 # Number of Earth Engine requests to run at once
