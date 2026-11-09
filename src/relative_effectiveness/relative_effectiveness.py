@@ -135,23 +135,20 @@ def analyze_site(site_id, designation_yr):
             land_mask,
         )
 
-        scored = condition_analyzer.calc_extent_score_per_cell(
-            habitat_binary_end, matched_cells
+        # Build habitat-loss raster
+        habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
+            habitat_binary_start, habitat_binary_end
+        )
+
+        # Score Habitat Extent and Habitat Loss per cell, with the start-habitat
+        # proportion that weights matched pairs' loss differences, in one pass
+        scored = loss_analyzer.calc_area_scores_per_cell(
+            habitat_binary_end, habitat_loss_raster, habitat_binary_start, matched_cells
         )
         scored = condition_analyzer.calc_intactness_score_per_cell(
             intactness_raster, scored
         )
         scored = condition_analyzer.calc_condition_score_per_cell(scored)
-
-        # Build habitat-loss raster and score Habitat Loss per cell
-        habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
-            habitat_binary_start, habitat_binary_end
-        )
-        scored = loss_analyzer.calc_loss_score_per_cell(habitat_loss_raster, scored)
-        # Start-habitat proportion per cell, used to weight matched pairs' loss differences
-        scored = loss_analyzer.calc_start_habitat_proportion_per_cell(
-            habitat_binary_start, scored
-        )
 
         # Download the scores once (same as geemap.ee_to_gdf, without its extra
         # request for the CRS)
