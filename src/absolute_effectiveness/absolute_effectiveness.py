@@ -23,7 +23,6 @@ from utils.variables import (
     SITE_IDS,
     ANALYSIS_END_YR,
     GLC_LABELS,
-    EE_N_WORKERS,
     ABSOLUTE_RESULTS,
 )
 
@@ -44,6 +43,8 @@ DRIVER_COLUMNS = {
     5: "tree_plantations",
 }
 N_HABITATS_LOST = 3
+# Number of sites analyzed at once
+N_WORKERS = 24
 
 COLUMNS = (
     [
@@ -206,7 +207,7 @@ def analyze_site(site_id, sites):
     return row
 
 
-def main(n_workers=EE_N_WORKERS):
+def main(n_workers=N_WORKERS):
     sites = site_selector.get_sites()
     rows = {}
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
