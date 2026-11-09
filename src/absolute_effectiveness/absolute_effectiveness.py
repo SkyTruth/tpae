@@ -124,34 +124,6 @@ def analyze_site(site_id, sites):
             habitat_binary_start, habitat_binary_end
         )
 
-        # Sum the areas for the extent and loss scores in one request
-        areas = loss_analyzer.sum_areas_km2(
-            site_geom,
-            {
-                "habitat_end": habitat_binary_end,
-                "land": land_mask,
-                "loss": habitat_loss_raster,
-                "habitat_start": habitat_binary_start,
-            },
-        )
-
-        # Calculate Habitat Extent score
-        row["extent"] = condition_analyzer.habitat_extent_from_areas(
-            areas["habitat_end"], areas["land"]
-        )
-
-        # Calculate Habitat Loss score
-        (
-            row["loss_area_km2"],
-            habitat_start_area_km2,
-            row["site_land_area_km2"],
-            row["loss_pct_site"],
-            row["loss_pct_habitat"],
-            row["loss"],
-        ) = loss_analyzer.habitat_loss_from_areas(
-            areas["loss"], areas["habitat_start"], areas["land"]
-        )
-
         # Build unmasked habitat raster for intactness (water excluded inside kernel, not zeroed)
         GLC_intactness = processor.process_glc(sites, START_YR, land_masked=False)
         GPW_intactness = processor.process_gpw(START_YR, land_masked=False)
@@ -163,51 +135,83 @@ def analyze_site(site_id, sites):
         habitat_binary_end_intactness = condition_analyzer.get_habitat_binary_end(
             lc_end_intactness, HGFC_intactness
         )
-
-        # Calculate Habitat Intactness score
         exp_kernel = condition_analyzer.build_kernel()
         intactness_raster = condition_analyzer.get_intactness_raster(
             habitat_binary_end_intactness, site_geom, exp_kernel, land_mask
         )
-        row["intactness"] = condition_analyzer.calc_intactness_score(
-            intactness_raster, site_geom
-        )
-
-        # Calculate overall Habitat Condition score
-        row["condition"] = condition_analyzer.calc_habitat_condition_score(
-            row["extent"], row["intactness"]
-        )
-
-        # Analyze drivers of habitat loss (all classes; absent drivers are 0)
-        driver_class = loss_analyzer.get_driver_class_image(lc_end, habitat_loss_raster)
-        drivers = by_class(
-            loss_analyzer.calc_class_area_and_pct(
-                driver_class,
-                site_geom,
-                row["site_land_area_km2"],
-                habitat_start_area_km2,
-                top_n=len(DRIVER_COLUMNS),
-            )
-        )
-        for class_id, driver in DRIVER_COLUMNS.items():
-            metrics = drivers.get(class_id, {})
-            row[f"{driver}_area_km2"] = metrics.get("area", 0)
-            row[f"{driver}_pct_site"] = metrics.get("pct_site", 0)
-            row[f"{driver}_pct_habitat"] = metrics.get("pct_start", 0)
-
-        # Analyze top types of habitat lost, largest first
         habitat_class = loss_analyzer.get_habitat_class_image(
             lc_start, habitat_loss_raster
         )
-        habitats = by_class(
-            loss_analyzer.calc_habitat_class_area_and_pct(
+
+        # Request intactness and habitat types lost alongside the areas and drivers below
+        with ThreadPoolExecutor(max_workers=2) as site_executor:
+            intactness_future = site_executor.submit(
+                condition_analyzer.calc_intactness_score, intactness_raster, site_geom
+            )
+            habitats_future = site_executor.submit(
+                loss_analyzer.calc_habitat_class_area_and_pct,
                 habitat_class,
                 habitat_binary_start,
                 lc_start,
                 site_geom,
                 top_n=N_HABITATS_LOST,
             )
-        )
+
+            # Sum the areas for the extent and loss scores in one request
+            areas = loss_analyzer.sum_areas_km2(
+                site_geom,
+                {
+                    "habitat_end": habitat_binary_end,
+                    "land": land_mask,
+                    "loss": habitat_loss_raster,
+                    "habitat_start": habitat_binary_start,
+                },
+            )
+
+            # Calculate Habitat Extent score
+            row["extent"] = condition_analyzer.habitat_extent_from_areas(
+                areas["habitat_end"], areas["land"]
+            )
+
+            # Calculate Habitat Loss score
+            (
+                row["loss_area_km2"],
+                habitat_start_area_km2,
+                row["site_land_area_km2"],
+                row["loss_pct_site"],
+                row["loss_pct_habitat"],
+                row["loss"],
+            ) = loss_analyzer.habitat_loss_from_areas(
+                areas["loss"], areas["habitat_start"], areas["land"]
+            )
+
+            # Analyze drivers of habitat loss (all classes; absent drivers are 0)
+            driver_class = loss_analyzer.get_driver_class_image(
+                lc_end, habitat_loss_raster
+            )
+            drivers = by_class(
+                loss_analyzer.calc_class_area_and_pct(
+                    driver_class,
+                    site_geom,
+                    row["site_land_area_km2"],
+                    habitat_start_area_km2,
+                    top_n=len(DRIVER_COLUMNS),
+                )
+            )
+            for class_id, driver in DRIVER_COLUMNS.items():
+                metrics = drivers.get(class_id, {})
+                row[f"{driver}_area_km2"] = metrics.get("area", 0)
+                row[f"{driver}_pct_site"] = metrics.get("pct_site", 0)
+                row[f"{driver}_pct_habitat"] = metrics.get("pct_start", 0)
+
+            # Calculate Habitat Intactness and overall Habitat Condition scores
+            row["intactness"] = intactness_future.result()
+            row["condition"] = condition_analyzer.calc_habitat_condition_score(
+                row["extent"], row["intactness"]
+            )
+
+            # Analyze top types of habitat lost, largest first
+            habitats = by_class(habitats_future.result())
         ranked = sorted(
             habitats, key=lambda c: habitats[c].get("area", 0), reverse=True
         )
