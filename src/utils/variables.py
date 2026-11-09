@@ -478,9 +478,9 @@ COVARIATES = [
 ]
 
 # Parameters for MDM
-# GCS prefixes for match diagnostics and report cards, one folder per site group
-MATCH_DIAGNOSTICS_PREFIX = f"match_diagnostics/{SITE_GROUP}/"
-MATCH_REPORT_CARDS_PREFIX = f"match_report_cards/{SITE_GROUP}/"
+# Match diagnostics and report card for the active site group, written by MDM_match_cells.py
+MATCH_DIAGNOSTICS = f"gs://{GCS_BUCKET}/match_diagnostics/diagnostics_{SITE_GROUP}.csv"
+MATCH_REPORT_CARD = f"gs://{GCS_BUCKET}/match_diagnostics/report_card_{SITE_GROUP}.csv"
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:

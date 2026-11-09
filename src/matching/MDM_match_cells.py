@@ -8,9 +8,6 @@ each site's match table and matched cells.
 Reads each site's cell covariates from GCS, so run extract_cell_covariates.py first.
 """
 
-# If modifying parameters, change run_id so results are not overwritten.
-# Provides a unique identifier for the experiment so we know which changes caused which results.
-run_id = "v3.1_holdout_set"
 # Save the diagnostics CSV and report card to GCS; otherwise only print the summary
 save_diagnostics = False
 # Save each site's match table and matched cells to GCS (matches/<group>/), replacing any saved by an earlier run
@@ -38,8 +35,8 @@ sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 from utils.variables import (
     SITE_IDS,
     GCS_BUCKET,
-    MATCH_DIAGNOSTICS_PREFIX,
-    MATCH_REPORT_CARDS_PREFIX,
+    MATCH_DIAGNOSTICS,
+    MATCH_REPORT_CARD,
     MATCHES_PREFIX,
     TREATMENT_CELLS,
     CONTROL_CELLS,
@@ -56,10 +53,6 @@ from matching.diagnostics import (
     save_report_card,
 )
 
-diagnostics_path = f"gs://{GCS_BUCKET}/{MATCH_DIAGNOSTICS_PREFIX}{run_id}.csv"
-report_card_path = (
-    f"gs://{GCS_BUCKET}/{MATCH_REPORT_CARDS_PREFIX}{run_id}_report_card.csv"
-)
 matches_folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
 
 
@@ -117,12 +110,12 @@ def main():
             # Rewrite the CSV after every site, so a stalled run keeps its results so far
             if save_diagnostics:
                 done = [rows[s] for s in SITE_IDS if s in rows]
-                save_experiment_diagnostics(done, diagnostics_path)
+                save_experiment_diagnostics(done, MATCH_DIAGNOSTICS)
 
     site_rows = [rows[site_id] for site_id in SITE_IDS]
     results_df = pd.DataFrame(site_rows).reindex(columns=DIAGNOSTIC_COLUMNS)
     if save_diagnostics:
-        card = save_report_card(results_df, report_card_path)
+        card = save_report_card(results_df, MATCH_REPORT_CARD)
     else:
         card = build_report_card(results_df)
     tiers = card["assessable"].value_counts()
@@ -136,7 +129,7 @@ def main():
         f"  Mean covariates balanced: {results_df['n_covariates_balanced'].mean():.1f} / 7"
     )
     if save_diagnostics:
-        print(f"\nSaved to {diagnostics_path} and {report_card_path}")
+        print(f"\nSaved to {MATCH_DIAGNOSTICS} and {MATCH_REPORT_CARD}")
     else:
         print("\nDiagnostics not saved (save_diagnostics = False)")
     if save_match_outputs:
