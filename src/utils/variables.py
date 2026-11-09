@@ -616,6 +616,10 @@ MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
 ABSOLUTE_RESULTS = (
     f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{SITE_GROUP}.csv"
 )
+# relative_effectiveness.py: one row of relative scores per site
+RELATIVE_RESULTS = (
+    f"gs://{GCS_BUCKET}/relative_results/relative_results_{SITE_GROUP}.csv"
+)
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging
 EE_DEADLINE_MS = 300_000
 # Number of Earth Engine requests to run at once
