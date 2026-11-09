@@ -36,8 +36,9 @@ def build_match_df_with_score_diffs(scored, match_table: pd.DataFrame) -> pd.Dat
     """Join per-cell scores to the match table and compute pairwise treatment–control differences.
 
     Also adds pair_habitat_weight, the lower of the two cells' start-habitat proportions.
+    scored: an ee.FeatureCollection or an already downloaded (Geo)DataFrame.
     """
-    score_gdf = geemap.ee_to_gdf(scored)
+    score_gdf = scored if isinstance(scored, pd.DataFrame) else geemap.ee_to_gdf(scored)
     cell_cols = SCORE_COLS + [START_HABITAT_COL]
     scores = score_gdf[["cell_ID"] + cell_cols].drop_duplicates("cell_ID").copy()
     scores["cell_ID"] = scores["cell_ID"].astype(int)

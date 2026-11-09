@@ -153,17 +153,17 @@ def analyze_site(site_id, designation_yr):
             habitat_binary_start, scored
         )
 
-        # Materialize scores once, so the table join doesn't recompute them
-        # (same as geemap.ee_to_gdf, without its extra request for the CRS)
+        # Download the scores once (same as geemap.ee_to_gdf, without its extra
+        # request for the CRS)
         scored_gdf = ee.data.computeFeatures(
             {"expression": scored, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
         ).set_crs(epsg=4326)
-        scored = geemap.geopandas_to_ee(
-            scored_gdf[["geometry", "cell_ID", *SCORE_COLS, START_HABITAT_COL]]
-        )
 
         # Calculate relative effectiveness, unadjusted and regression adjusted
-        match_df = build_match_df_with_score_diffs(scored, match_table)
+        match_df = build_match_df_with_score_diffs(
+            scored_gdf[["geometry", "cell_ID", *SCORE_COLS, START_HABITAT_COL]],
+            match_table,
+        )
         # Covariates for each matched cell come from the saved matched cells
         match_df = regression_adjust_score_diffs(match_df, matched_cells_gdf)
         row["regression_adjusted"] = match_df.attrs["regression_adjusted"]
