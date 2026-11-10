@@ -107,7 +107,7 @@ def analyze_site(site_id, sites, designation_yr):
         # Check if site designation year is valid for analysis
         site_selector.check_start_yr(START_YR)
 
-        # Process land-masked input datasets
+        # Process input datasets
         GLC_processed = processor.process_glc(sites, START_YR)
         GPW_processed = processor.process_gpw(START_YR)
         FORTY_processed = processor.process_forty(sites, START_YR)
@@ -129,20 +129,10 @@ def analyze_site(site_id, sites, designation_yr):
             habitat_binary_start, habitat_binary_end
         )
 
-        # Build unmasked habitat raster for intactness (water excluded inside kernel, not zeroed)
-        GLC_intactness = processor.process_glc(sites, START_YR, land_masked=False)
-        GPW_intactness = processor.process_gpw(START_YR, land_masked=False)
-        FORTY_intactness = processor.process_forty(sites, START_YR, land_masked=False)
-        HGFC_intactness = processor.process_hgfc(START_YR, land_masked=False)
-        lc_end_intactness = condition_analyzer.get_land_cover(
-            GLC_intactness, GPW_intactness, FORTY_intactness, ANALYSIS_END_YR
-        )
-        habitat_binary_end_intactness = condition_analyzer.get_habitat_binary_end(
-            lc_end_intactness, HGFC_intactness
-        )
+        # Build intactness raster
         exp_kernel = condition_analyzer.build_kernel()
         intactness_raster = condition_analyzer.get_intactness_raster(
-            habitat_binary_end_intactness, site_geom, exp_kernel, land_mask
+            habitat_binary_end, site_geom, exp_kernel, land_mask
         )
         habitat_class = loss_analyzer.get_habitat_class_image(
             lc_start, habitat_loss_raster

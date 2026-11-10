@@ -183,25 +183,33 @@ class HabitatConditionAnalyzer:
         """
         Create continuous habitat intactness raster.
 
-        Uses a three-class kernel input:
-          1 — habitat pixels
-          0 — anthropogenic / non-habitat on land (penalize adjacent habitat)
-          masked — permanent water and ocean (excluded from kernel entirely)
+        Intactness = kernel-weighted habitat / kernel-weighted land, so water and
+        ocean within the kernel are excluded rather than counted as non-habitat:
+          I(p) = Σ_land w·habitat / Σ_land w
         """
-        # 1=habitat, 0=anthro on land, null=water (masked out of kernel)
-        habitat_binary = (
-            ee.Image(0).where(habitat_raster.gt(0), 1).updateMask(land_mask).toFloat()
+        # Habitat on land and land, both 1/0 (water and no data are 0 in both)
+        kernel_input = (
+            ee.Image.cat(
+                [
+                    habitat_raster.gt(0).And(land_mask).rename("habitat"),
+                    land_mask.rename("land"),
+                ]
+            )
+            .unmask(0)
+            .toFloat()
         )
-        habitat_binary_reproj = habitat_binary.reproject(
+        kernel_input_reproj = kernel_input.reproject(
             crs=self.crs,
             scale=self.scale_m,
         )
-        habitat_binary_clipped = habitat_binary_reproj.clip(
+        kernel_input_clipped = kernel_input_reproj.clip(
             site_geom.buffer(self.kernel_radius_m)
         )
+        weighted = kernel_input_clipped.convolve(exp_kernel)
         habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
-            habitat_binary_clipped.convolve(exp_kernel)
+            weighted.select("habitat")
+            .divide(weighted.select("land"))
             .rename("intactness")
             .updateMask(habitat_output_mask)
         )

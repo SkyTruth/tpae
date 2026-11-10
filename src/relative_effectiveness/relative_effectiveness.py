@@ -116,25 +116,10 @@ def analyze_site(site_id, designation_yr):
         )
         habitat_binary_start = condition_analyzer.get_habitat_binary_start(lc_start)
 
-        # Build unmasked habitat raster for intactness (water excluded inside kernel, not zeroed)
-        GLC_intactness = processor.process_glc(
-            matched_cells, START_YR, land_masked=False
-        )
-        GPW_intactness = processor.process_gpw(START_YR, land_masked=False)
-        FORTY_intactness = processor.process_forty(
-            matched_cells, START_YR, land_masked=False
-        )
-        HGFC_intactness = processor.process_hgfc(START_YR, land_masked=False)
-        lc_end_intactness = condition_analyzer.get_land_cover(
-            GLC_intactness, GPW_intactness, FORTY_intactness, ANALYSIS_END_YR
-        )
-        habitat_binary_end_intactness = condition_analyzer.get_habitat_binary_end(
-            lc_end_intactness, HGFC_intactness
-        )
-
+        # Build intactness raster
         exp_kernel = condition_analyzer.build_kernel()
         intactness_raster = condition_analyzer.get_intactness_raster(
-            habitat_binary_end_intactness,
+            habitat_binary_end,
             matched_cells.geometry(),
             exp_kernel,
             land_mask,
