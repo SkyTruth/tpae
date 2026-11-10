@@ -11,6 +11,7 @@ Sites that fail keep the columns computed before the failure, with the reason in
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import sys
+import threading
 
 _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
@@ -45,6 +46,9 @@ DRIVER_COLUMNS = {
 N_HABITATS_LOST = 3
 # Number of sites analyzed at once
 N_WORKERS = 24
+# Earth Engine requests in flight at once, under the project limit of 40
+MAX_EE_REQUESTS = 36
+EE_REQUESTS = threading.BoundedSemaphore(MAX_EE_REQUESTS)
 
 COLUMNS = (
     [
@@ -88,6 +92,12 @@ def by_class(results_dict):
             class_id, metric = parsed
             classes.setdefault(class_id, {})[metric] = value
     return classes
+
+
+def ee_request(fn, *args, **kwargs):
+    """Call fn (one Earth Engine request) once a request slot is free."""
+    with EE_REQUESTS:
+        return fn(*args, **kwargs)
 
 
 def analyze_site(site_id, sites, designation_yr):
@@ -141,9 +151,13 @@ def analyze_site(site_id, sites, designation_yr):
         # Request intactness and habitat types lost alongside the areas and drivers below
         with ThreadPoolExecutor(max_workers=2) as site_executor:
             intactness_future = site_executor.submit(
-                condition_analyzer.calc_intactness_score, intactness_raster, site_geom
+                ee_request,
+                condition_analyzer.calc_intactness_score,
+                intactness_raster,
+                site_geom,
             )
             habitats_future = site_executor.submit(
+                ee_request,
                 loss_analyzer.calc_habitat_class_area_and_pct,
                 habitat_class,
                 habitat_binary_start,
@@ -153,7 +167,8 @@ def analyze_site(site_id, sites, designation_yr):
             )
 
             # Sum the areas for the extent and loss scores in one request
-            areas = loss_analyzer.sum_areas_km2(
+            areas = ee_request(
+                loss_analyzer.sum_areas_km2,
                 site_geom,
                 {
                     "habitat_end": habitat_binary_end,
@@ -185,7 +200,8 @@ def analyze_site(site_id, sites, designation_yr):
                 lc_end, habitat_loss_raster
             )
             drivers = by_class(
-                loss_analyzer.calc_class_area_and_pct(
+                ee_request(
+                    loss_analyzer.calc_class_area_and_pct,
                     driver_class,
                     site_geom,
                     row["site_land_area_km2"],
