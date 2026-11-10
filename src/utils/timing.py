@@ -13,6 +13,7 @@ Usage (from the repo root):
     poetry run python src/utils/timing.py src/covariates/extract_cell_covariates.py --overwrite
     poetry run python src/utils/timing.py src/matching/MDM_match_cells.py
     poetry run python src/utils/timing.py src/absolute_effectiveness/absolute_effectiveness.py
+    poetry run python src/utils/timing.py src/relative_effectiveness/relative_effectiveness.py
     poetry run python src/utils/timing.py --fill-eecu   # ~10 minutes after a run
     poetry run python src/utils/timing.py --show
 

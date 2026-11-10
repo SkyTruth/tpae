@@ -79,13 +79,18 @@ def analyze_site(site_id, designation_yr):
         # Check if site designation year is valid for analysis
         site_selector.check_start_yr(START_YR)
 
-        # Load matched_cells (saved match outputs in GCS)
+        # Load matched_cells and the match table (saved match outputs in GCS), both at once
         match_table_path, matched_cells_path = match_output_paths(site_id)
         try:
-            matched_cells_gdf = gpd.read_parquet(matched_cells_path).to_crs(epsg=4326)
-            match_table = pd.read_parquet(match_table_path).astype(
-                {"treat_cell_id": int, "control_cell_id": int}
-            )
+            with ThreadPoolExecutor(max_workers=2) as read_executor:
+                cells_future = read_executor.submit(
+                    gpd.read_parquet, matched_cells_path
+                )
+                table_future = read_executor.submit(pd.read_parquet, match_table_path)
+                matched_cells_gdf = cells_future.result().to_crs(epsg=4326)
+                match_table = table_future.result().astype(
+                    {"treat_cell_id": int, "control_cell_id": int}
+                )
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"No match outputs at {matched_cells_path}; run MDM_match_cells.py "
