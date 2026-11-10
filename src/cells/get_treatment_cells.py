@@ -65,13 +65,11 @@ def draw_grid(site_geom, cell_size_m):
 
 def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
     """
-    Calculate treatment sample size so the site's treatment-cell mean has a standard
-    error of se_target standard deviations.
+    Calculate treatment sample size using the Yamane formula.
     """
     if n_land_cells <= 0:
         return 0
-    n0 = 1 / se_target**2
-    return int(np.ceil(n0 / (1 + n0 / n_land_cells)))
+    return int(np.ceil(n_land_cells / (1 + n_land_cells * se_target**2)))
 
 
 def get_land_fraction(site_geom_4326):
