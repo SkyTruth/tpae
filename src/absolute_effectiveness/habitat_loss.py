@@ -259,6 +259,33 @@ class HabitatLossAnalyzer:
             .getInfo()
         )
 
+    def sum_areas_by_group_km2(self, geometry, masks, group_image):
+        """Area (km2) under each 0/1 mask in masks ({name: mask}) per value of the
+        integer group_image, in one request: {group: {name: area}}.
+
+        Masked pixels count as 0 in masks and as group 0.
+        """
+        names = list(masks)
+        area_img = ee.Image.pixelArea().divide(KM2_PER_M2)
+        image = ee.Image.cat(
+            [area_img.multiply(masks[name].unmask(0)).rename(name) for name in names]
+            + [group_image.unmask(0).int().rename("group")]
+        )
+        groups = (
+            image.reduceRegion(
+                ee.Reducer.sum()
+                .repeat(len(names))
+                .group(groupField=len(names), groupName="group"),
+                geometry,
+                scale=self.scale_m,
+                crs=self.crs,
+                maxPixels=self.max_pixels,
+            )
+            .get("groups")
+            .getInfo()
+        )
+        return {int(g["group"]): dict(zip(names, g["sum"])) for g in groups}
+
     def calc_class_area_dict(self, class_image, site_geom):
         """Calculate area (km2) for each class in a classified image."""
         class_name = class_image.bandNames().get(0)

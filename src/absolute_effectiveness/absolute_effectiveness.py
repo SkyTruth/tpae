@@ -30,7 +30,7 @@ from utils.variables import (
 from sites.site_selector import SiteSelector
 from absolute_effectiveness.data_processor import DataProcessor
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer
-from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer, parse_result_key
+from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
 
 # After the imports, since habitat_loss.py initializes without a project
 ee.Initialize(project=PROJECT)
@@ -44,6 +44,8 @@ DRIVER_COLUMNS = {
     5: "tree_plantations",
 }
 N_HABITATS_LOST = 3
+# Multiplier packing start land cover class and driver class into one group code
+GROUP_BASE = 10
 # Number of sites analyzed at once
 N_WORKERS = 24
 # Earth Engine requests in flight at once, under the project limit of 40
@@ -81,17 +83,6 @@ site_selector = SiteSelector()
 processor = DataProcessor.from_gee_defaults()
 condition_analyzer = HabitatConditionAnalyzer()
 loss_analyzer = HabitatLossAnalyzer()
-
-
-def by_class(results_dict):
-    """{class_id: {metric: value}} from a calc_*_area_and_pct result."""
-    classes = {}
-    for key, value in results_dict.items():
-        parsed = parse_result_key(key)
-        if parsed is not None:
-            class_id, metric = parsed
-            classes.setdefault(class_id, {})[metric] = value
-    return classes
 
 
 def ee_request(fn, *args, **kwargs):
@@ -144,31 +135,24 @@ def analyze_site(site_id, sites, designation_yr):
         intactness_raster = condition_analyzer.get_intactness_raster(
             habitat_binary_end, site_geom, exp_kernel, land_mask
         )
-        habitat_class = loss_analyzer.get_habitat_class_image(
-            lc_start, habitat_loss_raster
+        driver_class = loss_analyzer.get_driver_class_image(lc_end, habitat_loss_raster)
+        # Group code: (start land cover class + 1) * GROUP_BASE + driver class
+        group_image = (
+            lc_start.add(1).unmask(0).multiply(GROUP_BASE).add(driver_class.unmask(0))
         )
 
-        # Request intactness and habitat types lost alongside the areas and drivers below
-        with ThreadPoolExecutor(max_workers=2) as site_executor:
+        # Request intactness alongside the areas below
+        with ThreadPoolExecutor(max_workers=1) as site_executor:
             intactness_future = site_executor.submit(
                 ee_request,
                 condition_analyzer.calc_intactness_score,
                 intactness_raster,
                 site_geom,
             )
-            habitats_future = site_executor.submit(
-                ee_request,
-                loss_analyzer.calc_habitat_class_area_and_pct,
-                habitat_class,
-                habitat_binary_start,
-                lc_start,
-                site_geom,
-                top_n=N_HABITATS_LOST,
-            )
 
-            # Sum the areas for the extent and loss scores in one request
-            areas = ee_request(
-                loss_analyzer.sum_areas_km2,
+            # Sum areas for extent, loss, drivers and habitat types lost in one request
+            groups = ee_request(
+                loss_analyzer.sum_areas_by_group_km2,
                 site_geom,
                 {
                     "habitat_end": habitat_binary_end,
@@ -176,7 +160,23 @@ def analyze_site(site_id, sites, designation_yr):
                     "loss": habitat_loss_raster,
                     "habitat_start": habitat_binary_start,
                 },
+                group_image,
             )
+            areas = {
+                name: sum(group[name] for group in groups.values())
+                for name in ("habitat_end", "land", "loss", "habitat_start")
+            }
+            driver_areas, lost_areas, start_areas = {}, {}, {}
+            for code, group in groups.items():
+                start_class, driver = divmod(code, GROUP_BASE)
+                if driver:
+                    driver_areas[driver] = driver_areas.get(driver, 0) + group["loss"]
+                if start_class:
+                    lc_class = start_class - 1
+                    lost_areas[lc_class] = lost_areas.get(lc_class, 0) + group["loss"]
+                    start_areas[lc_class] = (
+                        start_areas.get(lc_class, 0) + group["habitat_start"]
+                    )
 
             # Calculate Habitat Extent score
             row["extent"] = condition_analyzer.habitat_extent_from_areas(
@@ -195,41 +195,37 @@ def analyze_site(site_id, sites, designation_yr):
                 areas["loss"], areas["habitat_start"], areas["land"]
             )
 
-            # Analyze drivers of habitat loss (all classes; absent drivers are 0)
-            driver_class = loss_analyzer.get_driver_class_image(
-                lc_end, habitat_loss_raster
-            )
-            drivers = by_class(
-                ee_request(
-                    loss_analyzer.calc_class_area_and_pct,
-                    driver_class,
-                    site_geom,
-                    row["site_land_area_km2"],
-                    habitat_start_area_km2,
-                    top_n=len(DRIVER_COLUMNS),
-                )
-            )
+            # Analyze drivers of habitat loss (absent drivers are 0)
             for class_id, driver in DRIVER_COLUMNS.items():
-                metrics = drivers.get(class_id, {})
-                row[f"{driver}_area_km2"] = metrics.get("area", 0)
-                row[f"{driver}_pct_site"] = metrics.get("pct_site", 0)
-                row[f"{driver}_pct_habitat"] = metrics.get("pct_start", 0)
+                area = driver_areas.get(class_id, 0) if habitat_start_area_km2 else 0
+                row[f"{driver}_area_km2"] = area
+                row[f"{driver}_pct_site"] = (
+                    area / row["site_land_area_km2"] * 100 if area else 0
+                )
+                row[f"{driver}_pct_habitat"] = (
+                    area / habitat_start_area_km2 * 100 if area else 0
+                )
+
+            # Analyze top types of habitat lost, largest first
+            ranked = sorted(
+                (c for c, area in lost_areas.items() if area > 0),
+                key=lambda c: lost_areas[c],
+                reverse=True,
+            )[:N_HABITATS_LOST]
+            for i, class_id in enumerate(ranked, start=1):
+                row[f"habitat_lost_{i}"] = GLC_LABELS.get(class_id, f"Class {class_id}")
+                row[f"habitat_lost_{i}_area_km2"] = lost_areas[class_id]
+                row[f"habitat_lost_{i}_pct_start"] = (
+                    lost_areas[class_id] / start_areas[class_id] * 100
+                    if start_areas[class_id] > 0
+                    else 0
+                )
 
             # Calculate Habitat Intactness and overall Habitat Condition scores
             row["intactness"] = intactness_future.result()
             row["condition"] = condition_analyzer.calc_habitat_condition_score(
                 row["extent"], row["intactness"]
             )
-
-            # Analyze top types of habitat lost, largest first
-            habitats = by_class(habitats_future.result())
-        ranked = sorted(
-            habitats, key=lambda c: habitats[c].get("area", 0), reverse=True
-        )
-        for i, class_id in enumerate(ranked, start=1):
-            row[f"habitat_lost_{i}"] = GLC_LABELS.get(class_id, f"Class {class_id}")
-            row[f"habitat_lost_{i}_area_km2"] = habitats[class_id].get("area")
-            row[f"habitat_lost_{i}_pct_start"] = habitats[class_id].get("pct_class")
     except Exception as exc:
         row["error"] = str(exc)
     return row
