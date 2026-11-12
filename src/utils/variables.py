@@ -569,6 +569,13 @@ REPORT_CARD_COLUMNS = [
 # standard error of the site's treatment-cell mean, in units of that site's standard deviation
 TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large sites
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
+# Sites are dropped with fewer than this many land treatment cells available, kept after
+# covariate extraction, or matched
+MIN_TREATMENT_CELLS = 100
+# Expected share of sampled treatment cells that are matched, used to raise small sites'
+# sample size so they can still reach MIN_TREATMENT_CELLS matched cells
+EXPECTED_MATCH_COVERAGE = 0.75
+TREATMENT_SAMPLE_FLOOR = math.ceil(MIN_TREATMENT_CELLS / EXPECTED_MATCH_COVERAGE)
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER_M = 10_000  # minimum distance (m) from site
@@ -601,6 +608,9 @@ REPO_DATA_DIR = "data/"
 SITE_GEOMS_PREFIX = "site_geoms/"  # stored in the GCS bucket
 SITE_GEOMS = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.parquet"
 SITE_GEOMS_META = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.json"
+# Sites dropped for too few treatment cells, with the step and reason, written by
+# get_treatment_cells.py and MDM_match_cells.py
+DROPPED_SITES = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}dropped_sites_{SITE_GROUP}.csv"
 
 # Outputs:
 # ----------

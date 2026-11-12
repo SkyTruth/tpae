@@ -410,8 +410,11 @@ def classify_site(row):
     return "Yes", "meets all criteria"
 
 
-def build_report_card(results_df):
-    """One row per site with the key validity diagnostics and an assessable tier."""
+def build_report_card(results_df, dropped=None):
+    """One row per site with the key validity diagnostics and an assessable tier.
+
+    dropped: {site_id: reason} of sites dropped from the analysis, which are "No".
+    """
     card = results_df.copy()
     abs_smds = card[ABS_SMD_AFTER_COLS].astype(float)
     card["max_abs_smd_after"] = abs_smds.max(axis=1)
@@ -421,6 +424,9 @@ def build_report_card(results_df):
     ]
     tiers = card.apply(classify_site, axis=1, result_type="expand")
     card["assessable"], card["reason"] = tiers[0], tiers[1]
+    for site_id, reason in (dropped or {}).items():
+        is_site = card["site_id"].astype(str) == str(site_id)
+        card.loc[is_site, ["assessable", "reason"]] = ["No", f"dropped: {reason}"]
     # Nullable integers so counts print as whole numbers even when some sites are empty
     for col in ("n_matched_treat", "n_covariates_balanced"):
         card[col] = card[col].round().astype("Int64")
@@ -430,11 +436,11 @@ def build_report_card(results_df):
     return card[REPORT_CARD_COLUMNS].round(3)
 
 
-def save_report_card(results_df, output_path):
+def save_report_card(results_df, output_path, dropped=None):
     """Write the report card CSV (local or gs:// path) and print the tier counts."""
     if "://" not in output_path:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    card = build_report_card(results_df)
+    card = build_report_card(results_df, dropped)
     card.to_csv(output_path, index=False)
     counts = card["assessable"].value_counts()
     print(

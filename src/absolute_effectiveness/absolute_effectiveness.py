@@ -8,6 +8,8 @@ n_workers sites at a time, and writes one row per site to a CSV in GCS
 Transient Earth Engine errors are retried. Sites that still fail keep the columns
 computed before the failure, with the reason in error. Use --retry-failed to re-run
 only the sites that failed (or are missing) in the saved CSV.
+Sites dropped for too few treatment cells (DROPPED_SITES, written by
+get_treatment_cells.py and MDM_match_cells.py) are not analyzed; their error says why.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,8 +29,10 @@ from utils.variables import (
     ANALYSIS_END_YR,
     GLC_LABELS,
     ABSOLUTE_RESULTS,
+    DROPPED_SITES,
 )
 
+from sites.dropped_sites import load_dropped
 from sites.site_selector import ee_geometry, load_sites
 from utils.retries import (
     has_error,
@@ -241,6 +245,16 @@ def main(n_workers=N_WORKERS, retry_failed=False):
     sites = load_sites()
     site_ids = [int(site_id) for site_id in sites["site_id"]]
     rows = load_succeeded_rows(ABSOLUTE_RESULTS, site_ids) if retry_failed else {}
+    # Sites dropped for too few treatment cells are not analyzed
+    dropped = load_dropped()
+    for site_id, start_yr in zip(site_ids, sites["start_yr"]):
+        if site_id in dropped:
+            rows[site_id] = {
+                "site_id": site_id,
+                "start_year": int(start_yr),
+                "end_year": ANALYSIS_END_YR,
+                "error": f"dropped: {dropped[site_id]}",
+            }
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
             executor.submit(analyze_site, site_id, int(start_yr), geometry): site_id
@@ -262,9 +276,17 @@ def main(n_workers=N_WORKERS, retry_failed=False):
                 ABSOLUTE_RESULTS, index=False
             )
 
+    done = [rows[s] for s in site_ids if s in rows]
+    pd.DataFrame(done).reindex(columns=COLUMNS).to_csv(ABSOLUTE_RESULTS, index=False)
     print(f"\nSaved {len(rows)} sites to {ABSOLUTE_RESULTS}")
-    errors = {s: rows[s]["error"] for s in site_ids if s in rows and has_error(rows[s])}
-    report_failures(errors, len(rows))
+    n_dropped = sum(site_id in dropped for site_id in site_ids)
+    print(f"{n_dropped} site(s) dropped for too few treatment cells ({DROPPED_SITES})")
+    errors = {
+        s: rows[s]["error"]
+        for s in site_ids
+        if s in rows and has_error(rows[s]) and s not in dropped
+    }
+    report_failures(errors, len(rows) - n_dropped)
 
 
 if __name__ == "__main__":

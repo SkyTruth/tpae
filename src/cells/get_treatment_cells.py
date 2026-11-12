@@ -3,6 +3,8 @@ Creates a set of treatment cells for each site.
 Treatment cells are 1km x 1km cells that are fully within the site's geometry.
 Each site gets a simple random sample of its grid of valid interior cells
 Sample size is calculated dynamically so that every site's treatment-cell mean has the same standard error.
+Sites with fewer than MIN_TREATMENT_CELLS land cells are dropped (recorded in
+DROPPED_SITES), and small sites' samples are raised to TREATMENT_SAMPLE_FLOOR cells.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -31,8 +33,11 @@ from utils.variables import (
     CELL_SIZE_M,
     RAND_SEED,
     TREATMENT_SE_TARGET,
+    MIN_TREATMENT_CELLS,
+    TREATMENT_SAMPLE_FLOOR,
     EE_N_WORKERS,
 )
+from sites.dropped_sites import record_dropped
 from utils.retries import report_failures, with_retries
 
 
@@ -64,13 +69,17 @@ def draw_grid(site_geom, cell_size_m):
     )
 
 
-def calc_n_treatment(n_land_cells, se_target=TREATMENT_SE_TARGET):
+def calc_n_treatment(
+    n_land_cells, se_target=TREATMENT_SE_TARGET, floor=TREATMENT_SAMPLE_FLOOR
+):
     """
-    Calculate treatment sample size using the Yamane formula.
+    Calculate treatment sample size using the Yamane formula, raised to floor (or to
+    every cell, if there are fewer than floor).
     """
     if n_land_cells <= 0:
         return 0
-    return int(np.ceil(n_land_cells / (1 + n_land_cells * se_target**2)))
+    n = int(np.ceil(n_land_cells / (1 + n_land_cells * se_target**2)))
+    return max(n, min(floor, int(np.ceil(n_land_cells))))
 
 
 def get_land_fraction(site_geom_4326):
@@ -122,7 +131,7 @@ def get_treatment_cells(
     all_cells = []
 
     # Iterate through sites and get a set of valid treatment cells for each
-    failed = {}
+    failed, dropped = {}, {}
     for (_, row), land_frac in zip(sites_gdf.iterrows(), land_fracs):
         site_geom = row.geometry
         site_id = str(row["site_id"])
@@ -130,9 +139,18 @@ def get_treatment_cells(
             if isinstance(land_frac, Exception):
                 raise land_frac
             cells = draw_grid(site_geom, CELL_SIZE_M)
+            # Drop sites with too few land cells
+            n_land_cells = len(cells) * land_frac
+            if n_land_cells < MIN_TREATMENT_CELLS:
+                dropped[site_id] = (
+                    f"fewer than {MIN_TREATMENT_CELLS} land treatment cells available "
+                    f"({n_land_cells:.0f})"
+                )
+                print(f"Dropped site {site_id}: {dropped[site_id]}")
+                continue
             # Size the sample on land cells; water cells are dropped at extraction,
             # so draw extra to keep ~n_target land cells
-            n_target = calc_n_treatment(len(cells) * land_frac)
+            n_target = calc_n_treatment(n_land_cells)
             n_draw = int(np.ceil(n_target / land_frac)) if land_frac > 0 else 0
             if len(cells) > n_draw:
                 cells = cells.sample(n=n_draw, random_state=RAND_SEED)
@@ -143,14 +161,9 @@ def get_treatment_cells(
         # Add attributes to cells
         cells["site_id"] = site_id
         cells["protected"] = 1
-        # Warning for sites with few or 0 valid cells
-        if len(cells) < 50 and len(cells) > 0:
-            print(f"Warning: site {site_id}: only {len(cells)} valid cells")
-        if len(cells) == 0:
-            print(f"Warning: site {site_id}: no valid cells")
-            continue
         all_cells.append(cells)
 
+    record_dropped("treatment_cells", dropped)
     report_failures(failed, len(sites_gdf))
     if failed:
         print("Re-run to retry them")
