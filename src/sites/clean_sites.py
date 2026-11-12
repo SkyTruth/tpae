@@ -1,17 +1,17 @@
 """
-Select the active site group (SITE_GROUPS[SITE_GROUP]) from the latest WDPA and WDOECM
-feature collections in Earth Engine, clean their geometries, and save them to SITE_GEOMS
-(GeoParquet in GCS), with a summary of the run in SITE_GEOMS_META (JSON).
+Select the active site group (SITE_GROUPS[SITE_GROUP]) from the latest WDPA feature
+collection in Earth Engine (PAs only), clean their geometries, and save them to
+SITE_GEOMS (GeoParquet in GCS), with a summary of the run in SITE_GEOMS_META (JSON).
 
 A group is either a list of SITE_IDs or a list of (column, operator, value) filters,
 all of which a site must pass. Filters on WDPA attributes (e.g. PRNT_ISO3, STATUS) are
 applied to each feature in Earth Engine, and a site is selected if any of its features
-pass; filters on SITE_COLUMNS are applied to each cleaned site. Only terrestrial
-features are used.
+pass; filters on SITE_COLUMNS are applied to each cleaned site. Only features in
+SITE_REALMS (Terrestrial and Coastal) are used.
 
-Cleaning keeps one copy of each feature found in both collections, keeps only
-polygonal parts, repairs invalid geometries, renames SITE_ID to site_id, dissolves
-multi-part sites into one row per site, and simplifies boundaries by SITE_SIMPLIFY_M.
+Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
+site_id, dissolves multi-part sites into one row per site, and simplifies boundaries by
+SITE_SIMPLIFY_M.
 Sites designated too recently to analyze, or with no designation year, are left out.
 """
 
@@ -30,16 +30,15 @@ from shapely import make_valid
 from shapely.ops import unary_union
 
 from cells.get_control_cells import init_ee
-from sites.site_selector import all_wdpa_sites
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
-    OECMS_ASSET_ID,
     SITE_GROUP,
     SITE_GROUPS,
     SITE_GEOMS,
     SITE_GEOMS_META,
     SITE_SIMPLIFY_M,
+    SITE_REALMS,
     ANALYSIS_START_YR,
     ANALYSIS_END_YR,
     GPD_CRS_METERS,
@@ -88,44 +87,26 @@ def split_filters(filters):
 
 
 def select_site_ids(ee_filters):
-    """SITE_IDs (server side) with a terrestrial feature passing every filter."""
-    features = all_wdpa_sites().filter(ee.Filter.eq("REALM", "Terrestrial"))
+    """SITE_IDs (server side) with a feature in SITE_REALMS passing every filter."""
+    features = ee.FeatureCollection(PAS_ASSET_ID).filter(
+        ee.Filter.inList("REALM", SITE_REALMS)
+    )
     for col, op, value in ee_filters:
         features = features.filter(EE_FILTERS[op](col, value))
     return features.aggregate_array("SITE_ID").distinct()
 
 
 def fetch_sites(site_ids):
-    """Every terrestrial WDPA and WDOECM polygon of the given SITE_IDs (GeoDataFrame).
-
-    Each feature is tagged with its collection's rank (0 = WDPA), so a feature found in
-    both collections can keep its WDPA copy.
-    """
-
-    def from_collection(asset_id, rank):
-        return (
-            ee.FeatureCollection(asset_id)
-            .filter(ee.Filter.eq("REALM", "Terrestrial"))
-            .filter(ee.Filter.inList("SITE_ID", site_ids))
-            .map(lambda f: f.set("collection_rank", rank))
-        )
-
-    sites_fc = ee.FeatureCollection(
-        [from_collection(PAS_ASSET_ID, 0), from_collection(OECMS_ASSET_ID, 1)]
-    ).flatten()
+    """Every WDPA polygon in SITE_REALMS of the given sites (GeoDataFrame)."""
+    sites_fc = (
+        ee.FeatureCollection(PAS_ASSET_ID)
+        .filter(ee.Filter.inList("REALM", SITE_REALMS))
+        .filter(ee.Filter.inList("SITE_ID", site_ids))
+    )
     # computeFeatures pages through results, so it is not limited to 5000 features
     return ee.data.computeFeatures(
         {"expression": sites_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
     ).set_crs("EPSG:4326")
-
-
-def drop_duplicate_features(features):
-    """Keep one copy (the WDPA one) of each feature found in both collections."""
-    return (
-        features.sort_values("collection_rank", kind="stable")
-        .drop_duplicates(subset=["SITE_ID", "SITE_PID"])
-        .drop(columns="collection_rank")
-    )
 
 
 def polygonal_part(geom):
@@ -173,14 +154,6 @@ def exclusion_reasons(sites, site_filters):
     return reasons
 
 
-def asset_update_times():
-    """{asset ID: last update time} of the WDPA and WDOECM collections."""
-    return {
-        asset_id: ee.data.getAsset(asset_id)["updateTime"]
-        for asset_id in (PAS_ASSET_ID, OECMS_ASSET_ID)
-    }
-
-
 def save_sites(
     group=SITE_GROUPS[SITE_GROUP], output_path=SITE_GEOMS, meta_path=SITE_GEOMS_META
 ):
@@ -193,8 +166,7 @@ def save_sites(
         site_filters = []
         site_ids = list(group)
 
-    raw = fetch_sites(site_ids)
-    features = drop_duplicate_features(raw)
+    features = fetch_sites(site_ids)
     sites = clean_sites(features)
 
     reasons = exclusion_reasons(sites, site_filters)
@@ -217,12 +189,12 @@ def save_sites(
         missing = sorted(set(group) - found)
         if missing:
             print(
-                f"Warning: {len(missing)} SITE_ID(s) not found among terrestrial "
-                f"WDPA/WDOECM sites: {missing}"
+                f"Warning: {len(missing)} SITE_ID(s) not found among {SITE_REALMS} "
+                f"WDPA sites: {missing}"
             )
     print(
-        f"Fetched {len(raw)} feature(s), {len(features)} after dropping duplicates, "
-        f"for {len(sites) + len(excluded)} site(s); kept {len(sites)}"
+        f"Fetched {len(features)} feature(s) for {len(sites) + len(excluded)} site(s); "
+        f"kept {len(sites)}"
     )
 
     if "://" not in output_path:  # local path; gs:// needs no folder
@@ -232,9 +204,9 @@ def save_sites(
         "site_group": SITE_GROUP,
         "group": [list(item) for item in group] if is_filter_group(group) else group,
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "asset_update_times": asset_update_times(),
-        "n_features": len(raw),
-        "n_features_deduplicated": len(features),
+        "wdpa_asset_id": PAS_ASSET_ID,
+        "wdpa_update_time": ee.data.getAsset(PAS_ASSET_ID)["updateTime"],
+        "n_features": len(features),
         "n_sites": len(sites),
         "n_left_out": n_left_out,
         "missing_site_ids": missing,

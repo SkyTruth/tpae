@@ -10,7 +10,7 @@ This repository contains preliminary code related to the development of a Terres
   - `run_relative_effectiveness.ipynb`: Per-cell scores and site-level relative effectiveness for one site.
   - `archive/`: Retired PSM notebooks.
 - **src/sites/**: Select and clean analysis sites.
-  - `clean_sites.py`: Extract the active `SITE_IDS` from WDPA/WDOECM, clean geometries, and save them to GCS.
+  - `clean_sites.py`: Extract the active `SITE_IDS` from WDPA (PAs only), clean geometries, and save them to GCS.
   - `site_selector.py`: Load the selected sites and derive site-specific variables (start year, geometry).
 - **src/cells/**: Build treatment and control cells.
   - `get_treatment_cells.py`: Sample 1 km interior cells for each site.

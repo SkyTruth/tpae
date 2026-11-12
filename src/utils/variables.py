@@ -43,7 +43,7 @@ GAEZ_MAIZE_PATH = INPUT_DATA_PREFIX + "GAEZ_maize.tif"
 GAEZ_SOYBEAN_PATH = INPUT_DATA_PREFIX + "GAEZ_soybean.tif"
 HUMAN_FOOTPRINT_PATH = INPUT_DATA_PREFIX + "human_footprint_1993.tif"
 
-# Site IDs (WDPA SITE_ID) of the selected sites (PAs and OECMs) for list-based site groups
+# Site IDs (WDPA SITE_ID) of the selected sites for list-based site groups
 SITE_IDS_65 = [
     555714961,
     1543,
@@ -223,13 +223,13 @@ SITE_IDS_HOLDOUT65 = [
 # (column, operator, value) filters a site must all pass, with operators ==, !=, <, <=, >,
 # >=, in, not in, contains. Columns are WDPA attributes (applied to each feature), or
 # area_km2 and start_yr (applied to each cleaned site). clean_sites.py selects the
-# group's terrestrial sites and leaves out sites designated too recently to analyze
+# group's sites in SITE_REALMS and leaves out sites designated too recently to analyze
 SITE_GROUPS = {
     "OG30": SITE_IDS_OG30,
     "65": SITE_IDS_65,
     "holdout65": SITE_IDS_HOLDOUT65,
-    "ECU": [
-        ("PRNT_ISO3", "==", "ECU"),
+    "BOL": [
+        ("PRNT_ISO3", "==", "BOL"),
         ("STATUS", "!=", "Proposed"),
         ("area_km2", ">", 100),
     ],
@@ -237,9 +237,11 @@ SITE_GROUPS = {
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
 # overwrite each other
-SITE_GROUP = "OG30"
+SITE_GROUP = "BOL"
 # Tolerance (m) for simplifying cleaned site boundaries
 SITE_SIMPLIFY_M = 15
+# WDPA realms (REALM) of the features used for sites; Marine is left out
+SITE_REALMS = ["Terrestrial", "Coastal"]
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018

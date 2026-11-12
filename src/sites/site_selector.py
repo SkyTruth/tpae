@@ -6,14 +6,7 @@ import ee
 import geopandas as gpd
 import pandas as pd
 
-from utils.variables import OECMS_ASSET_ID, PAS_ASSET_ID, SITE_GEOMS
-
-
-def all_wdpa_sites():
-    """All WDPA and WDOECM polygons (the WDOECM asset also holds the PAs)."""
-    return ee.FeatureCollection(
-        [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
-    ).flatten()
+from utils.variables import SITE_GEOMS
 
 
 def _read_sites(reader, path, **kwargs):

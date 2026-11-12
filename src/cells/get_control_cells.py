@@ -33,9 +33,10 @@ from utils.variables import (
     CONTROL_N_SAMPLES_MAX,
     CONTROL_SAMPLES_PER_TREAT,
     HGFC_ASSET_ID,
+    PAS_ASSET_ID,
+    OECMS_ASSET_ID,
     EE_N_WORKERS,
 )
-from sites.site_selector import all_wdpa_sites
 from utils.retries import report_failures, with_retries
 
 
@@ -194,7 +195,9 @@ def get_control_cells(
         .to_crs(sites_gdf.crs)
     )
     # Every PA and OECM, in all realms
-    all_pas = all_wdpa_sites()
+    all_pas = ee.FeatureCollection(
+        [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
+    ).flatten()
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)
     except FileNotFoundError as exc:
