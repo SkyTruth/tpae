@@ -93,7 +93,7 @@ def run_script(script, script_args):
 
     sys.argv = [str(script), *script_args]
     status = "success"
-    wall_start, cpu_start = time.perf_counter(), time.process_time()
+    elapsed_start, cpu_start = time.perf_counter(), time.process_time()
     try:
         runpy.run_path(str(script), run_name="__main__")
     except SystemExit as exc:
@@ -117,12 +117,12 @@ def run_script(script, script_args):
             "host": socket.gethostname(),
             "started_utc": started.isoformat(timespec="seconds"),
             "finished_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "wall_seconds": round(time.perf_counter() - wall_start, 1),
-            "local_cpu_seconds": round(time.process_time() - cpu_start, 1),
+            "elapsed_seconds": round(time.perf_counter() - elapsed_start, 1),
+            "cpu_seconds": round(time.process_time() - cpu_start, 1),
             "status": status,
             "eecu_seconds": None,
         }
-        print(f"\n{'=' * 70}\nTiming {run_tag}: {status}, {row['wall_seconds']} s")
+        print(f"\n{'=' * 70}\nTiming {run_tag}: {status}, {row['elapsed_seconds']} s")
         try:
             append_run(row)
             print(f"Logged to {TIMING_LOG}")
@@ -195,8 +195,8 @@ def show_log(path=TIMING_LOG):
         "site_group",
         "git_commit",
         "git_dirty",
-        "wall_seconds",
-        "local_cpu_seconds",
+        "elapsed_seconds",
+        "cpu_seconds",
         "eecu_seconds",
         "status",
     ]
