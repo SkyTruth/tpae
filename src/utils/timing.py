@@ -37,7 +37,8 @@ sys.path.insert(0, str(_SRC))
 import ee
 import pandas as pd
 
-from utils.variables import PROJECT, GCS_BUCKET, SITE_GROUP, SITE_IDS
+from sites.site_selector import load_site_ids
+from utils.variables import PROJECT, GCS_BUCKET, SITE_GROUP
 
 TIMING_LOG = f"gs://{GCS_BUCKET}/timing/timings.csv"
 EECU_METRIC = "earthengine.googleapis.com/project/cpu/usage_time"
@@ -74,6 +75,14 @@ def append_run(row, path=TIMING_LOG):
     log.to_csv(path, index=False)
 
 
+def count_sites():
+    """Number of sites in the active group, or None before clean_sites.py has run."""
+    try:
+        return len(load_site_ids())
+    except FileNotFoundError:
+        return None
+
+
 def run_script(script, script_args):
     """Run a script as __main__ under a unique workload tag and log its run time."""
     script = Path(script).resolve()
@@ -103,7 +112,7 @@ def run_script(script, script_args):
             "script": script.name,
             "script_args": " ".join(script_args),
             "site_group": SITE_GROUP,
-            "n_sites": len(SITE_IDS),
+            "n_sites": count_sites(),
             **git_info(),
             "host": socket.gethostname(),
             "started_utc": started.isoformat(timespec="seconds"),

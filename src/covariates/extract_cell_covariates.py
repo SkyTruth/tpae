@@ -39,7 +39,6 @@ from utils.variables import (
     PROJECT,
     EE_CRS_METERS,
     CELL_SIZE_M,
-    SITE_IDS,
     SITE_GROUP,
     GCS_BUCKET,
     CELL_COVARIATES_PREFIX,
@@ -60,12 +59,16 @@ def is_up_to_date(fs, path, inputs_modified):
     return fs.exists(path) and fs.modified(path) > inputs_modified
 
 
-def extract_site_covariates(site_ids=SITE_IDS, overwrite=False, n_workers=EE_N_WORKERS):
-    """Extract and save each site's cell covariates; return the sites that failed."""
+def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKERS):
+    """Extract and save each site's cell covariates; return the sites that failed.
+
+    site_ids: sites to extract (default: every site in SITE_GEOMS).
+    """
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
     import geemap
     from cells.load_all_cells import build_all_site_cells
+    from sites.site_selector import load_site_ids
     from covariates.export_covariate_stack import (
         covariate_stack_updated,
         load_covariate_stack,
@@ -80,6 +83,8 @@ def extract_site_covariates(site_ids=SITE_IDS, overwrite=False, n_workers=EE_N_W
     ee.Initialize(project=PROJECT)
     ee.data.setDeadline(EE_DEADLINE_MS)
 
+    if site_ids is None:
+        site_ids = load_site_ids()
     ee_crs_1km = ee.Projection(EE_CRS_METERS).atScale(CELL_SIZE_M)
     covariates = load_covariate_stack()
 

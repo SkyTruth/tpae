@@ -21,13 +21,12 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
-    SITE_IDS,
     ANALYSIS_END_YR,
     GLC_LABELS,
     ABSOLUTE_RESULTS,
 )
 
-from sites.site_selector import SiteSelector
+from sites.site_selector import ee_geometry, load_sites
 from absolute_effectiveness.data_processor import DataProcessor
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer
 from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
@@ -79,7 +78,6 @@ COLUMNS = (
     + ["error"]
 )
 
-site_selector = SiteSelector()
 processor = DataProcessor.from_gee_defaults()
 condition_analyzer = HabitatConditionAnalyzer()
 loss_analyzer = HabitatLossAnalyzer()
@@ -91,27 +89,19 @@ def ee_request(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
 
-def analyze_site(site_id, sites, designation_yr):
+def analyze_site(site_id, START_YR, geometry):
     """Compute one site's results row; failed steps leave their columns blank.
 
-    designation_yr: from get_designation_yrs (None if the site was not found).
+    geometry: the site's cleaned (shapely) geometry from SITE_GEOMS.
     """
-    row = {"site_id": site_id, "end_year": ANALYSIS_END_YR}
+    row = {"site_id": site_id, "start_year": START_YR, "end_year": ANALYSIS_END_YR}
     try:
-        # Get site-specific information
-        if designation_yr is None:
-            raise ValueError("Site not found among terrestrial PAs and OECMs")
-        START_YR = site_selector.start_yr_from_designation(designation_yr)
-        row["start_year"] = START_YR
-        site_geom = site_selector.get_site_geom(sites, site_id)
-
-        # Check if site designation year is valid for analysis
-        site_selector.check_start_yr(START_YR)
+        site_geom = ee_geometry(geometry)
 
         # Process input datasets
-        GLC_processed = processor.process_glc(sites, START_YR)
+        GLC_processed = processor.process_glc(site_geom, START_YR)
         GPW_processed = processor.process_gpw(START_YR)
-        FORTY_processed = processor.process_forty(sites, START_YR)
+        FORTY_processed = processor.process_forty(site_geom, START_YR)
         HGFC_processed = processor.process_hgfc(START_YR)
         land_mask = processor.get_land_mask()
 
@@ -232,25 +222,25 @@ def analyze_site(site_id, sites, designation_yr):
 
 
 def main(n_workers=N_WORKERS):
-    sites = site_selector.get_sites()
-    designation_yrs = site_selector.get_designation_yrs(sites)
+    sites = load_sites()
+    site_ids = [int(site_id) for site_id in sites["site_id"]]
     rows = {}
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
-            executor.submit(
-                analyze_site, site_id, sites, designation_yrs.get(site_id)
-            ): site_id
-            for site_id in SITE_IDS
+            executor.submit(analyze_site, site_id, int(start_yr), geometry): site_id
+            for site_id, start_yr, geometry in zip(
+                site_ids, sites["start_yr"], sites.geometry
+            )
         }
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
             rows[site_id] = future.result()
             error = rows[site_id].get("error")
             status = f"FAILED: {error}" if error else "done"
-            print(f"Site {site_id} ({i}/{len(SITE_IDS)}): {status}")
+            print(f"Site {site_id} ({i}/{len(site_ids)}): {status}")
 
             # Rewrite the CSV after every site, so a stalled run keeps its results so far
-            done = [rows[s] for s in SITE_IDS if s in rows]
+            done = [rows[s] for s in site_ids if s in rows]
             pd.DataFrame(done).reindex(columns=COLUMNS).to_csv(
                 ABSOLUTE_RESULTS, index=False
             )

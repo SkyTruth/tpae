@@ -33,7 +33,6 @@ for parent in [cur] + list(cur.parents):
 sys.path.insert(0, str((Path.cwd() / "src").resolve()))
 
 from utils.variables import (
-    SITE_IDS,
     GCS_BUCKET,
     MATCH_DIAGNOSTICS,
     MATCH_REPORT_CARD,
@@ -43,6 +42,7 @@ from utils.variables import (
 )
 
 from covariates.extract_cell_covariates import cell_covariates_path
+from sites.site_selector import load_site_ids
 from cells.load_all_cells import build_all_site_cells
 from matching.match_cells import match_treatment_control_mdm, save_matching_outputs
 from matching.diagnostics import (
@@ -84,11 +84,12 @@ def match_site(site_id, site_cells):
 
 
 def main():
+    site_ids = load_site_ids()
     # Cell geometries for the saved matched cells (cell_IDs are rebuilt from these files)
     cells_by_site = {}
     if save_match_outputs:
         cells = build_all_site_cells(
-            SITE_IDS, gpd.read_parquet(TREATMENT_CELLS), gpd.read_parquet(CONTROL_CELLS)
+            site_ids, gpd.read_parquet(TREATMENT_CELLS), gpd.read_parquet(CONTROL_CELLS)
         )
         cells_by_site = dict(tuple(cells.groupby("site_id")))
 
@@ -99,20 +100,20 @@ def main():
             executor.submit(
                 match_site, site_id, cells_by_site.get(str(site_id))
             ): site_id
-            for site_id in SITE_IDS
+            for site_id in site_ids
         }
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
             rows[site_id], log = future.result()
-            print(f"\n{'=' * 70}\nSite {site_id} ({i}/{len(SITE_IDS)})\n{'=' * 70}")
+            print(f"\n{'=' * 70}\nSite {site_id} ({i}/{len(site_ids)})\n{'=' * 70}")
             print(log, end="")
 
             # Rewrite the CSV after every site, so a stalled run keeps its results so far
             if save_diagnostics:
-                done = [rows[s] for s in SITE_IDS if s in rows]
+                done = [rows[s] for s in site_ids if s in rows]
                 save_experiment_diagnostics(done, MATCH_DIAGNOSTICS)
 
-    site_rows = [rows[site_id] for site_id in SITE_IDS]
+    site_rows = [rows[site_id] for site_id in site_ids]
     results_df = pd.DataFrame(site_rows).reindex(columns=DIAGNOSTIC_COLUMNS)
     if save_diagnostics:
         card = save_report_card(results_df, MATCH_REPORT_CARD)

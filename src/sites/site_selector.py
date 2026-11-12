@@ -1,85 +1,46 @@
-import logging
+"""
+Read the active site group's cleaned sites (SITE_GEOMS, written by clean_sites.py).
+"""
+
 import ee
-from utils.variables import (
-    ANALYSIS_START_YR,
-    ANALYSIS_END_YR,
-    OECMS_ASSET_ID,
-    PAS_ASSET_ID,
-    SITE_IDS,
-)
+import geopandas as gpd
+import pandas as pd
 
-logger = logging.getLogger(__name__)
+from utils.variables import OECMS_ASSET_ID, PAS_ASSET_ID, SITE_GEOMS
 
 
-class SiteSelector:
-    """
-    Selects site for analysis and gets site-specific variables.
-    """
+def all_wdpa_sites():
+    """All WDPA and WDOECM polygons (the WDOECM asset also holds the PAs)."""
+    return ee.FeatureCollection(
+        [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
+    ).flatten()
 
-    def __init__(
-        self,
-        site_ids=SITE_IDS,
-        analysis_start_yr=ANALYSIS_START_YR,
-        analysis_end_yr=ANALYSIS_END_YR,
-        pas_collection_id=PAS_ASSET_ID,
-        oecms_collection_id=OECMS_ASSET_ID,
-    ):
-        self.site_ids = site_ids
-        self.analysis_start_yr = analysis_start_yr
-        self.analysis_end_yr = analysis_end_yr
-        self.pas = ee.FeatureCollection(pas_collection_id)
-        self.oecms = ee.FeatureCollection(oecms_collection_id)
 
-    def get_sites(self):
-        """
-        Get the selected sites (terrestrial PAs and OECMs).
-        """
-        all_sites = (
-            ee.FeatureCollection([self.pas, self.oecms])
-            .flatten()
-            .filter(ee.Filter.eq("REALM", "Terrestrial"))
-        )
-        return all_sites.filter(ee.Filter.inList("SITE_ID", self.site_ids))
+def _read_sites(reader, path, **kwargs):
+    try:
+        return reader(path, **kwargs)
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"No cleaned sites at {path}; run clean_sites.py first"
+        ) from None
 
-    def set_start_yr(self, sites, site_id):
-        """
-        Set start year to designation year if it is later than the analysis start year.
-        """
-        designation_yr = (
-            sites.filter(ee.Filter.eq("SITE_ID", site_id))
-            .first()
-            .get("STATUS_YR")
-            .getInfo()
-        )
-        return self.start_yr_from_designation(designation_yr)
 
-    def start_yr_from_designation(self, designation_yr):
-        """Start year for a site designated in designation_yr."""
-        return max(self.analysis_start_yr, designation_yr)
+def load_sites(path=SITE_GEOMS):
+    """Cleaned sites, one row per site_id (EPSG:4326)."""
+    return _read_sites(gpd.read_parquet, path)
 
-    def get_designation_yrs(self, sites):
-        """{site_id: designation year} for all sites, in one request (first feature per site)."""
-        pairs = (
-            sites.reduceColumns(ee.Reducer.toList(2), ["SITE_ID", "STATUS_YR"])
-            .get("list")
-            .getInfo()
-        )
-        designation_yrs = {}
-        for site_id, designation_yr in pairs:
-            designation_yrs.setdefault(int(site_id), designation_yr)
-        return designation_yrs
 
-    def check_start_yr(self, start_yr):
-        """
-        Check if start year is valid for analysis.
-        """
-        if start_yr > (self.analysis_end_yr - 1):
-            msg = f"Site was designated too recently ({start_yr}) to analyze effectiveness."
-            logger.error(msg)
-            raise ValueError(msg)
+def load_start_yrs(path=SITE_GEOMS):
+    """{site_id: start year} for every site, without reading geometries."""
+    table = _read_sites(pd.read_parquet, path, columns=["site_id", "start_yr"])
+    return dict(zip(table["site_id"].astype(int), table["start_yr"].astype(int)))
 
-    def get_site_geom(self, sites, site_id):
-        """
-        Get geometry of a specific site.
-        """
-        return sites.filter(ee.Filter.eq("SITE_ID", site_id)).geometry()
+
+def load_site_ids(path=SITE_GEOMS):
+    """SITE_IDs of every site, in file order."""
+    return list(load_start_yrs(path))
+
+
+def ee_geometry(geom):
+    """Earth Engine geometry of a shapely geometry."""
+    return ee.Geometry(geom.__geo_interface__)

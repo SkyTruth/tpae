@@ -17,8 +17,6 @@ from shapely.geometry import box
 
 from utils.variables import (
     PROJECT,
-    PAS_ASSET_ID,
-    OECMS_ASSET_ID,
     SITE_GEOMS,
     TREATMENT_CELLS,
     CONTROL_CELLS,
@@ -37,6 +35,7 @@ from utils.variables import (
     HGFC_ASSET_ID,
     EE_N_WORKERS,
 )
+from sites.site_selector import all_wdpa_sites
 
 
 def init_ee(project):
@@ -68,19 +67,6 @@ def calc_n_control_samples(
     """Control sample size: per_treat per treatment cell, clipped to [minimum, maximum]."""
     n_treat = 0 if n_treat is None else int(n_treat)
     return min(maximum, max(minimum, per_treat * n_treat))
-
-
-def get_all_pas():
-    """
-    Get a feature collection of all terrestrial PAs and OECMS.
-    """
-    pas = ee.FeatureCollection(PAS_ASSET_ID)
-    oecms = ee.FeatureCollection(OECMS_ASSET_ID)
-    return (
-        ee.FeatureCollection([pas, oecms])
-        .flatten()
-        .filter(ee.Filter.eq("REALM", "Terrestrial"))
-    )
 
 
 def sample_points(
@@ -206,7 +192,8 @@ def get_control_cells(
         .simplify(CONTROL_SIMPLIFY_M)
         .to_crs(sites_gdf.crs)
     )
-    all_pas = get_all_pas()
+    # Every PA and OECM, in all realms
+    all_pas = all_wdpa_sites()
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)
     except FileNotFoundError as exc:

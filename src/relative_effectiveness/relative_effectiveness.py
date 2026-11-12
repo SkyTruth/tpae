@@ -25,12 +25,11 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
-    SITE_IDS,
     ANALYSIS_END_YR,
     RELATIVE_RESULTS,
 )
 
-from sites.site_selector import SiteSelector
+from sites.site_selector import load_start_yrs
 from absolute_effectiveness.data_processor import DataProcessor
 from matching.match_cells import match_output_paths
 from relative_effectiveness.metrics_per_cell import (
@@ -57,28 +56,15 @@ COLUMNS = (
 # Number of sites analyzed at once
 N_WORKERS = 24
 
-site_selector = SiteSelector()
 processor = DataProcessor.from_gee_defaults()
 condition_analyzer = RelativeHabitatConditionAnalyzer()
 loss_analyzer = RelativeHabitatLossAnalyzer()
 
 
-def analyze_site(site_id, designation_yr):
-    """Compute one site's results row; failed steps leave their columns blank.
-
-    designation_yr: from get_designation_yrs (None if the site was not found).
-    """
-    row = {"site_id": site_id, "end_year": ANALYSIS_END_YR}
+def analyze_site(site_id, START_YR):
+    """Compute one site's results row; failed steps leave their columns blank."""
+    row = {"site_id": site_id, "start_year": START_YR, "end_year": ANALYSIS_END_YR}
     try:
-        # Get site-specific information
-        if designation_yr is None:
-            raise ValueError("Site not found among terrestrial PAs and OECMs")
-        START_YR = site_selector.start_yr_from_designation(designation_yr)
-        row["start_year"] = START_YR
-
-        # Check if site designation year is valid for analysis
-        site_selector.check_start_yr(START_YR)
-
         # Load matched_cells and the match table (saved match outputs in GCS), both at once
         match_table_path, matched_cells_path = match_output_paths(site_id)
         try:
@@ -166,24 +152,23 @@ def analyze_site(site_id, designation_yr):
 
 
 def main(n_workers=N_WORKERS):
-    designation_yrs = site_selector.get_designation_yrs(site_selector.get_sites())
+    start_yrs = load_start_yrs()
+    site_ids = list(start_yrs)
     rows = {}
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
-            executor.submit(analyze_site, site_id, designation_yrs.get(site_id)): (
-                site_id
-            )
-            for site_id in SITE_IDS
+            executor.submit(analyze_site, site_id, start_yr): site_id
+            for site_id, start_yr in start_yrs.items()
         }
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
             rows[site_id] = future.result()
             error = rows[site_id].get("error")
             status = f"FAILED: {error}" if error else "done"
-            print(f"Site {site_id} ({i}/{len(SITE_IDS)}): {status}")
+            print(f"Site {site_id} ({i}/{len(site_ids)}): {status}")
 
             # Rewrite the CSV after every site, so a stalled run keeps its results so far
-            done = [rows[s] for s in SITE_IDS if s in rows]
+            done = [rows[s] for s in site_ids if s in rows]
             pd.DataFrame(done).reindex(columns=COLUMNS).to_csv(
                 RELATIVE_RESULTS, index=False
             )

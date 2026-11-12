@@ -7,6 +7,7 @@ import geemap
 import geopandas as gpd
 import ee
 
+from sites.site_selector import ee_geometry, load_sites
 from utils.variables import TREATMENT_CELLS, CONTROL_CELLS
 
 
@@ -41,7 +42,7 @@ def build_all_site_cells(site_ids, treatment_cells, control_cells):
     return cells.reset_index(drop=True)
 
 
-def load_site_cells(site_id, site_selector, treatment_cells=None, control_cells=None):
+def load_site_cells(site_id, treatment_cells=None, control_cells=None):
     """Load treatment and control cells for a site and assign sequential cell_IDs.
 
     treatment_cells / control_cells: cells from TREATMENT_CELLS / CONTROL_CELLS (all
@@ -49,8 +50,8 @@ def load_site_cells(site_id, site_selector, treatment_cells=None, control_cells=
     """
     site_id = str(site_id)
 
-    sites = site_selector.get_sites()
-    site_geom = site_selector.get_site_geom(sites, site_id)
+    sites = load_sites()
+    site_geom = ee_geometry(sites.geometry[sites["site_id"] == int(site_id)].item())
 
     if treatment_cells is None:
         treatment_cells = gpd.read_parquet(TREATMENT_CELLS)
@@ -73,7 +74,6 @@ def load_site_cells(site_id, site_selector, treatment_cells=None, control_cells=
 
     return {
         "site_id": site_id,
-        "sites": sites,
         "site_geom": site_geom,
         "treatment_cells": treatment_cells,
         "control_cells": control_cells,
