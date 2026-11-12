@@ -222,17 +222,14 @@ SITE_IDS_HOLDOUT65 = [
 # Site groups, keyed by group ID. A group is a list of SITE_IDs, or a list of
 # (column, operator, value) filters a site must all pass, with operators ==, !=, <, <=, >,
 # >=, in, not in, contains. Columns are WDPA attributes (applied to each feature), or
-# area_km2 and start_yr (applied to each cleaned site). clean_sites.py selects the
-# group's sites in SITE_REALMS and leaves out sites designated too recently to analyze
+# area_km2 and start_yr (applied to each cleaned site). clean_sites.py applies its own
+# filters to every group: sites in SITE_REALMS, not Proposed, large enough for
+# MIN_TREATMENT_CELLS cells, and not designated too recently to analyze
 SITE_GROUPS = {
     "OG30": SITE_IDS_OG30,
     "65": SITE_IDS_65,
     "holdout65": SITE_IDS_HOLDOUT65,
-    "BOL": [
-        ("PRNT_ISO3", "==", "BOL"),
-        ("STATUS", "!=", "Proposed"),
-        ("area_km2", ">", 100),
-    ],
+    "BOL": [("PRNT_ISO3", "==", "BOL")],
 }
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
@@ -542,7 +539,6 @@ REPORT_NO_MAX_SMD = 0.5
 # Yes if all: enough matched treatment cells, high enough match coverage,
 # every covariate balanced, matched cells representative of the whole site,
 # few cross-border pairs
-REPORT_YES_MIN_MATCHED_TREAT = 10
 REPORT_YES_MIN_COVERAGE = 0.75
 REPORT_YES_MAX_SMD = BALANCED_SMD_THRESHOLD
 REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD = BALANCED_SMD_THRESHOLD
@@ -574,10 +570,9 @@ MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly wa
 # Sites are dropped with fewer than this many land treatment cells available, kept after
 # covariate extraction, or matched
 MIN_TREATMENT_CELLS = 100
-# Expected share of sampled treatment cells that are matched, used to raise small sites'
-# sample size so they can still reach MIN_TREATMENT_CELLS matched cells
-EXPECTED_MATCH_COVERAGE = 0.75
-TREATMENT_SAMPLE_FLOOR = math.ceil(MIN_TREATMENT_CELLS / EXPECTED_MATCH_COVERAGE)
+# Smallest treatment sample: sites with fewer land cells than this take every land cell,
+# so small sites can still reach MIN_TREATMENT_CELLS matched cells
+TREATMENT_SAMPLE_FLOOR = 200
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER_M = 10_000  # minimum distance (m) from site

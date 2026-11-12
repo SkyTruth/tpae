@@ -12,7 +12,6 @@ from utils.variables import (
     REPORT_YES_MAX_CROSS_BORDER,
     REPORT_YES_MAX_SMD,
     REPORT_YES_MIN_COVERAGE,
-    REPORT_YES_MIN_MATCHED_TREAT,
     REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
     BALANCED_SMD_THRESHOLD,
@@ -364,7 +363,7 @@ def classify_site(row):
     No: results cannot be meaningful (too little of the site matched, or a covariate
     too imbalanced).
     Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the site,
-    cross-border pairs, or few matched cells).
+    or cross-border pairs).
     """
     coverage = row["match_coverage"]
     if pd.isna(coverage) or coverage == 0:
@@ -383,11 +382,6 @@ def classify_site(row):
         return "No", "; ".join(no_reasons)
 
     caution_reasons = []
-    n_matched = row["n_matched_treat"]
-    if n_matched < REPORT_YES_MIN_MATCHED_TREAT:
-        caution_reasons.append(
-            f"only {int(n_matched)} matched treatment cells (< {REPORT_YES_MIN_MATCHED_TREAT})"
-        )
     if coverage < REPORT_YES_MIN_COVERAGE:
         caution_reasons.append(
             f"coverage {coverage:.0%} < {REPORT_YES_MIN_COVERAGE:.0%}"

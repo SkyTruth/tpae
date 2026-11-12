@@ -4,15 +4,18 @@ collection in Earth Engine (PAs only), clean their geometries, and save them to
 SITE_GEOMS (GeoParquet in GCS), with a summary of the run in SITE_GEOMS_META (JSON).
 
 A group is either a list of SITE_IDs or a list of (column, operator, value) filters,
-all of which a site must pass. Filters on WDPA attributes (e.g. PRNT_ISO3, STATUS) are
+all of which a site must pass. Filters on WDPA attributes (e.g. PRNT_ISO3) are
 applied to each feature in Earth Engine, and a site is selected if any of its features
-pass; filters on SITE_COLUMNS are applied to each cleaned site. Only features in
-SITE_REALMS (Terrestrial and Coastal) are used.
+pass; filters on SITE_COLUMNS are applied to each cleaned site.
+
+Every group uses only features in SITE_REALMS (Terrestrial and Coastal) that are not
+Proposed, and leaves out sites smaller than MIN_SITE_AREA_KM2 (too small for
+MIN_TREATMENT_CELLS cells), designated too recently to analyze, or with no designation
+year.
 
 Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
 site_id, dissolves multi-part sites into one row per site, and simplifies boundaries by
 SITE_SIMPLIFY_M.
-Sites designated too recently to analyze, or with no designation year, are left out.
 """
 
 from datetime import datetime, timezone
@@ -42,9 +45,13 @@ from utils.variables import (
     ANALYSIS_START_YR,
     ANALYSIS_END_YR,
     GPD_CRS_METERS,
+    CELL_SIZE_M,
+    MIN_TREATMENT_CELLS,
 )
 
 M2_PER_KM2 = 1_000_000
+# Smallest site that can hold MIN_TREATMENT_CELLS cells
+MIN_SITE_AREA_KM2 = MIN_TREATMENT_CELLS * CELL_SIZE_M**2 / M2_PER_KM2
 # Site columns added by clean_sites; filters on these are applied to cleaned sites
 SITE_COLUMNS = ("area_km2", "start_yr")
 EE_FILTERS = {
@@ -86,23 +93,26 @@ def split_filters(filters):
     return ee_filters, site_filters
 
 
-def select_site_ids(ee_filters):
-    """SITE_IDs (server side) with a feature in SITE_REALMS passing every filter."""
-    features = ee.FeatureCollection(PAS_ASSET_ID).filter(
-        ee.Filter.inList("REALM", SITE_REALMS)
+def wdpa_features():
+    """WDPA polygons in SITE_REALMS that are not Proposed (server side)."""
+    return (
+        ee.FeatureCollection(PAS_ASSET_ID)
+        .filter(ee.Filter.inList("REALM", SITE_REALMS))
+        .filter(ee.Filter.neq("STATUS", "Proposed"))
     )
+
+
+def select_site_ids(ee_filters):
+    """SITE_IDs (server side) with a feature in wdpa_features passing every filter."""
+    features = wdpa_features()
     for col, op, value in ee_filters:
         features = features.filter(EE_FILTERS[op](col, value))
     return features.aggregate_array("SITE_ID").distinct()
 
 
 def fetch_sites(site_ids):
-    """Every WDPA polygon in SITE_REALMS of the given sites (GeoDataFrame)."""
-    sites_fc = (
-        ee.FeatureCollection(PAS_ASSET_ID)
-        .filter(ee.Filter.inList("REALM", SITE_REALMS))
-        .filter(ee.Filter.inList("SITE_ID", site_ids))
-    )
+    """Every polygon in wdpa_features of the given sites (GeoDataFrame)."""
+    sites_fc = wdpa_features().filter(ee.Filter.inList("SITE_ID", site_ids))
     # computeFeatures pages through results, so it is not limited to 5000 features
     return ee.data.computeFeatures(
         {"expression": sites_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
@@ -144,6 +154,11 @@ def exclusion_reasons(sites, site_filters):
         (
             sites["start_yr"] > ANALYSIS_END_YR - 1,
             f"designated after {ANALYSIS_END_YR - 1}",
+        ),
+        (
+            sites["area_km2"] < MIN_SITE_AREA_KM2,
+            f"smaller than {MIN_SITE_AREA_KM2:g} km² (too small for "
+            f"{MIN_TREATMENT_CELLS} treatment cells)",
         ),
     ] + [
         (~SITE_FILTERS[op](sites[col], value), f"fails {col} {op} {value!r}")
@@ -190,7 +205,7 @@ def save_sites(
         if missing:
             print(
                 f"Warning: {len(missing)} SITE_ID(s) not found among {SITE_REALMS} "
-                f"WDPA sites: {missing}"
+                f"WDPA sites that are not Proposed: {missing}"
             )
     print(
         f"Fetched {len(features)} feature(s) for {len(sites) + len(excluded)} site(s); "
