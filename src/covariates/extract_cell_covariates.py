@@ -69,6 +69,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     import geemap
     from cells.load_all_cells import build_all_site_cells
     from sites.site_selector import load_site_ids
+    from utils.retries import report_failures, with_retries
     from covariates.export_covariate_stack import (
         covariate_stack_updated,
         load_covariate_stack,
@@ -137,8 +138,12 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     )
 
     def extract_chunk(chunk):
-        return extract_covariates(
-            geemap.geopandas_to_ee(chunk_cells[chunk]), covariates, ee_crs_1km
+        return with_retries(
+            extract_covariates,
+            geemap.geopandas_to_ee(chunk_cells[chunk]),
+            covariates,
+            ee_crs_1km,
+            label=f"Chunk {chunk}",
         )
 
     def save_site(site_id):
@@ -166,7 +171,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     remaining = {s: set(chunks) for s, chunks in site_chunks.items()}
     # Sites not yet saved for each chunk, so a chunk's results are freed once unused
     chunk_users = {c: len(sites) for c, sites in chunk_sites.items()}
-    failed = set()
+    failed = {}
     executor = ThreadPoolExecutor(max_workers=n_workers)
     try:
         futures = {executor.submit(extract_chunk, c): c for c in range(n_chunks)}
@@ -189,7 +194,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
                     save_site(site_id)
                 except Exception as exc:
                     print(f"FAILED: site {site_id}: {exc}")
-                    failed.add(site_id)
+                    failed[site_id] = str(exc)
                 for c in site_chunks[site_id]:
                     chunk_users[c] -= 1
                     if chunk_users[c] == 0:
@@ -198,12 +203,12 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
         # Stop unstarted chunks if interrupted
         executor.shutdown(cancel_futures=True)
 
-    failed = [site_id for site_id in site_ids if str(site_id) in failed]
-    n_done = len(site_ids) - len(failed)
-    print(f"\nSite group {SITE_GROUP}: {n_done}/{len(site_ids)} sites done")
+    failed = {s: failed[str(s)] for s in site_ids if str(s) in failed}
+    print(f"\nSite group {SITE_GROUP}: {len(site_ids) - len(failed)} sites done")
+    report_failures(failed, len(site_ids))
     if failed:
-        print(f"Failed (re-run to retry): {failed}")
-    return failed
+        print("Re-run to retry them")
+    return list(failed)
 
 
 if __name__ == "__main__":

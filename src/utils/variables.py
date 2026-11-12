@@ -636,6 +636,10 @@ RELATIVE_RESULTS = (
 EE_DEADLINE_MS = 300_000
 # Number of Earth Engine requests to run at once
 EE_N_WORKERS = 8
+# Attempts per site (or chunk of cells) for transient Earth Engine errors
+EE_MAX_ATTEMPTS = 3
+# Wait (s) before the first retry; doubles before each later one
+EE_RETRY_WAIT_S = 30
 
 # Archived:
 # ----------

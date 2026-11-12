@@ -5,11 +5,14 @@ Computes habitat condition and loss metrics for every site in the active SITE_GR
 n_workers sites at a time, and writes one row per site to a CSV in GCS
 (absolute_results/). Same analysis as notebooks/run_absolute_effectiveness.ipynb.
 
-Sites that fail keep the columns computed before the failure, with the reason in error.
+Transient Earth Engine errors are retried. Sites that still fail keep the columns
+computed before the failure, with the reason in error. Use --retry-failed to re-run
+only the sites that failed (or are missing) in the saved CSV.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import argparse
 import sys
 import threading
 
@@ -27,6 +30,12 @@ from utils.variables import (
 )
 
 from sites.site_selector import ee_geometry, load_sites
+from utils.retries import (
+    has_error,
+    load_succeeded_rows,
+    report_failures,
+    with_retries,
+)
 from absolute_effectiveness.data_processor import DataProcessor
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer
 from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
@@ -90,154 +99,162 @@ def ee_request(fn, *args, **kwargs):
 
 
 def analyze_site(site_id, START_YR, geometry):
-    """Compute one site's results row; failed steps leave their columns blank.
+    """Compute one site's results row, retrying transient errors; failed steps leave
+    their columns blank.
 
     geometry: the site's cleaned (shapely) geometry from SITE_GEOMS.
     """
     row = {"site_id": site_id, "start_year": START_YR, "end_year": ANALYSIS_END_YR}
     try:
-        site_geom = ee_geometry(geometry)
-
-        # Process input datasets
-        GLC_processed = processor.process_glc(site_geom, START_YR)
-        GPW_processed = processor.process_gpw(START_YR)
-        FORTY_processed = processor.process_forty(site_geom, START_YR)
-        HGFC_processed = processor.process_hgfc(START_YR)
-        land_mask = processor.get_land_mask()
-
-        # Build habitat rasters for the end and start years, and habitat loss
-        lc_end = condition_analyzer.get_land_cover(
-            GLC_processed, GPW_processed, FORTY_processed, ANALYSIS_END_YR
-        )
-        habitat_binary_end = condition_analyzer.get_habitat_binary_end(
-            lc_end, HGFC_processed
-        )
-        lc_start = condition_analyzer.get_land_cover(
-            GLC_processed, GPW_processed, FORTY_processed, START_YR
-        )
-        habitat_binary_start = condition_analyzer.get_habitat_binary_start(lc_start)
-        habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
-            habitat_binary_start, habitat_binary_end
-        )
-
-        # Build intactness raster
-        exp_kernel = condition_analyzer.build_kernel()
-        intactness_raster = condition_analyzer.get_intactness_raster(
-            habitat_binary_end, site_geom, exp_kernel, land_mask
-        )
-        driver_class = loss_analyzer.get_driver_class_image(lc_end, habitat_loss_raster)
-        # Group code: (start land cover class + 1) * GROUP_BASE + driver class
-        group_image = (
-            lc_start.add(1).unmask(0).multiply(GROUP_BASE).add(driver_class.unmask(0))
-        )
-
-        # Request intactness alongside the areas below
-        with ThreadPoolExecutor(max_workers=1) as site_executor:
-            intactness_future = site_executor.submit(
-                ee_request,
-                condition_analyzer.calc_intactness_score,
-                intactness_raster,
-                site_geom,
-            )
-
-            # Sum areas for extent, loss, drivers and habitat types lost in one request
-            groups = ee_request(
-                loss_analyzer.sum_areas_by_group_km2,
-                site_geom,
-                {
-                    "habitat_end": habitat_binary_end,
-                    "land": land_mask,
-                    "loss": habitat_loss_raster,
-                    "habitat_start": habitat_binary_start,
-                },
-                group_image,
-            )
-            areas = {
-                name: sum(group[name] for group in groups.values())
-                for name in ("habitat_end", "land", "loss", "habitat_start")
-            }
-            driver_areas, lost_areas, start_areas = {}, {}, {}
-            for code, group in groups.items():
-                start_class, driver = divmod(code, GROUP_BASE)
-                if driver:
-                    driver_areas[driver] = driver_areas.get(driver, 0) + group["loss"]
-                if start_class:
-                    lc_class = start_class - 1
-                    lost_areas[lc_class] = lost_areas.get(lc_class, 0) + group["loss"]
-                    start_areas[lc_class] = (
-                        start_areas.get(lc_class, 0) + group["habitat_start"]
-                    )
-
-            # Calculate Habitat Extent score
-            row["extent"] = condition_analyzer.habitat_extent_from_areas(
-                areas["habitat_end"], areas["land"]
-            )
-
-            # Calculate Habitat Loss score
-            (
-                row["loss_area_km2"],
-                habitat_start_area_km2,
-                row["site_land_area_km2"],
-                row["loss_pct_site"],
-                row["loss_pct_habitat"],
-                row["loss"],
-            ) = loss_analyzer.habitat_loss_from_areas(
-                areas["loss"], areas["habitat_start"], areas["land"]
-            )
-
-            # Analyze drivers of habitat loss (absent drivers are 0)
-            for class_id, driver in DRIVER_COLUMNS.items():
-                area = driver_areas.get(class_id, 0) if habitat_start_area_km2 else 0
-                row[f"{driver}_area_km2"] = area
-                row[f"{driver}_pct_site"] = (
-                    area / row["site_land_area_km2"] * 100 if area else 0
-                )
-                row[f"{driver}_pct_habitat"] = (
-                    area / habitat_start_area_km2 * 100 if area else 0
-                )
-
-            # Analyze top types of habitat lost, largest first
-            ranked = sorted(
-                (c for c, area in lost_areas.items() if area > 0),
-                key=lambda c: lost_areas[c],
-                reverse=True,
-            )[:N_HABITATS_LOST]
-            for i, class_id in enumerate(ranked, start=1):
-                row[f"habitat_lost_{i}"] = GLC_LABELS.get(class_id, f"Class {class_id}")
-                row[f"habitat_lost_{i}_area_km2"] = lost_areas[class_id]
-                row[f"habitat_lost_{i}_pct_start"] = (
-                    lost_areas[class_id] / start_areas[class_id] * 100
-                    if start_areas[class_id] > 0
-                    else 0
-                )
-
-            # Calculate Habitat Intactness and overall Habitat Condition scores
-            row["intactness"] = intactness_future.result()
-            row["condition"] = condition_analyzer.calc_habitat_condition_score(
-                row["extent"], row["intactness"]
-            )
+        with_retries(fill_site_row, row, START_YR, geometry, label=f"Site {site_id}")
     except Exception as exc:
         row["error"] = str(exc)
     return row
 
 
-def main(n_workers=N_WORKERS):
+def fill_site_row(row, START_YR, geometry):
+    """Add one site's results to row."""
+    site_geom = ee_geometry(geometry)
+
+    # Process input datasets
+    GLC_processed = processor.process_glc(site_geom, START_YR)
+    GPW_processed = processor.process_gpw(START_YR)
+    FORTY_processed = processor.process_forty(site_geom, START_YR)
+    HGFC_processed = processor.process_hgfc(START_YR)
+    land_mask = processor.get_land_mask()
+
+    # Build habitat rasters for the end and start years, and habitat loss
+    lc_end = condition_analyzer.get_land_cover(
+        GLC_processed, GPW_processed, FORTY_processed, ANALYSIS_END_YR
+    )
+    habitat_binary_end = condition_analyzer.get_habitat_binary_end(
+        lc_end, HGFC_processed
+    )
+    lc_start = condition_analyzer.get_land_cover(
+        GLC_processed, GPW_processed, FORTY_processed, START_YR
+    )
+    habitat_binary_start = condition_analyzer.get_habitat_binary_start(lc_start)
+    habitat_loss_raster = loss_analyzer.get_habitat_loss_raster(
+        habitat_binary_start, habitat_binary_end
+    )
+
+    # Build intactness raster
+    exp_kernel = condition_analyzer.build_kernel()
+    intactness_raster = condition_analyzer.get_intactness_raster(
+        habitat_binary_end, site_geom, exp_kernel, land_mask
+    )
+    driver_class = loss_analyzer.get_driver_class_image(lc_end, habitat_loss_raster)
+    # Group code: (start land cover class + 1) * GROUP_BASE + driver class
+    group_image = (
+        lc_start.add(1).unmask(0).multiply(GROUP_BASE).add(driver_class.unmask(0))
+    )
+
+    # Request intactness alongside the areas below
+    with ThreadPoolExecutor(max_workers=1) as site_executor:
+        intactness_future = site_executor.submit(
+            ee_request,
+            condition_analyzer.calc_intactness_score,
+            intactness_raster,
+            site_geom,
+        )
+
+        # Sum areas for extent, loss, drivers and habitat types lost in one request
+        groups = ee_request(
+            loss_analyzer.sum_areas_by_group_km2,
+            site_geom,
+            {
+                "habitat_end": habitat_binary_end,
+                "land": land_mask,
+                "loss": habitat_loss_raster,
+                "habitat_start": habitat_binary_start,
+            },
+            group_image,
+        )
+        areas = {
+            name: sum(group[name] for group in groups.values())
+            for name in ("habitat_end", "land", "loss", "habitat_start")
+        }
+        driver_areas, lost_areas, start_areas = {}, {}, {}
+        for code, group in groups.items():
+            start_class, driver = divmod(code, GROUP_BASE)
+            if driver:
+                driver_areas[driver] = driver_areas.get(driver, 0) + group["loss"]
+            if start_class:
+                lc_class = start_class - 1
+                lost_areas[lc_class] = lost_areas.get(lc_class, 0) + group["loss"]
+                start_areas[lc_class] = (
+                    start_areas.get(lc_class, 0) + group["habitat_start"]
+                )
+
+        # Calculate Habitat Extent score
+        row["extent"] = condition_analyzer.habitat_extent_from_areas(
+            areas["habitat_end"], areas["land"]
+        )
+
+        # Calculate Habitat Loss score
+        (
+            row["loss_area_km2"],
+            habitat_start_area_km2,
+            row["site_land_area_km2"],
+            row["loss_pct_site"],
+            row["loss_pct_habitat"],
+            row["loss"],
+        ) = loss_analyzer.habitat_loss_from_areas(
+            areas["loss"], areas["habitat_start"], areas["land"]
+        )
+
+        # Analyze drivers of habitat loss (absent drivers are 0)
+        for class_id, driver in DRIVER_COLUMNS.items():
+            area = driver_areas.get(class_id, 0) if habitat_start_area_km2 else 0
+            row[f"{driver}_area_km2"] = area
+            row[f"{driver}_pct_site"] = (
+                area / row["site_land_area_km2"] * 100 if area else 0
+            )
+            row[f"{driver}_pct_habitat"] = (
+                area / habitat_start_area_km2 * 100 if area else 0
+            )
+
+        # Analyze top types of habitat lost, largest first
+        ranked = sorted(
+            (c for c, area in lost_areas.items() if area > 0),
+            key=lambda c: lost_areas[c],
+            reverse=True,
+        )[:N_HABITATS_LOST]
+        for i, class_id in enumerate(ranked, start=1):
+            row[f"habitat_lost_{i}"] = GLC_LABELS.get(class_id, f"Class {class_id}")
+            row[f"habitat_lost_{i}_area_km2"] = lost_areas[class_id]
+            row[f"habitat_lost_{i}_pct_start"] = (
+                lost_areas[class_id] / start_areas[class_id] * 100
+                if start_areas[class_id] > 0
+                else 0
+            )
+
+        # Calculate Habitat Intactness and overall Habitat Condition scores
+        row["intactness"] = intactness_future.result()
+        row["condition"] = condition_analyzer.calc_habitat_condition_score(
+            row["extent"], row["intactness"]
+        )
+
+
+def main(n_workers=N_WORKERS, retry_failed=False):
+    """Analyze every site, or with retry_failed only those without saved results."""
     sites = load_sites()
     site_ids = [int(site_id) for site_id in sites["site_id"]]
-    rows = {}
+    rows = load_succeeded_rows(ABSOLUTE_RESULTS, site_ids) if retry_failed else {}
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
             executor.submit(analyze_site, site_id, int(start_yr), geometry): site_id
             for site_id, start_yr, geometry in zip(
                 site_ids, sites["start_yr"], sites.geometry
             )
+            if site_id not in rows
         }
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
             rows[site_id] = future.result()
             error = rows[site_id].get("error")
             status = f"FAILED: {error}" if error else "done"
-            print(f"Site {site_id} ({i}/{len(site_ids)}): {status}")
+            print(f"Site {site_id} ({i}/{len(futures)}): {status}")
 
             # Rewrite the CSV after every site, so a stalled run keeps its results so far
             done = [rows[s] for s in site_ids if s in rows]
@@ -245,9 +262,16 @@ def main(n_workers=N_WORKERS):
                 ABSOLUTE_RESULTS, index=False
             )
 
-    n_failed = sum("error" in row for row in rows.values())
-    print(f"\nSaved {len(rows)} sites ({n_failed} failed) to {ABSOLUTE_RESULTS}")
+    print(f"\nSaved {len(rows)} sites to {ABSOLUTE_RESULTS}")
+    errors = {s: rows[s]["error"] for s in site_ids if s in rows and has_error(rows[s])}
+    report_failures(errors, len(rows))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="re-run only the sites that failed (or are missing) in the saved CSV",
+    )
+    main(retry_failed=parser.parse_args().retry_failed)

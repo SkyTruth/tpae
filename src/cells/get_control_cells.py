@@ -36,6 +36,7 @@ from utils.variables import (
     EE_N_WORKERS,
 )
 from sites.site_selector import all_wdpa_sites
+from utils.retries import report_failures, with_retries
 
 
 def init_ee(project):
@@ -236,10 +237,22 @@ def get_control_cells(
 
     executor = ThreadPoolExecutor(max_workers=n_workers)
     try:
-        futures = {executor.submit(sample_site, *job): job for job in site_jobs}
+        futures = {
+            executor.submit(with_retries, sample_site, *job, label=f"Site {job[0]}"): (
+                job
+            )
+            for job in site_jobs
+        }
+        site_cells, failed = {}, {}
         for n_done, future in enumerate(as_completed(futures), start=1):
             site_id, _, n_samples_site = futures[future]
-            n_cells = len(future.result())
+            try:
+                site_cells[site_id] = future.result()
+            except Exception as exc:
+                print(f"FAILED: site {site_id}: {exc} [{n_done}/{len(site_jobs)}]")
+                failed[site_id] = str(exc)
+                continue
+            n_cells = len(site_cells[site_id])
             print(
                 f"Site {site_id}: {n_cells} control cells "
                 f"(requested {n_samples_site}) [{n_done}/{len(site_jobs)}]"
@@ -247,11 +260,18 @@ def get_control_cells(
             if n_cells == 0:
                 print(f"Warning: site {site_id}: no control cells")
     finally:
-        # Stop unstarted sites if one fails
+        # Stop unstarted sites if interrupted
         executor.shutdown(cancel_futures=True)
+    report_failures(failed, len(site_jobs))
+    if failed:
+        print("Re-run to retry them")
 
     # Combine in site order, so the output does not depend on which site finished first
-    all_cells = [f.result() for f in futures if len(f.result()) > 0]
+    all_cells = [
+        site_cells[job[0]]
+        for job in site_jobs
+        if job[0] in site_cells and len(site_cells[job[0]]) > 0
+    ]
 
     if not all_cells:
         raise RuntimeError("No control cells generated for any site.")

@@ -33,6 +33,7 @@ from utils.variables import (
     TREATMENT_SE_TARGET,
     EE_N_WORKERS,
 )
+from utils.retries import report_failures, with_retries
 
 
 def draw_grid(site_geom, cell_size_m):
@@ -103,19 +104,25 @@ def get_treatment_cells(
     sites_gdf = sites_gdf_4326.to_crs(GPD_CRS_METERS)
 
     # Land fraction of each site (or the error it raised), n_workers sites at a time
-    def land_fraction_or_error(geom_4326):
+    def land_fraction_or_error(site_id, geom_4326):
         try:
-            return get_land_fraction(geom_4326)
+            return with_retries(get_land_fraction, geom_4326, label=f"Site {site_id}")
         except Exception as exc:
             return exc
 
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
-        land_fracs = list(executor.map(land_fraction_or_error, sites_gdf_4326.geometry))
+        land_fracs = list(
+            executor.map(
+                land_fraction_or_error,
+                sites_gdf_4326["site_id"],
+                sites_gdf_4326.geometry,
+            )
+        )
 
     all_cells = []
 
     # Iterate through sites and get a set of valid treatment cells for each
-    failed = []
+    failed = {}
     for (_, row), land_frac in zip(sites_gdf.iterrows(), land_fracs):
         site_geom = row.geometry
         site_id = str(row["site_id"])
@@ -131,7 +138,7 @@ def get_treatment_cells(
                 cells = cells.sample(n=n_draw, random_state=RAND_SEED)
         except Exception as exc:
             print(f"FAILED: site {site_id}: {exc}")
-            failed.append(site_id)
+            failed[site_id] = str(exc)
             continue
         # Add attributes to cells
         cells["site_id"] = site_id
@@ -144,8 +151,9 @@ def get_treatment_cells(
             continue
         all_cells.append(cells)
 
+    report_failures(failed, len(sites_gdf))
     if failed:
-        print(f"Failed (re-run to retry): {failed}")
+        print("Re-run to retry them")
     if not all_cells:
         raise RuntimeError("No treatment cells generated for any site.")
 
