@@ -26,6 +26,7 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
+    EE_DEADLINE_MS,
     ANALYSIS_END_YR,
     GLC_LABELS,
     ABSOLUTE_RESULTS,
@@ -46,6 +47,7 @@ from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
 
 # After the imports, since habitat_loss.py initializes without a project
 ee.Initialize(project=PROJECT)
+ee.data.setDeadline(EE_DEADLINE_MS)
 
 # Column prefix for each driver class in DRIVER_LABELS
 DRIVER_COLUMNS = {

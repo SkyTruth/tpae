@@ -230,11 +230,12 @@ SITE_GROUPS = {
     "65": SITE_IDS_65,
     "holdout65": SITE_IDS_HOLDOUT65,
     "BOL": [("PRNT_ISO3", "==", "BOL")],
+    "BRA": [("PRNT_ISO3", "==", "BRA")],
 }
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
 # overwrite each other
-SITE_GROUP = "BOL"
+SITE_GROUP = "BRA"
 # Tolerance (m) for simplifying cleaned site boundaries
 SITE_SIMPLIFY_M = 15
 # WDPA realms (REALM) of the features used for sites; Marine is left out

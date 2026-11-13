@@ -17,6 +17,7 @@ from shapely.geometry import box
 
 from utils.variables import (
     PROJECT,
+    EE_DEADLINE_MS,
     SITE_GEOMS,
     TREATMENT_CELLS,
     CONTROL_CELLS,
@@ -42,13 +43,14 @@ from utils.retries import report_failures, with_retries
 
 def init_ee(project):
     """
-    Initialize Earth Engine, authenticating if needed.
+    Initialize Earth Engine, authenticating if needed, with a request deadline.
     """
     try:
         ee.Initialize(project=project)
     except Exception:
         ee.Authenticate()
         ee.Initialize(project=project)
+    ee.data.setDeadline(EE_DEADLINE_MS)
 
 
 def load_treatment_cell_counts(treatment_cells_path: str = TREATMENT_CELLS):

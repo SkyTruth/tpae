@@ -29,6 +29,7 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
+    EE_DEADLINE_MS,
     ANALYSIS_END_YR,
     RELATIVE_RESULTS,
     DROPPED_SITES,
@@ -58,6 +59,7 @@ from relative_effectiveness.relative_scores import (
 
 # After the imports, since habitat_loss.py initializes without a project
 ee.Initialize(project=PROJECT)
+ee.data.setDeadline(EE_DEADLINE_MS)
 
 SCORE_NAMES = ["extent", "intactness", "condition", "loss"]
 COLUMNS = (
