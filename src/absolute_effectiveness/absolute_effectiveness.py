@@ -162,7 +162,7 @@ def fill_site_row(row, START_YR, geometry):
             ee_request,
             condition_analyzer.calc_intactness_score,
             intactness_raster,
-            site,
+            site_geom,
         )
 
         # Sum areas for extent, loss, drivers and habitat types lost in one request

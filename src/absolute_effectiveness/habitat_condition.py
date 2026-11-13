@@ -214,17 +214,15 @@ class HabitatConditionAnalyzer:
         )
         return intactness_raster
 
-    def calc_intactness_score(self, intactness_raster, site):
+    def calc_intactness_score(self, intactness_raster, site_geom):
         """
-        Calculate Habitat Intactness score within a site (from site_region) from
-        intactness raster.
+        Calculate Habitat Intactness score within a site from intactness raster.
         """
         # Calculate average intactness of habitat pixels within site
         intactness_score = (
-            reduce_site(
-                intactness_raster,
+            intactness_raster.reduceRegion(
                 ee.Reducer.mean(),
-                site,
+                site_geom,
                 scale=self.intactness_scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
