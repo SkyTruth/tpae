@@ -19,13 +19,17 @@ TRANSIENT_ERRORS = (
     "internal error",
     "connection",
 )
+# Substrings (lower case) of errors that fail the same way on every attempt
+PERMANENT_ERRORS = ("computation timed out",)
 
 
 def is_transient(exc):
     """True if exc is an error that can succeed on a later attempt."""
+    message = str(exc).lower()
+    if any(error in message for error in PERMANENT_ERRORS):
+        return False
     if isinstance(exc, (ConnectionError, TimeoutError)):
         return True
-    message = str(exc).lower()
     return any(error in message for error in TRANSIENT_ERRORS)
 
 

@@ -640,8 +640,9 @@ ABSOLUTE_RESULTS = (
 RELATIVE_RESULTS = (
     f"gs://{GCS_BUCKET}/relative_results/relative_results_{SITE_GROUP}.csv"
 )
-# Earth Engine request timeout (ms), so a stalled request fails instead of hanging
-EE_DEADLINE_MS = 300_000
+# Earth Engine request timeout (ms), so a stalled request fails instead of hanging; longer
+# than Earth Engine's 5-minute limit, so a too-heavy computation fails with its own error
+EE_DEADLINE_MS = 360_000
 # Number of Earth Engine requests to run at once
 EE_N_WORKERS = 8
 # Attempts per site (or chunk of cells) for transient Earth Engine errors
