@@ -147,7 +147,7 @@ def fill_site_row(row, START_YR, geometry):
     # Build intactness raster
     exp_kernel = condition_analyzer.build_kernel()
     intactness_raster = condition_analyzer.get_intactness_raster(
-        habitat_binary_end, site_geom, exp_kernel, land_mask
+        habitat_binary_end, exp_kernel, land_mask
     )
     driver_class = loss_analyzer.get_driver_class_image(lc_end, habitat_loss_raster)
     # Group code: (start land cover class + 1) * GROUP_BASE + driver class

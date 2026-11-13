@@ -179,7 +179,7 @@ class HabitatConditionAnalyzer:
         )
         return exp_kernel
 
-    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel, land_mask):
+    def get_intactness_raster(self, habitat_raster, exp_kernel, land_mask):
         """
         Create continuous habitat intactness raster.
 
@@ -202,10 +202,7 @@ class HabitatConditionAnalyzer:
             crs=self.crs,
             scale=self.scale_m,
         )
-        kernel_input_clipped = kernel_input_reproj.clip(
-            site_geom.buffer(self.kernel_radius_m)
-        )
-        weighted = kernel_input_clipped.convolve(exp_kernel)
+        weighted = kernel_input_reproj.convolve(exp_kernel)
         habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
             weighted.select("habitat")

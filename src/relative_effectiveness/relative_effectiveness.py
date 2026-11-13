@@ -126,10 +126,7 @@ def fill_site_row(row, site_id, START_YR):
     # Build intactness raster
     exp_kernel = condition_analyzer.build_kernel()
     intactness_raster = condition_analyzer.get_intactness_raster(
-        habitat_binary_end,
-        matched_cells.geometry(),
-        exp_kernel,
-        land_mask,
+        habitat_binary_end, exp_kernel, land_mask
     )
 
     # Build habitat-loss raster
