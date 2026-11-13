@@ -222,8 +222,8 @@ SITE_IDS_HOLDOUT65 = [
 # Site groups, keyed by group ID. A group is a list of SITE_IDs, or a list of
 # (column, operator, value) filters a site must all pass, with operators ==, !=, <, <=, >,
 # >=, in, not in, contains. Columns are WDPA attributes (applied to each feature), or
-# area_km2 and start_yr (applied to each cleaned site). clean_sites.py applies its own
-# filters to every group: sites in SITE_REALMS, not Proposed, large enough for
+# start_yr (applied to each cleaned site). clean_sites.py applies its own filters to
+# every group: sites in SITE_REALMS, not Proposed, with enough GIS_AREA for
 # MIN_TREATMENT_CELLS cells, and not designated too recently to analyze
 SITE_GROUPS = {
     "OG30": SITE_IDS_OG30,

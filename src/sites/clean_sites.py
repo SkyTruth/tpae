@@ -9,9 +9,10 @@ applied to each feature in Earth Engine, and a site is selected if any of its fe
 pass; filters on SITE_COLUMNS are applied to each cleaned site.
 
 Every group uses only features in SITE_REALMS (Terrestrial and Coastal) that are not
-Proposed, and leaves out sites smaller than MIN_SITE_AREA_KM2 (too small for
-MIN_TREATMENT_CELLS cells), designated too recently to analyze, or with no designation
-year.
+Proposed, and leaves out sites designated too recently to analyze or with no
+designation year. Sites whose features' GIS_AREA sums to less than MIN_GIS_AREA_KM2 are
+left out before their geometries are downloaded; get_treatment_cells.py drops any
+remaining site with too few land cells.
 
 Cleaning keeps only polygonal parts, repairs invalid geometries, renames SITE_ID to
 site_id, dissolves multi-part sites into one row per site, and simplifies boundaries by
@@ -50,10 +51,11 @@ from utils.variables import (
 )
 
 M2_PER_KM2 = 1_000_000
-# Smallest site that can hold MIN_TREATMENT_CELLS cells
-MIN_SITE_AREA_KM2 = MIN_TREATMENT_CELLS * CELL_SIZE_M**2 / M2_PER_KM2
+# Smallest GIS_AREA sum (km2) of a site's features: 90% of the area MIN_TREATMENT_CELLS
+# cells need, allowing for differences between WDPA's areas and the cleaned geometries
+MIN_GIS_AREA_KM2 = 0.9 * MIN_TREATMENT_CELLS * CELL_SIZE_M**2 / M2_PER_KM2
 # Site columns added by clean_sites; filters on these are applied to cleaned sites
-SITE_COLUMNS = ("area_km2", "start_yr")
+SITE_COLUMNS = ("start_yr",)
 EE_FILTERS = {
     "==": ee.Filter.eq,
     "!=": ee.Filter.neq,
@@ -110,6 +112,17 @@ def select_site_ids(ee_filters):
     return features.aggregate_array("SITE_ID").distinct()
 
 
+def site_gis_areas(site_ids):
+    """One feature per site in site_ids (server side), with its SITE_ID and the sum of
+    its wdpa_features' GIS_AREA (km2) as sum."""
+    features = wdpa_features().filter(ee.Filter.inList("SITE_ID", site_ids))
+    groups = features.reduceColumns(
+        ee.Reducer.sum().group(groupField=1, groupName="SITE_ID"),
+        ["GIS_AREA", "SITE_ID"],
+    ).get("groups")
+    return ee.FeatureCollection(ee.List(groups).map(lambda g: ee.Feature(None, g)))
+
+
 def fetch_sites(site_ids):
     """Every polygon in wdpa_features of the given sites (GeoDataFrame)."""
     sites_fc = wdpa_features().filter(ee.Filter.inList("SITE_ID", site_ids))
@@ -141,7 +154,6 @@ def clean_sites(sites, simplify_m=SITE_SIMPLIFY_M):
     sites = sites.dissolve(by="site_id", aggfunc="first", as_index=False)
     sites_m = sites.geometry.to_crs(GPD_CRS_METERS).simplify(simplify_m)
     sites["geometry"] = sites_m.to_crs(sites.crs)
-    sites["area_km2"] = sites_m.area / M2_PER_KM2
     sites["start_yr"] = sites["STATUS_YR"].clip(lower=ANALYSIS_START_YR)
     return sites
 
@@ -154,11 +166,6 @@ def exclusion_reasons(sites, site_filters):
         (
             sites["start_yr"] > ANALYSIS_END_YR - 1,
             f"designated after {ANALYSIS_END_YR - 1}",
-        ),
-        (
-            sites["area_km2"] < MIN_SITE_AREA_KM2,
-            f"smaller than {MIN_SITE_AREA_KM2:g} km² (too small for "
-            f"{MIN_TREATMENT_CELLS} treatment cells)",
         ),
     ] + [
         (~SITE_FILTERS[op](sites[col], value), f"fails {col} {op} {value!r}")
@@ -181,17 +188,34 @@ def save_sites(
         site_filters = []
         site_ids = list(group)
 
-    features = fetch_sites(site_ids)
+    # Leave out sites too small for MIN_TREATMENT_CELLS cells before downloading them
+    areas = site_gis_areas(site_ids)
+    small = areas.filter(ee.Filter.lt("sum", MIN_GIS_AREA_KM2))
+    if is_filter_group(group):
+        small_ids, n_small = [], small.size().getInfo()
+    else:
+        small_ids = small.aggregate_array("SITE_ID").getInfo()
+        n_small = len(small_ids)
+    features = fetch_sites(
+        areas.filter(ee.Filter.gte("sum", MIN_GIS_AREA_KM2)).aggregate_array("SITE_ID")
+    )
     sites = clean_sites(features)
 
     reasons = exclusion_reasons(sites, site_filters)
     excluded = sites.loc[reasons != "", "site_id"].astype(int)
-    n_left_out = {
+    small_reason = (
+        f"GIS_AREA below {MIN_GIS_AREA_KM2:g} km² (too small for "
+        f"{MIN_TREATMENT_CELLS} treatment cells)"
+    )
+    n_left_out = {small_reason: n_small} if n_small else {}
+    n_left_out |= {
         reason: int(n) for reason, n in reasons[reasons != ""].value_counts().items()
     }
     for reason, n in n_left_out.items():
         print(f"Left out {n} site(s): {reason}")
     if not is_filter_group(group):
+        for site_id in small_ids:
+            print(f"  {site_id}: {small_reason}")
         for site_id, reason in zip(excluded, reasons[reasons != ""]):
             print(f"  {site_id}: {reason}")
     sites = sites[reasons == ""].reset_index(drop=True)
@@ -200,7 +224,7 @@ def save_sites(
 
     missing = []
     if not is_filter_group(group):
-        found = set(features["SITE_ID"].astype(int))
+        found = set(features["SITE_ID"].astype(int)) | set(small_ids)
         missing = sorted(set(group) - found)
         if missing:
             print(
