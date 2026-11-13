@@ -12,6 +12,7 @@ from utils.variables import (
     KERNEL_SIZE_PIXELS,
     TILE_SCALE,
 )
+from sites.site_selector import reduce_site
 
 
 class HabitatConditionAnalyzer:
@@ -107,18 +108,18 @@ class HabitatConditionAnalyzer:
         """
         return self._remap_habitat_binary(lc)
 
-    def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
+    def calc_habitat_extent_score(self, habitat_raster, site, land_mask=None):
         """
-        Calculate Habitat Extent score for analysis_end_yr within a site.
+        Calculate Habitat Extent score for analysis_end_yr within a site (from
+        site_region).
         Extent score = habitat area / site area
         """
         # Calculate area of habitat within site
         habitat_area = (
-            ee.Image.pixelArea()
-            .updateMask(habitat_raster)
-            .reduceRegion(
+            reduce_site(
+                ee.Image.pixelArea().updateMask(habitat_raster),
                 ee.Reducer.sum(),
-                site_geom,
+                site,
                 scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
@@ -131,9 +132,10 @@ class HabitatConditionAnalyzer:
         if land_mask is not None:
             site_area_img = site_area_img.updateMask(land_mask)
         site_area = (
-            site_area_img.reduceRegion(
+            reduce_site(
+                site_area_img,
                 ee.Reducer.sum(),
-                site_geom,
+                site,
                 scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
@@ -212,15 +214,17 @@ class HabitatConditionAnalyzer:
         )
         return intactness_raster
 
-    def calc_intactness_score(self, intactness_raster, site_geom):
+    def calc_intactness_score(self, intactness_raster, site):
         """
-        Calculate Habitat Intactness score within a site from intactness raster.
+        Calculate Habitat Intactness score within a site (from site_region) from
+        intactness raster.
         """
         # Calculate average intactness of habitat pixels within site
         intactness_score = (
-            intactness_raster.reduceRegion(
+            reduce_site(
+                intactness_raster,
                 ee.Reducer.mean(),
-                site_geom,
+                site,
                 scale=self.intactness_scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,

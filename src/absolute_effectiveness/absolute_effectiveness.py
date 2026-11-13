@@ -34,7 +34,7 @@ from utils.variables import (
 )
 
 from sites.dropped_sites import load_dropped
-from sites.site_selector import ee_geometry, load_sites
+from sites.site_selector import ee_geometry, load_sites, site_region
 from utils.retries import (
     has_error,
     load_succeeded_rows,
@@ -121,6 +121,7 @@ def analyze_site(site_id, START_YR, geometry):
 def fill_site_row(row, START_YR, geometry):
     """Add one site's results to row."""
     site_geom = ee_geometry(geometry)
+    site = site_region(geometry)
 
     # Process input datasets
     GLC_processed = processor.process_glc(site_geom, START_YR)
@@ -161,13 +162,13 @@ def fill_site_row(row, START_YR, geometry):
             ee_request,
             condition_analyzer.calc_intactness_score,
             intactness_raster,
-            site_geom,
+            site,
         )
 
         # Sum areas for extent, loss, drivers and habitat types lost in one request
         groups = ee_request(
             loss_analyzer.sum_areas_by_group_km2,
-            site_geom,
+            site,
             {
                 "habitat_end": habitat_binary_end,
                 "land": land_mask,

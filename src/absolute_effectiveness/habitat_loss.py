@@ -5,6 +5,7 @@ from utils.variables import (
     LOSS_OPENING_RADIUS_M,
     SCALE_M,
 )
+from sites.site_selector import reduce_site
 
 ee.Initialize()
 
@@ -45,19 +46,20 @@ class HabitatLossAnalyzer:
         return self.open_binary_raster(habitat_loss)
 
     def calc_overall_habitat_loss(
-        self, habitat_loss_raster, habitat_start_raster, site_geom, land_mask=None
+        self, habitat_loss_raster, habitat_start_raster, site, land_mask=None
     ):
         """
-        Calculate overall habitat loss metrics and habitat loss score.
+        Calculate overall habitat loss metrics and habitat loss score within a site
+        (from site_region).
 
         Returns area of habitat loss (km2), area of habitat at start year (km2),
         total site area (km2), habitat loss as percent of total site area, habitat
         loss as percent of habitat at start year, and habitat loss score (0-1,
         where 1 = no habitat loss).
         """
-        habitat_loss_area = self.sum_area_km2(site_geom, habitat_loss_raster)
-        habitat_start_area = self.sum_area_km2(site_geom, habitat_start_raster)
-        site_area = self.sum_area_km2(site_geom, land_mask)
+        habitat_loss_area = self.sum_area_km2(site, habitat_loss_raster)
+        habitat_start_area = self.sum_area_km2(site, habitat_start_raster)
+        site_area = self.sum_area_km2(site, land_mask)
         return self.habitat_loss_from_areas(
             habitat_loss_area, habitat_start_area, site_area
         )
@@ -84,13 +86,14 @@ class HabitatLossAnalyzer:
         )
 
     def calc_class_area_and_pct(
-        self, class_image, site_geom, site_area, habitat_start_area, top_n=4
+        self, class_image, site, site_area, habitat_start_area, top_n=4
     ):
         """
         Calculate area (km2), percent of total site area, and percent of habitat
-        at start year for each class in a classified image.
+        at start year for each class in a classified image, within a site (from
+        site_region).
         """
-        class_dict = self.top_class_areas(class_image, site_geom, top_n)
+        class_dict = self.top_class_areas(class_image, site, top_n)
         if not habitat_start_area:
             return {}
 
@@ -116,18 +119,18 @@ class HabitatLossAnalyzer:
         habitat_class_image,
         habitat_start_raster,
         lc_start,
-        site_geom,
+        site,
         top_n=4,
     ):
         """
         Calculate area (km2) and percent of each habitat type's start-year
-        extent for lost habitat classes.
+        extent for lost habitat classes, within a site (from site_region).
         """
-        class_dict = self.top_class_areas(habitat_class_image, site_geom, top_n)
+        class_dict = self.top_class_areas(habitat_class_image, site, top_n)
         habitat_at_start = lc_start.updateMask(habitat_start_raster).rename(
             "habitat_class"
         )
-        start_areas = self.calc_class_area_dict(habitat_at_start, site_geom)
+        start_areas = self.calc_class_area_dict(habitat_at_start, site)
 
         def add_metrics(key, value):
             base = ee.String(key).slice(0, -5)
@@ -226,14 +229,16 @@ class HabitatLossAnalyzer:
         }
         return binary.focalMin(**kwargs).focalMax(**kwargs)
 
-    def sum_area_km2(self, geometry, mask=None):
+    def sum_area_km2(self, site, mask=None):
+        """Area (km2) within a site (from site_region), under mask if given."""
         area_img = ee.Image.pixelArea().divide(KM2_PER_M2)
         if mask is not None:
             area_img = area_img.updateMask(mask)
         return (
-            area_img.reduceRegion(
+            reduce_site(
+                area_img,
                 ee.Reducer.sum(),
-                geometry,
+                site,
                 scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
@@ -242,26 +247,10 @@ class HabitatLossAnalyzer:
             .getInfo()
         )
 
-    def sum_areas_km2(self, geometry, masks):
-        """Area (km2) within geometry under each mask in masks ({name: mask}), in one request."""
-        area_img = ee.Image.pixelArea().divide(KM2_PER_M2)
-        return (
-            ee.Image.cat(
-                [area_img.updateMask(mask).rename(name) for name, mask in masks.items()]
-            )
-            .reduceRegion(
-                ee.Reducer.sum(),
-                geometry,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .getInfo()
-        )
-
-    def sum_areas_by_group_km2(self, geometry, masks, group_image):
-        """Area (km2) under each 0/1 mask in masks ({name: mask}) per value of the
-        integer group_image, in one request: {group: {name: area}}.
+    def sum_areas_by_group_km2(self, site, masks, group_image):
+        """Area (km2) within a site (from site_region) under each 0/1 mask in masks
+        ({name: mask}) per value of the integer group_image, in one request:
+        {group: {name: area}}.
 
         Masked pixels count as 0 in masks and as group 0.
         """
@@ -272,11 +261,12 @@ class HabitatLossAnalyzer:
             + [group_image.unmask(0).int().rename("group")]
         )
         groups = (
-            image.reduceRegion(
+            reduce_site(
+                image,
                 ee.Reducer.sum()
                 .repeat(len(names))
                 .group(groupField=len(names), groupName="group"),
-                geometry,
+                site,
                 scale=self.scale_m,
                 crs=self.crs,
                 maxPixels=self.max_pixels,
@@ -286,23 +276,17 @@ class HabitatLossAnalyzer:
         )
         return {int(g["group"]): dict(zip(names, g["sum"])) for g in groups}
 
-    def calc_class_area_dict(self, class_image, site_geom):
-        """Calculate area (km2) for each class in a classified image."""
+    def calc_class_area_dict(self, class_image, site):
+        """Calculate area (km2) for each class in a classified image, within a site
+        (from site_region)."""
         class_name = class_image.bandNames().get(0)
-        grouped = (
-            ee.Image.pixelArea()
-            .divide(KM2_PER_M2)
-            .addBands(class_image)
-            .reduceRegion(
-                reducer=ee.Reducer.sum().group(
-                    groupField=1,
-                    groupName=class_name,
-                ),
-                geometry=site_geom,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
+        grouped = reduce_site(
+            ee.Image.pixelArea().divide(KM2_PER_M2).addBands(class_image),
+            ee.Reducer.sum().group(groupField=1, groupName=class_name),
+            site,
+            scale=self.scale_m,
+            crs=self.crs,
+            maxPixels=self.max_pixels,
         )
 
         def to_entry(item, acc):
@@ -313,8 +297,8 @@ class HabitatLossAnalyzer:
             ee.List(grouped.get("groups")).iterate(to_entry, ee.Dictionary({}))
         )
 
-    def top_class_areas(self, class_image, site_geom, top_n):
-        areas = self.calc_class_area_dict(class_image, site_geom)
+    def top_class_areas(self, class_image, site, top_n):
+        areas = self.calc_class_area_dict(class_image, site)
         top = areas.select(areas.keys().sort(areas.values()).reverse().slice(0, top_n))
         keys = top.keys().map(lambda key: ee.String(key).cat("_area"))
         return ee.Dictionary.fromLists(keys, top.values())
