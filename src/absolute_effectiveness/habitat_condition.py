@@ -214,33 +214,35 @@ class HabitatConditionAnalyzer:
         )
         return intactness_raster
 
-    def calc_intactness_score(self, intactness_raster, site_geom):
+    def calc_intactness_score(self, intactness_raster, chunks):
         """
-        Calculate Habitat Intactness score within a site from intactness raster.
+        Calculate Habitat Intactness score within a site from intactness raster, one
+        request per piece of the site (chunks, from site_chunks).
         """
-        # Calculate average intactness of habitat pixels within site
-        intactness_score = (
-            intactness_raster.reduceRegion(
-                ee.Reducer.mean(),
-                site_geom,
-                scale=self.intactness_scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-                tileScale=self.tile_scale,
-            )
-            .get("intactness")
-            .getInfo()
+        return self.intactness_from_sums(
+            [self.intactness_sums(intactness_raster, chunk) for chunk in chunks]
         )
-        # Return 0 if score is invalid
-        if intactness_score is None:
-            return 0
-        try:
-            # Check for NaN or non-numeric results
-            if isinstance(intactness_score, float) and math.isnan(intactness_score):
-                return 0
-        except Exception:
-            return 0
-        return intactness_score
+
+    def intactness_sums(self, intactness_raster, region):
+        """(Sum of intactness, sum of pixel weights) over a region, in one request."""
+        stats = intactness_raster.reduceRegion(
+            ee.Reducer.sum().combine(ee.Reducer.mean(), sharedInputs=True),
+            region,
+            scale=self.intactness_scale_m,
+            crs=self.crs,
+            maxPixels=self.max_pixels,
+            tileScale=self.tile_scale,
+        ).getInfo()
+        total, mean = stats["intactness_sum"], stats["intactness_mean"]
+        # Weight = sum / mean; none if the region has no habitat
+        return (total, total / mean) if mean else (0, 0)
+
+    def intactness_from_sums(self, sums):
+        """Habitat Intactness score (mean intactness of habitat pixels) from the
+        intactness_sums of each piece of a site; 0 if the site has no habitat."""
+        total = sum(piece_total for piece_total, _ in sums)
+        weight = sum(piece_weight for _, piece_weight in sums)
+        return total / weight if weight else 0
 
     def calc_habitat_condition_score(
         self, habitat_extent_score, habitat_intactness_score

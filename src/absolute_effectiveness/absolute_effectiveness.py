@@ -34,7 +34,7 @@ from utils.variables import (
 )
 
 from sites.dropped_sites import load_dropped
-from sites.site_selector import ee_geometry, load_sites, site_region
+from sites.site_selector import ee_geometry, load_sites, site_chunks, site_region
 from utils.retries import (
     has_error,
     load_succeeded_rows,
@@ -122,6 +122,7 @@ def fill_site_row(row, START_YR, geometry):
     """Add one site's results to row."""
     site_geom = ee_geometry(geometry)
     site = site_region(geometry)
+    chunks = site_chunks(geometry)
 
     # Process input datasets
     GLC_processed = processor.process_glc(site_geom, START_YR)
@@ -156,14 +157,19 @@ def fill_site_row(row, START_YR, geometry):
         lc_start.add(1).unmask(0).multiply(GROUP_BASE).add(driver_class.unmask(0))
     )
 
-    # Request intactness alongside the areas below
-    with ThreadPoolExecutor(max_workers=1) as site_executor:
-        intactness_future = site_executor.submit(
-            ee_request,
-            condition_analyzer.calc_intactness_score,
-            intactness_raster,
-            site_geom,
-        )
+    # Request intactness, one request per piece of the site, alongside the areas below
+    with ThreadPoolExecutor(
+        max_workers=min(len(chunks), MAX_EE_REQUESTS)
+    ) as site_executor:
+        intactness_futures = [
+            site_executor.submit(
+                ee_request,
+                condition_analyzer.intactness_sums,
+                intactness_raster,
+                chunk,
+            )
+            for chunk in chunks
+        ]
 
         # Sum areas for extent, loss, drivers and habitat types lost in one request
         groups = ee_request(
@@ -237,7 +243,9 @@ def fill_site_row(row, START_YR, geometry):
             )
 
         # Calculate Habitat Intactness and overall Habitat Condition scores
-        row["intactness"] = intactness_future.result()
+        row["intactness"] = condition_analyzer.intactness_from_sums(
+            [future.result() for future in intactness_futures]
+        )
         row["condition"] = condition_analyzer.calc_habitat_condition_score(
             row["extent"], row["intactness"]
         )

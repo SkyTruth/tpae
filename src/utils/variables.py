@@ -466,6 +466,9 @@ INTACTNESS_SCALE_M = 60  # pixel size in meters
 KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_M / INTACTNESS_SCALE_M)
 KERNEL_SIZE_PIXELS = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
 TILE_SCALE = 4
+# Largest width and height (km, in GPD_CRS_METERS) of the pieces a site is split into
+# for intactness, one Earth Engine request each
+INTACTNESS_CHUNK_KM = 100
 
 # Parameters for habitat loss calculations
 LOSS_OPENING_RADIUS_M = 30  # meters
