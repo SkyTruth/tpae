@@ -2,14 +2,15 @@
 Extract covariate values for every candidate cell of each site in the active SITE_GROUP
 and save them to GCS, one parquet file per site.
 
-This is the slow Earth Engine step. Run it once per site group, after
-export_covariate_stack.py, get_treatment_cells.py and get_control_cells.py;
-MDM_match_cells.py then reads the saved files, so matching can be re-run quickly.
-Covariates are read from the exported 1 km covariate stack.
+Run it once per site group, after export_covariate_stack.py, get_treatment_cells.py
+and get_control_cells.py; MDM_match_cells.py then reads the saved files, so matching
+can be re-run quickly. Every cell is one pixel of the exported 1 km covariate stack, so
+its covariates are read as pixel values, with country, ecoregion and biome painted onto
+the same grid.
 
 Cells from all sites are pooled, so a cell shared by several sites is extracted once,
-and sent to Earth Engine in chunks, several at a time. A site is saved once all of its
-cells are extracted.
+and read from Earth Engine in tiles of the stack's grid, several at a time. A site is
+saved once all of its cells are extracted.
 
 A site is skipped if its file is newer than the treatment and control cell files and the
 covariate stack, so re-running picks up where a stalled or failed run left off, and regenerated cells are
@@ -37,8 +38,6 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
-    EE_CRS_METERS,
-    CELL_SIZE_M,
     SITE_GROUP,
     GCS_BUCKET,
     CELL_COVARIATES_PREFIX,
@@ -66,7 +65,6 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     """
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
-    import geemap
     from cells.load_all_cells import build_all_site_cells
     from sites.site_selector import load_site_ids
     from utils.retries import report_failures, with_retries
@@ -75,9 +73,11 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
         load_covariate_stack,
     )
     from covariates.cell_features import (
-        EE_GETINFO_LIMIT,
-        extract_covariates,
+        TILE_PX,
+        covariate_image,
         drop_invalid_cells,
+        extract_covariates,
+        stack_pixels,
     )
 
     ee.Authenticate()
@@ -86,8 +86,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
 
     if site_ids is None:
         site_ids = load_site_ids()
-    ee_crs_1km = ee.Projection(EE_CRS_METERS).atScale(CELL_SIZE_M)
-    covariates = load_covariate_stack()
+    image, country_names = covariate_image(load_covariate_stack())
 
     fs = gcsfs.GCSFileSystem()
     inputs_modified = max(
@@ -112,20 +111,20 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
         pd.DataFrame().to_parquet(cell_covariates_path(site_id), index=False)
         print(f"Site {site_id}: no cells, saved empty table")
 
-    # Each unique cell is extracted with the first site it belongs to, in chunks of up
-    # to EE_GETINFO_LIMIT cells from one site, so each request covers one site's area
+    # Each unique cell is extracted once; a chunk is the cells in one TILE_PX x TILE_PX
+    # tile of stack pixels, numbered in the order sites first use them
     site_order = cells["site_id"].map({s: i for i, s in enumerate(todo)})
     unique_cells = (
         cells.assign(_order=site_order)
         .sort_values(["_order", "cell_ID"])
         .drop_duplicates("cell_key")[["cell_key", "site_id", "geometry"]]
     )
-    unique_cells["chunk"] = unique_cells.groupby("site_id", sort=False).cumcount()
+    unique_cells["ix"], unique_cells["iy"] = stack_pixels(unique_cells)
     unique_cells["chunk"] = unique_cells.groupby(
-        ["site_id", unique_cells["chunk"] // EE_GETINFO_LIMIT], sort=False
+        [unique_cells["ix"] // TILE_PX, unique_cells["iy"] // TILE_PX], sort=False
     ).ngroup()
     chunk_cells = {
-        c: g[["cell_key", "geometry"]] for c, g in unique_cells.groupby("chunk")
+        c: g[["cell_key", "ix", "iy"]] for c, g in unique_cells.groupby("chunk")
     }
     cells["chunk"] = cells["cell_key"].map(unique_cells.set_index("cell_key")["chunk"])
     n_chunks = len(chunk_cells)
@@ -134,15 +133,15 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     chunk_sites = cells.groupby("chunk")["site_id"].unique()
     print(
         f"Extracting {len(unique_cells)} unique cells for {len(site_rows)} sites "
-        f"({len(cells)} site cells) in {n_chunks} chunks, {n_workers} at a time"
+        f"({len(cells)} site cells) in {n_chunks} tiles, {n_workers} at a time"
     )
 
     def extract_chunk(chunk):
         return with_retries(
             extract_covariates,
-            geemap.geopandas_to_ee(chunk_cells[chunk]),
-            covariates,
-            ee_crs_1km,
+            chunk_cells[chunk],
+            image,
+            country_names,
             label=f"Chunk {chunk}",
         )
 
