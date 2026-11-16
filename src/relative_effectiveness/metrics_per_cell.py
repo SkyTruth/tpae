@@ -46,51 +46,17 @@ def set_start_habitat_proportion(feature):
 
 
 class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
-    """Per-cell habitat loss metric.
+    """Per-cell habitat extent and loss metrics.
 
     Reuses `get_habitat_loss_raster` from `HabitatLossAnalyzer` and scores
-    loss within each cell using a single reduceRegions pass.
+    extent and loss within each cell using a single reduceRegions pass.
     """
-
-    def calc_loss_score_per_cell(self, habitat_loss_raster, cells_fc):
-        """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`."""
-        cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        loss_area_image = cell_area_image.updateMask(habitat_loss_raster).rename(
-            "loss_area"
-        )
-        combined = loss_area_image.addBands(cell_area_image)
-
-        with_areas = combined.reduceRegions(
-            collection=cells_fc,
-            reducer=ee.Reducer.sum(),
-            scale=self.scale_m,
-            crs=self.crs,
-        )
-
-        return with_areas.map(set_loss_score)
-
-    def calc_start_habitat_proportion_per_cell(self, habitat_start_raster, cells_fc):
-        """Proportion of each cell that was habitat at the start year."""
-        cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        start_area_image = cell_area_image.updateMask(habitat_start_raster).rename(
-            "start_habitat_area"
-        )
-        combined = start_area_image.addBands(cell_area_image)
-
-        with_areas = combined.reduceRegions(
-            collection=cells_fc,
-            reducer=ee.Reducer.sum(),
-            scale=self.scale_m,
-            crs=self.crs,
-        )
-
-        return with_areas.map(set_start_habitat_proportion)
 
     def calc_area_scores_per_cell(
         self, habitat_end_raster, habitat_loss_raster, habitat_start_raster, cells_fc
     ):
         """Set extent_score, loss_score, and start_habitat_proportion per cell, in one
-        reduceRegions pass (same results as the three separate methods)."""
+        reduceRegions pass."""
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
         combined = ee.Image.cat(
             [
@@ -117,34 +83,14 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
 
 
 class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
-    """Per-cell habitat extent, intactness, and overall condition metrics.
+    """Per-cell habitat intactness and overall condition metrics (extent is scored by
+    RelativeHabitatLossAnalyzer.calc_area_scores_per_cell).
 
     Reuses the raster-building methods from `HabitatConditionAnalyzer`
     (`get_habitat_binary_end`, `build_kernel`, `get_intactness_raster`) and adds
     server-side `reduceRegions`-based scoring for an entire FeatureCollection
-    of cells in a single pass per metric.
+    of cells.
     """
-
-    def calc_extent_score_per_cell(self, habitat_raster, cells_fc):
-        """Score Habitat Extent within each cell of `cells_fc`."""
-
-        # Could just set cell area to 1000000 since that's what it should be,
-        # but this might be more accurate given the projection
-
-        cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        habitat_area_image = cell_area_image.updateMask(habitat_raster).rename(
-            "habitat_area"
-        )
-        combined = habitat_area_image.addBands(cell_area_image)
-
-        with_area = combined.reduceRegions(
-            collection=cells_fc,
-            reducer=ee.Reducer.sum(),
-            scale=self.scale_m,
-            crs=self.crs,
-        )
-
-        return with_area.map(set_extent_score)
 
     def calc_intactness_score_per_cell(self, intactness_raster, cells_fc):
         """Score Habitat Intactness within each cell as the mean of intactness."""

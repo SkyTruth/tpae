@@ -10,12 +10,6 @@ from sites.site_selector import reduce_site
 ee.Initialize()
 
 KM2_PER_M2 = 1_000_000
-METRIC_SUFFIXES = (
-    ("_pct_start", "pct_start"),
-    ("_pct_class", "pct_class"),
-    ("_pct_site", "pct_site"),
-    ("_area", "area"),
-)
 
 
 class HabitatLossAnalyzer:
@@ -45,25 +39,6 @@ class HabitatLossAnalyzer:
         habitat_loss = habitat_binary_start.eq(1).And(habitat_binary_end.eq(0))
         return self.open_binary_raster(habitat_loss)
 
-    def calc_overall_habitat_loss(
-        self, habitat_loss_raster, habitat_start_raster, site, land_mask=None
-    ):
-        """
-        Calculate overall habitat loss metrics and habitat loss score within a site
-        (from site_region).
-
-        Returns area of habitat loss (km2), area of habitat at start year (km2),
-        total site area (km2), habitat loss as percent of total site area, habitat
-        loss as percent of habitat at start year, and habitat loss score (0-1,
-        where 1 = no habitat loss).
-        """
-        habitat_loss_area = self.sum_area_km2(site, habitat_loss_raster)
-        habitat_start_area = self.sum_area_km2(site, habitat_start_raster)
-        site_area = self.sum_area_km2(site, land_mask)
-        return self.habitat_loss_from_areas(
-            habitat_loss_area, habitat_start_area, site_area
-        )
-
     def habitat_loss_from_areas(self, habitat_loss_area, habitat_start_area, site_area):
         """calc_overall_habitat_loss's results from its three areas (km2)."""
         if not habitat_start_area:
@@ -84,67 +59,6 @@ class HabitatLossAnalyzer:
             habitat_loss_percent_start,
             habitat_loss_score,
         )
-
-    def calc_class_area_and_pct(
-        self, class_image, site, site_area, habitat_start_area, top_n=4
-    ):
-        """
-        Calculate area (km2), percent of total site area, and percent of habitat
-        at start year for each class in a classified image, within a site (from
-        site_region).
-        """
-        class_dict = self.top_class_areas(class_image, site, top_n)
-        if not habitat_start_area:
-            return {}
-
-        def add_metrics(key, value):
-            base = ee.String(key).slice(0, -5)
-            return (
-                ee.Dictionary()
-                .set(key, value)
-                .set(
-                    base.cat("_pct_site"),
-                    ee.Number(value).divide(site_area).multiply(100),
-                )
-                .set(
-                    base.cat("_pct_start"),
-                    ee.Number(value).divide(habitat_start_area).multiply(100),
-                )
-            )
-
-        return self.flatten_dict(class_dict.map(add_metrics)).getInfo()
-
-    def calc_habitat_class_area_and_pct(
-        self,
-        habitat_class_image,
-        habitat_start_raster,
-        lc_start,
-        site,
-        top_n=4,
-    ):
-        """
-        Calculate area (km2) and percent of each habitat type's start-year
-        extent for lost habitat classes, within a site (from site_region).
-        """
-        class_dict = self.top_class_areas(habitat_class_image, site, top_n)
-        habitat_at_start = lc_start.updateMask(habitat_start_raster).rename(
-            "habitat_class"
-        )
-        start_areas = self.calc_class_area_dict(habitat_at_start, site)
-
-        def add_metrics(key, value):
-            base = ee.String(key).slice(0, -5)
-            start_area = ee.Number(start_areas.get(base, 0))
-            pct_class = ee.Algorithms.If(
-                start_area.gt(0),
-                ee.Number(value).divide(start_area).multiply(100),
-                0,
-            )
-            return (
-                ee.Dictionary().set(key, value).set(base.cat("_pct_class"), pct_class)
-            )
-
-        return self.flatten_dict(class_dict.map(add_metrics)).getInfo()
 
     def get_driver_class_image(self, lc_end, habitat_loss_raster):
         """
@@ -187,40 +101,6 @@ class HabitatLossAnalyzer:
         parts.append(f"{pct_reference:.2f}% {reference_label}")
         print(", ".join(parts))
 
-    def translate_results(self, results_dict, labels, pct_reference_key="pct_start"):
-        """Print class metrics with human-readable labels."""
-        normalized = {}
-        for key, value in results_dict.items():
-            parsed = parse_result_key(key)
-            if parsed is None:
-                continue
-            class_id, metric = parsed
-            normalized.setdefault(class_id, {})[metric] = value
-
-        for class_id in sorted(
-            normalized,
-            key=lambda class_id: normalized[class_id].get("area", 0),
-            reverse=True,
-        ):
-            label = labels.get(class_id, f"Class {class_id}")
-            area = normalized[class_id].get("area")
-            pct_reference = normalized[class_id].get(pct_reference_key)
-            if area is None or pct_reference is None:
-                continue
-
-            if pct_reference_key == "pct_class":
-                reference_label = f"of site {label.lower()} at start year"
-                pct_site = None
-            else:
-                reference_label = "of habitat at start year"
-                pct_site = normalized[class_id].get("pct_site")
-                if pct_site is None:
-                    continue
-
-            self.print_habitat_loss_metrics(
-                label, area, pct_reference, reference_label, pct_site
-            )
-
     def open_binary_raster(self, binary):
         kwargs = {
             "radius": self.loss_opening_radius_m,
@@ -228,24 +108,6 @@ class HabitatLossAnalyzer:
             "units": "meters",
         }
         return binary.focalMin(**kwargs).focalMax(**kwargs)
-
-    def sum_area_km2(self, site, mask=None):
-        """Area (km2) within a site (from site_region), under mask if given."""
-        area_img = ee.Image.pixelArea().divide(KM2_PER_M2)
-        if mask is not None:
-            area_img = area_img.updateMask(mask)
-        return (
-            reduce_site(
-                area_img,
-                ee.Reducer.sum(),
-                site,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .get("area")
-            .getInfo()
-        )
 
     def sum_areas_by_group_km2(self, site, masks, group_image):
         """Area (km2) within a site (from site_region) under each 0/1 mask in masks
@@ -275,48 +137,3 @@ class HabitatLossAnalyzer:
             .getInfo()
         )
         return {int(g["group"]): dict(zip(names, g["sum"])) for g in groups}
-
-    def calc_class_area_dict(self, class_image, site):
-        """Calculate area (km2) for each class in a classified image, within a site
-        (from site_region)."""
-        class_name = class_image.bandNames().get(0)
-        grouped = reduce_site(
-            ee.Image.pixelArea().divide(KM2_PER_M2).addBands(class_image),
-            ee.Reducer.sum().group(groupField=1, groupName=class_name),
-            site,
-            scale=self.scale_m,
-            crs=self.crs,
-            maxPixels=self.max_pixels,
-        )
-
-        def to_entry(item, acc):
-            item = ee.Dictionary(item)
-            return ee.Dictionary(acc).set(item.get(class_name), item.get("sum"))
-
-        return ee.Dictionary(
-            ee.List(grouped.get("groups")).iterate(to_entry, ee.Dictionary({}))
-        )
-
-    def top_class_areas(self, class_image, site, top_n):
-        areas = self.calc_class_area_dict(class_image, site)
-        top = areas.select(areas.keys().sort(areas.values()).reverse().slice(0, top_n))
-        keys = top.keys().map(lambda key: ee.String(key).cat("_area"))
-        return ee.Dictionary.fromLists(keys, top.values())
-
-    def flatten_dict(self, mapped_dict):
-        def combine(item, acc):
-            return ee.Dictionary(acc).combine(ee.Dictionary(item), True)
-
-        return ee.Dictionary(mapped_dict.values().iterate(combine, ee.Dictionary({})))
-
-
-def parse_result_key(key):
-    if "_" not in key:
-        return None
-    for suffix, metric in METRIC_SUFFIXES:
-        if key.endswith(suffix):
-            try:
-                return int(float(key[: -len(suffix)])), metric
-            except TypeError, ValueError:
-                return None
-    return None

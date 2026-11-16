@@ -12,7 +12,6 @@ from utils.variables import (
     KERNEL_SIZE_PIXELS,
     TILE_SCALE,
 )
-from sites.site_selector import reduce_site
 
 
 class HabitatConditionAnalyzer:
@@ -108,43 +107,6 @@ class HabitatConditionAnalyzer:
         """
         return self._remap_habitat_binary(lc)
 
-    def calc_habitat_extent_score(self, habitat_raster, site, land_mask=None):
-        """
-        Calculate Habitat Extent score for analysis_end_yr within a site (from
-        site_region).
-        Extent score = habitat area / site area
-        """
-        # Calculate area of habitat within site
-        habitat_area = (
-            reduce_site(
-                ee.Image.pixelArea().updateMask(habitat_raster),
-                ee.Reducer.sum(),
-                site,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .get("area")
-            .getInfo()
-        )
-        # Calculate total site area (land only when land_mask is provided)
-        site_area_img = ee.Image.pixelArea()
-        if land_mask is not None:
-            site_area_img = site_area_img.updateMask(land_mask)
-        site_area = (
-            reduce_site(
-                site_area_img,
-                ee.Reducer.sum(),
-                site,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .get("area")
-            .getInfo()
-        )
-        return self.habitat_extent_from_areas(habitat_area, site_area)
-
     def habitat_extent_from_areas(self, habitat_area, site_area):
         """Habitat Extent score from habitat area and site area (same units)."""
         return min(habitat_area / site_area, 1)
@@ -213,15 +175,6 @@ class HabitatConditionAnalyzer:
             .updateMask(habitat_output_mask)
         )
         return intactness_raster
-
-    def calc_intactness_score(self, intactness_raster, chunks):
-        """
-        Calculate Habitat Intactness score within a site from intactness raster, one
-        request per piece of the site (chunks, from site_chunks).
-        """
-        return self.intactness_from_sums(
-            [self.intactness_sums(intactness_raster, chunk) for chunk in chunks]
-        )
 
     def intactness_sums(self, intactness_raster, region):
         """(Sum of intactness, sum of pixel weights) over a region, in one request."""
