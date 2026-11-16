@@ -57,14 +57,18 @@ class DataProcessor:
 
     def process_glc(self, region, start_yr):
         """
-        Process Global Land Cover Change data for the analysis period.
+        Process Global Land Cover Change data for the analysis period, from the images
+        that overlap region (a simple geometry, e.g. from bounds_rectangle).
         """
-        glc_mosaic = self.glc_collection.filterBounds(region).mosaic()
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
         # Rename bands for clarity
         band_names = [f"b{year - 2000 + 1}" for year in analysis_years]
         new_band_names = [f"GLC_{year}" for year in analysis_years]
-        glc_selected = glc_mosaic.select(band_names, new_band_names)
+        glc_selected = (
+            self.glc_collection.filterBounds(region)
+            .select(band_names, new_band_names)
+            .mosaic()
+        )
 
         def remap_classes(band):
             """
@@ -110,7 +114,8 @@ class DataProcessor:
 
     def process_forty(self, region, start_yr):
         """
-        Process Forest Typology (ForTy) data for the analysis period.
+        Process Forest Typology (ForTy) data for the analysis period, from the images
+        that overlap region (a simple geometry, e.g. from bounds_rectangle).
         """
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
         missing = [

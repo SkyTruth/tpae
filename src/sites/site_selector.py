@@ -1,6 +1,7 @@
 """
 Read the active site group's cleaned sites (SITE_GEOMS, written by clean_sites.py),
-reduce Earth Engine images over a site, and cut a site into pieces for intactness.
+reduce Earth Engine images over a site, cut a site into pieces for intactness, and
+build simple rectangles to select input images with.
 """
 
 import math
@@ -15,6 +16,8 @@ from pyproj import Transformer
 from utils.variables import SITE_GEOMS, GPD_CRS_METERS, INTACTNESS_CHUNK_KM
 
 M_PER_KM = 1000
+# Meters per degree of latitude (and of longitude at the equator), rounded down
+M_PER_DEGREE = 110_000
 
 
 def _read_sites(reader, path, **kwargs):
@@ -45,6 +48,21 @@ def load_site_ids(path=SITE_GEOMS):
 def ee_geometry(geom):
     """Earth Engine geometry of a shapely geometry."""
     return ee.Geometry(geom.__geo_interface__)
+
+
+def bounds_rectangle(bounds, margin_m=0):
+    """Earth Engine rectangle around bounds (min lon, min lat, max lon, max lat), at
+    least margin_m wider on each side."""
+    min_lon, min_lat, max_lon, max_lat = bounds
+    pad_lat = margin_m / M_PER_DEGREE
+    lat_lo, lat_hi = max(min_lat - pad_lat, -90), min(max_lat + pad_lat, 90)
+    max_abs_lat = min(max(abs(lat_lo), abs(lat_hi)), 89)
+    pad_lon = margin_m / (M_PER_DEGREE * math.cos(math.radians(max_abs_lat)))
+    return ee.Geometry.Rectangle(
+        [max(min_lon - pad_lon, -180), lat_lo, min(max_lon + pad_lon, 180), lat_hi],
+        proj="EPSG:4326",
+        geodesic=False,
+    )
 
 
 def site_region(geom):

@@ -31,10 +31,16 @@ from utils.variables import (
     GLC_LABELS,
     ABSOLUTE_RESULTS,
     DROPPED_SITES,
+    KERNEL_RADIUS_M,
 )
 
 from sites.dropped_sites import load_dropped
-from sites.site_selector import ee_geometry, load_sites, site_chunks, site_region
+from sites.site_selector import (
+    bounds_rectangle,
+    load_sites,
+    site_chunks,
+    site_region,
+)
 from utils.retries import (
     has_error,
     load_succeeded_rows,
@@ -120,14 +126,15 @@ def analyze_site(site_id, START_YR, geometry):
 
 def fill_site_row(row, START_YR, geometry):
     """Add one site's results to row."""
-    site_geom = ee_geometry(geometry)
     site = site_region(geometry)
     chunks = site_chunks(geometry)
+    # Input images are read within the site and the intactness kernel's reach
+    inputs_region = bounds_rectangle(geometry.bounds, KERNEL_RADIUS_M)
 
     # Process input datasets
-    GLC_processed = processor.process_glc(site_geom, START_YR)
+    GLC_processed = processor.process_glc(inputs_region, START_YR)
     GPW_processed = processor.process_gpw(START_YR)
-    FORTY_processed = processor.process_forty(site_geom, START_YR)
+    FORTY_processed = processor.process_forty(inputs_region, START_YR)
     HGFC_processed = processor.process_hgfc(START_YR)
     land_mask = processor.get_land_mask()
 
