@@ -107,41 +107,8 @@ class HabitatConditionAnalyzer:
         """
         return self._remap_habitat_binary(lc)
 
-    def calc_habitat_extent_score(self, habitat_raster, site_geom, land_mask=None):
-        """
-        Calculate Habitat Extent score for analysis_end_yr within a site.
-        Extent score = habitat area / site area
-        """
-        # Calculate area of habitat within site
-        habitat_area = (
-            ee.Image.pixelArea()
-            .updateMask(habitat_raster)
-            .reduceRegion(
-                ee.Reducer.sum(),
-                site_geom,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .get("area")
-            .getInfo()
-        )
-        # Calculate total site area (land only when land_mask is provided)
-        site_area_img = ee.Image.pixelArea()
-        if land_mask is not None:
-            site_area_img = site_area_img.updateMask(land_mask)
-        site_area = (
-            site_area_img.reduceRegion(
-                ee.Reducer.sum(),
-                site_geom,
-                scale=self.scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-            )
-            .get("area")
-            .getInfo()
-        )
-
+    def habitat_extent_from_areas(self, habitat_area, site_area):
+        """Habitat Extent score from habitat area and site area (same units)."""
         return min(habitat_area / site_area, 1)
 
     def build_kernel(self):
@@ -176,61 +143,59 @@ class HabitatConditionAnalyzer:
         )
         return exp_kernel
 
-    def get_intactness_raster(self, habitat_raster, site_geom, exp_kernel, land_mask):
+    def get_intactness_raster(self, habitat_raster, exp_kernel, land_mask):
         """
         Create continuous habitat intactness raster.
 
-        Uses a three-class kernel input:
-          1 — habitat pixels
-          0 — anthropogenic / non-habitat on land (penalize adjacent habitat)
-          masked — permanent water and ocean (excluded from kernel entirely)
+        Intactness = kernel-weighted habitat / kernel-weighted land, so water and
+        ocean within the kernel are excluded rather than counted as non-habitat:
+          I(p) = Σ_land w·habitat / Σ_land w
         """
-        # 1=habitat, 0=anthro on land, null=water (masked out of kernel)
-        habitat_binary = (
-            ee.Image(0).where(habitat_raster.gt(0), 1).updateMask(land_mask).toFloat()
+        # Habitat on land and land, both 1/0 (water and no data are 0 in both)
+        kernel_input = (
+            ee.Image.cat(
+                [
+                    habitat_raster.gt(0).And(land_mask).rename("habitat"),
+                    land_mask.rename("land"),
+                ]
+            )
+            .unmask(0)
+            .toFloat()
         )
-        habitat_binary_reproj = habitat_binary.reproject(
+        kernel_input_reproj = kernel_input.reproject(
             crs=self.crs,
             scale=self.scale_m,
         )
-        habitat_binary_clipped = habitat_binary_reproj.clip(
-            site_geom.buffer(self.kernel_radius_m)
-        )
+        weighted = kernel_input_reproj.convolve(exp_kernel)
         habitat_output_mask = habitat_raster.gt(0).updateMask(land_mask)
         intactness_raster = (
-            habitat_binary_clipped.convolve(exp_kernel)
+            weighted.select("habitat")
+            .divide(weighted.select("land"))
             .rename("intactness")
             .updateMask(habitat_output_mask)
         )
         return intactness_raster
 
-    def calc_intactness_score(self, intactness_raster, site_geom):
-        """
-        Calculate Habitat Intactness score within a site from intactness raster.
-        """
-        # Calculate average intactness of habitat pixels within site
-        intactness_score = (
-            intactness_raster.reduceRegion(
-                ee.Reducer.mean(),
-                site_geom,
-                scale=self.intactness_scale_m,
-                crs=self.crs,
-                maxPixels=self.max_pixels,
-                tileScale=self.tile_scale,
-            )
-            .get("intactness")
-            .getInfo()
-        )
-        # Return 0 if score is invalid
-        if intactness_score is None:
-            return 0
-        try:
-            # Check for NaN or non-numeric results
-            if isinstance(intactness_score, float) and math.isnan(intactness_score):
-                return 0
-        except Exception:
-            return 0
-        return intactness_score
+    def intactness_sums(self, intactness_raster, region):
+        """(Sum of intactness, sum of pixel weights) over a region, in one request."""
+        stats = intactness_raster.reduceRegion(
+            ee.Reducer.sum().combine(ee.Reducer.mean(), sharedInputs=True),
+            region,
+            scale=self.intactness_scale_m,
+            crs=self.crs,
+            maxPixels=self.max_pixels,
+            tileScale=self.tile_scale,
+        ).getInfo()
+        total, mean = stats["intactness_sum"], stats["intactness_mean"]
+        # Weight = sum / mean; none if the region has no habitat
+        return (total, total / mean) if mean else (0, 0)
+
+    def intactness_from_sums(self, sums):
+        """Habitat Intactness score (mean intactness of habitat pixels) from the
+        intactness_sums of each piece of a site; 0 if the site has no habitat."""
+        total = sum(piece_total for piece_total, _ in sums)
+        weight = sum(piece_weight for _, piece_weight in sums)
+        return total / weight if weight else 0
 
     def calc_habitat_condition_score(
         self, habitat_extent_score, habitat_intactness_score

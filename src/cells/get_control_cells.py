@@ -3,6 +3,7 @@ Creates a set of control cells for each site.
 Control cells are 1km x 1km cells that fall within a given distance range around the site.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import sys
 
@@ -16,9 +17,8 @@ from shapely.geometry import box
 
 from utils.variables import (
     PROJECT,
-    PAS_ASSET_ID,
-    OECMS_ASSET_ID,
-    SITES,
+    EE_DEADLINE_MS,
+    SITE_GEOMS,
     TREATMENT_CELLS,
     CONTROL_CELLS,
     EE_CRS_METERS,
@@ -28,23 +28,29 @@ from utils.variables import (
     RAND_SEED,
     CONTROL_INNER_BUFFER_M,
     CONTROL_OUTER_BUFFER_M,
+    CONTROL_SIMPLIFY_M,
     CONTROL_SPACING_M,
     CONTROL_N_SAMPLES_MIN,
     CONTROL_N_SAMPLES_MAX,
     CONTROL_SAMPLES_PER_TREAT,
     HGFC_ASSET_ID,
+    PAS_ASSET_ID,
+    OECMS_ASSET_ID,
+    EE_N_WORKERS,
 )
+from utils.retries import report_failures, with_retries
 
 
 def init_ee(project):
     """
-    Initialize Earth Engine, authenticating if needed.
+    Initialize Earth Engine, authenticating if needed, with a request deadline.
     """
     try:
         ee.Initialize(project=project)
     except Exception:
         ee.Authenticate()
         ee.Initialize(project=project)
+    ee.data.setDeadline(EE_DEADLINE_MS)
 
 
 def load_treatment_cell_counts(treatment_cells_path: str = TREATMENT_CELLS):
@@ -65,19 +71,6 @@ def calc_n_control_samples(
     """Control sample size: per_treat per treatment cell, clipped to [minimum, maximum]."""
     n_treat = 0 if n_treat is None else int(n_treat)
     return min(maximum, max(minimum, per_treat * n_treat))
-
-
-def get_all_pas():
-    """
-    Get a feature collection of all terrestrial PAs and OECMS.
-    """
-    pas = ee.FeatureCollection(PAS_ASSET_ID)
-    oecms = ee.FeatureCollection(OECMS_ASSET_ID)
-    return (
-        ee.FeatureCollection([pas, oecms])
-        .flatten()
-        .filter(ee.Filter.eq("REALM", "Terrestrial"))
-    )
 
 
 def sample_points(
@@ -190,13 +183,23 @@ def get_control_cells(
     seed: int = RAND_SEED,
     inner_buffer_m: int = CONTROL_INNER_BUFFER_M,
     outer_buffer_m: int = CONTROL_OUTER_BUFFER_M,
+    n_workers: int = EE_N_WORKERS,
 ):
     """
-    Iterate through sites and extract control cells for each.
+    Extract control cells for each site, n_workers sites at a time.
     """
     init_ee(PROJECT)
     sites_gdf = gpd.read_parquet(sites_path)
-    all_pas = get_all_pas()
+    # Simplify site boundaries before buffering
+    sites_gdf["geometry"] = (
+        sites_gdf.geometry.to_crs(GPD_CRS_METERS)
+        .simplify(CONTROL_SIMPLIFY_M)
+        .to_crs(sites_gdf.crs)
+    )
+    # Every PA and OECM, in all realms
+    all_pas = ee.FeatureCollection(
+        [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
+    ).flatten()
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)
     except FileNotFoundError as exc:
@@ -205,9 +208,8 @@ def get_control_cells(
             "Run get_treatment_cells.py first."
         ) from exc
 
-    all_cells = []
-    n_done = 0
-    n_sites = len(sites_gdf)
+    # Sites with treatment cells, and the number of control cells to request for each
+    site_jobs = []
     for _, row in sites_gdf.iterrows():
         site_id = int(row["site_id"])
         n_treat = treat_counts.get(str(site_id), 0)
@@ -217,20 +219,18 @@ def get_control_cells(
         n_samples_site = (
             n_samples if n_samples is not None else calc_n_control_samples(n_treat)
         )
-        print("Starting site: ", site_id)
-        print(
-            f"Treatment cells: {n_treat}; requesting {n_samples_site} control cells "
-            f"(min={CONTROL_N_SAMPLES_MIN}, max={CONTROL_N_SAMPLES_MAX}, "
-            f"per_treat={CONTROL_SAMPLES_PER_TREAT})"
-        )
+        site_jobs.append((site_id, row.geometry, n_samples_site))
+    print(
+        f"Sampling control cells for {len(site_jobs)} sites, {n_workers} at a time "
+        f"(min={CONTROL_N_SAMPLES_MIN}, max={CONTROL_N_SAMPLES_MAX}, "
+        f"per_treat={CONTROL_SAMPLES_PER_TREAT})"
+    )
 
+    def sample_site(site_id, geom, n_samples_site):
         # Use the cleaned site geometry (same one used for treatment cells)
-        site_geom = ee.Geometry(row.geometry.__geo_interface__)
-
-        print("Sampling points for site: ", site_id)
         points_fc = sample_points(
             all_pas,
-            site_geom,
+            ee.Geometry(geom.__geo_interface__),
             site_id,
             n_samples=n_samples_site,
             control_spacing_m=control_spacing_m,
@@ -238,20 +238,45 @@ def get_control_cells(
             inner_buffer_m=inner_buffer_m,
             outer_buffer_m=outer_buffer_m,
         )
-        print("Drawing cells for site: ", site_id)
-        cells_gdf = points_to_cells(points_fc)
+        return points_to_cells(points_fc)
 
-        if len(cells_gdf) == 0:
-            print(f"Warning: site {site_id}: no control cells")
-            continue
+    executor = ThreadPoolExecutor(max_workers=n_workers)
+    try:
+        futures = {
+            executor.submit(with_retries, sample_site, *job, label=f"Site {job[0]}"): (
+                job
+            )
+            for job in site_jobs
+        }
+        site_cells, failed = {}, {}
+        for n_done, future in enumerate(as_completed(futures), start=1):
+            site_id, _, n_samples_site = futures[future]
+            try:
+                site_cells[site_id] = future.result()
+            except Exception as exc:
+                print(f"FAILED: site {site_id}: {exc} [{n_done}/{len(site_jobs)}]")
+                failed[site_id] = str(exc)
+                continue
+            n_cells = len(site_cells[site_id])
+            print(
+                f"Site {site_id}: {n_cells} control cells "
+                f"(requested {n_samples_site}) [{n_done}/{len(site_jobs)}]"
+            )
+            if n_cells == 0:
+                print(f"Warning: site {site_id}: no control cells")
+    finally:
+        # Stop unstarted sites if interrupted
+        executor.shutdown(cancel_futures=True)
+    report_failures(failed, len(site_jobs))
+    if failed:
+        print("Re-run to retry them")
 
-        print(f"Got {len(cells_gdf)} control cells (requested {n_samples_site})")
-        all_cells.append(cells_gdf)
-
-        print("Completed site: ", site_id)
-        n_done += 1
-        print(f"Progress: {n_done}/{n_sites} sites processed")
-        print("--------------------------------")
+    # Combine in site order, so the output does not depend on which site finished first
+    all_cells = [
+        site_cells[job[0]]
+        for job in site_jobs
+        if job[0] in site_cells and len(site_cells[job[0]]) > 0
+    ]
 
     if not all_cells:
         raise RuntimeError("No control cells generated for any site.")
@@ -268,4 +293,4 @@ def get_control_cells(
 
 
 if __name__ == "__main__":
-    get_control_cells(SITES)
+    get_control_cells(SITE_GEOMS)

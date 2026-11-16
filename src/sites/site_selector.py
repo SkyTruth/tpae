@@ -1,69 +1,121 @@
-import logging
+"""
+Read the active site group's cleaned sites (SITE_GEOMS, written by clean_sites.py),
+reduce Earth Engine images over a site, cut a site into pieces for intactness, and
+build simple rectangles to select input images with.
+"""
+
+import math
+
 import ee
-from utils.variables import (
-    ANALYSIS_START_YR,
-    ANALYSIS_END_YR,
-    OECMS_ASSET_ID,
-    PAS_ASSET_ID,
-    SITE_IDS,
-)
+import geopandas as gpd
+import numpy as np
+import pandas as pd
+import shapely
+from pyproj import Transformer
 
-logger = logging.getLogger(__name__)
+from utils.variables import SITE_GEOMS, GPD_CRS_METERS, INTACTNESS_CHUNK_KM
+
+M_PER_KM = 1000
+# Meters per degree of latitude (and of longitude at the equator), rounded down
+M_PER_DEGREE = 110_000
 
 
-class SiteSelector:
+def _read_sites(reader, path, **kwargs):
+    try:
+        return reader(path, **kwargs)
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"No cleaned sites at {path}; run clean_sites.py first"
+        ) from None
+
+
+def load_sites(path=SITE_GEOMS):
+    """Cleaned sites, one row per site_id (EPSG:4326)."""
+    return _read_sites(gpd.read_parquet, path)
+
+
+def load_start_yrs(path=SITE_GEOMS):
+    """{site_id: start year} for every site, without reading geometries."""
+    table = _read_sites(pd.read_parquet, path, columns=["site_id", "start_yr"])
+    return dict(zip(table["site_id"].astype(int), table["start_yr"].astype(int)))
+
+
+def load_site_ids(path=SITE_GEOMS):
+    """SITE_IDs of every site, in file order."""
+    return list(load_start_yrs(path))
+
+
+def ee_geometry(geom):
+    """Earth Engine geometry of a shapely geometry."""
+    return ee.Geometry(geom.__geo_interface__)
+
+
+def bounds_rectangle(bounds, margin_m=0):
+    """Earth Engine rectangle around bounds (min lon, min lat, max lon, max lat), at
+    least margin_m wider on each side."""
+    min_lon, min_lat, max_lon, max_lat = bounds
+    pad_lat = margin_m / M_PER_DEGREE
+    lat_lo, lat_hi = max(min_lat - pad_lat, -90), min(max_lat + pad_lat, 90)
+    max_abs_lat = min(max(abs(lat_lo), abs(lat_hi)), 89)
+    pad_lon = margin_m / (M_PER_DEGREE * math.cos(math.radians(max_abs_lat)))
+    return ee.Geometry.Rectangle(
+        [max(min_lon - pad_lon, -180), lat_lo, min(max_lon + pad_lon, 180), lat_hi],
+        proj="EPSG:4326",
+        geodesic=False,
+    )
+
+
+def site_region(geom):
+    """A site for reduce_site: its polygons as an Earth Engine FeatureCollection, and
+    its bounding box."""
+    parts = getattr(geom, "geoms", [geom])
+    site_fc = ee.FeatureCollection([ee.Feature(ee_geometry(p)) for p in parts])
+    bbox = ee.Geometry.Rectangle(list(geom.bounds), proj="EPSG:4326", geodesic=False)
+    return site_fc, bbox
+
+
+def reduce_site(image, reducer, site, **kwargs):
+    """image.reduceRegion over a site from site_region: the image is masked to the
+    site's polygons and reduced over its bounding box, which is much faster than
+    reducing over a complex polygon."""
+    site_fc, bbox = site
+    return image.clipToCollection(site_fc).reduceRegion(reducer, bbox, **kwargs)
+
+
+def site_chunks(geom, chunk_km=INTACTNESS_CHUNK_KM):
+    """A site cut on a grid into pieces at most chunk_km wide and tall (in
+    GPD_CRS_METERS), as Earth Engine geometries; a site that fits in one piece is
+    returned whole.
+
+    The grid divides the site's bounding box evenly, and neighboring pieces share the
+    same cut edges, so every part of the site is in exactly one piece.
     """
-    Selects site for analysis and gets site-specific variables.
-    """
+    to_m = Transformer.from_crs("EPSG:4326", GPD_CRS_METERS, always_xy=True)
+    min_lon, min_lat, max_lon, max_lat = geom.bounds
+    (x0, x1), (y0, y1) = to_m.transform([min_lon, max_lon], [min_lat, max_lat])
+    n_cols = max(1, math.ceil((x1 - x0) / (chunk_km * M_PER_KM)))
+    n_rows = max(1, math.ceil((y1 - y0) / (chunk_km * M_PER_KM)))
+    if n_cols * n_rows == 1:
+        return [ee_geometry(geom)]
 
-    def __init__(
-        self,
-        site_ids=SITE_IDS,
-        analysis_start_yr=ANALYSIS_START_YR,
-        analysis_end_yr=ANALYSIS_END_YR,
-        pas_collection_id=PAS_ASSET_ID,
-        oecms_collection_id=OECMS_ASSET_ID,
-    ):
-        self.site_ids = site_ids
-        self.analysis_start_yr = analysis_start_yr
-        self.analysis_end_yr = analysis_end_yr
-        self.pas = ee.FeatureCollection(pas_collection_id)
-        self.oecms = ee.FeatureCollection(oecms_collection_id)
+    # Grid lines in degrees, evenly spaced in meters; outer lines on the exact bounds
+    xs, ys = np.linspace(x0, x1, n_cols + 1), np.linspace(y0, y1, n_rows + 1)
+    lons = to_m.transform(xs, np.full_like(xs, y0), direction="INVERSE")[0]
+    lats = to_m.transform(np.full_like(ys, x0), ys, direction="INVERSE")[1]
+    lons[[0, -1]], lats[[0, -1]] = (min_lon, max_lon), (min_lat, max_lat)
+    lon_lo, lat_lo = np.meshgrid(lons[:-1], lats[:-1])
+    lon_hi, lat_hi = np.meshgrid(lons[1:], lats[1:])
+    cells = shapely.box(lon_lo, lat_lo, lon_hi, lat_hi).ravel()
 
-    def get_sites(self):
-        """
-        Get the selected sites (terrestrial PAs and OECMs).
-        """
-        all_sites = (
-            ee.FeatureCollection([self.pas, self.oecms])
-            .flatten()
-            .filter(ee.Filter.eq("REALM", "Terrestrial"))
-        )
-        return all_sites.filter(ee.Filter.inList("SITE_ID", self.site_ids))
-
-    def set_start_yr(self, sites, site_id):
-        """
-        Set start year to designation year if it is later than the analysis start year.
-        """
-        designation_yr = (
-            sites.filter(ee.Filter.eq("SITE_ID", site_id))
-            .first()
-            .get("STATUS_YR")
-            .getInfo()
-        )
-        return max(self.analysis_start_yr, designation_yr)
-
-    def check_start_yr(self, start_yr):
-        """
-        Check if start year is valid for analysis.
-        """
-        if start_yr > (self.analysis_end_yr - 1):
-            msg = f"Site was designated too recently ({start_yr}) to analyze effectiveness."
-            logger.error(msg)
-            raise ValueError(msg)
-
-    def get_site_geom(self, sites, site_id):
-        """
-        Get geometry of a specific site.
-        """
-        return sites.filter(ee.Filter.eq("SITE_ID", site_id)).geometry()
+    chunks = []
+    for piece in shapely.intersection(geom, cells):
+        # Keep polygons only (cells that miss or just touch the site add empty
+        # polygons, lines or points)
+        polygons = [
+            p
+            for p in shapely.get_parts(piece)
+            if p.geom_type == "Polygon" and not p.is_empty
+        ]
+        if polygons:
+            chunks.append(ee_geometry(shapely.MultiPolygon(polygons)))
+    return chunks

@@ -7,6 +7,7 @@ import geemap
 import geopandas as gpd
 import ee
 
+from sites.site_selector import ee_geometry, load_sites
 from utils.variables import TREATMENT_CELLS, CONTROL_CELLS
 
 
@@ -27,17 +28,39 @@ def build_site_cells(site_id, treatment_cells, control_cells):
     return all_cells
 
 
-def load_site_cells(site_id, site_selector):
-    """Load treatment and control cells for a site and assign sequential cell_IDs."""
+def build_all_site_cells(site_ids, treatment_cells, control_cells):
+    """Every listed site's cells, with the same cell_IDs as build_site_cells (EPSG:4326).
+
+    cell_key numbers the unique cell geometries in order of first appearance; a control
+    cell can belong to more than one site.
+    """
+    site_ids = [str(site_id) for site_id in site_ids]
+    cells = pd.concat([treatment_cells, control_cells], ignore_index=True)
+    cells = cells[cells["site_id"].isin(site_ids)].to_crs(epsg=4326)
+    cells["cell_ID"] = cells.groupby("site_id").cumcount()
+    cells["cell_key"] = pd.factorize(cells.geometry.to_wkb())[0]
+    return cells.reset_index(drop=True)
+
+
+def load_site_cells(site_id, treatment_cells=None, control_cells=None):
+    """Load treatment and control cells for a site and assign sequential cell_IDs.
+
+    treatment_cells / control_cells: cells from TREATMENT_CELLS / CONTROL_CELLS (all
+    sites), so a loop over sites reads them once; read from GCS if not given.
+    """
     site_id = str(site_id)
 
-    sites = site_selector.get_sites()
-    site_geom = site_selector.get_site_geom(sites, site_id)
+    sites = load_sites()
+    site_geom = ee_geometry(sites.geometry[sites["site_id"] == int(site_id)].item())
 
-    treatment_cells = gpd.read_parquet(TREATMENT_CELLS).to_crs(epsg=4326)
+    if treatment_cells is None:
+        treatment_cells = gpd.read_parquet(TREATMENT_CELLS)
+    if control_cells is None:
+        control_cells = gpd.read_parquet(CONTROL_CELLS)
     treatment_cells = treatment_cells[treatment_cells["site_id"] == site_id]
-    control_cells = gpd.read_parquet(CONTROL_CELLS).to_crs(epsg=4326)
+    treatment_cells = treatment_cells.to_crs(epsg=4326)
     control_cells = control_cells[control_cells["site_id"] == site_id]
+    control_cells = control_cells.to_crs(epsg=4326)
 
     print(f"Number of candidate treatment cells: {len(treatment_cells)}")
     print(f"Number of candidate control cells: {len(control_cells)}")
@@ -51,7 +74,6 @@ def load_site_cells(site_id, site_selector):
 
     return {
         "site_id": site_id,
-        "sites": sites,
         "site_geom": site_geom,
         "treatment_cells": treatment_cells,
         "control_cells": control_cells,

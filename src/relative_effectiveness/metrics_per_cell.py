@@ -15,20 +15,59 @@ __all__ = [
 ]
 
 
+def set_extent_score(feature):
+    """Set extent_score from a cell's habitat_area and cell_area."""
+    habitat_area = ee.Number(feature.get("habitat_area"))
+    cell_area = ee.Number(feature.get("cell_area"))
+    return feature.set("extent_score", habitat_area.divide(cell_area).min(1))
+
+
+def set_loss_score(feature):
+    """Set loss_score from a cell's loss_area and cell_area."""
+    loss_area = ee.Number(
+        ee.Algorithms.If(feature.get("loss_area"), feature.get("loss_area"), 0)
+    )
+    cell_area = ee.Number(feature.get("cell_area"))
+    loss_score = ee.Number(1).subtract(loss_area.divide(cell_area).min(1))
+    return feature.set("loss_score", loss_score)
+
+
+def set_start_habitat_proportion(feature):
+    """Set start_habitat_proportion from a cell's start_habitat_area and cell_area."""
+    start_area = ee.Number(
+        ee.Algorithms.If(
+            feature.get("start_habitat_area"),
+            feature.get("start_habitat_area"),
+            0,
+        )
+    )
+    cell_area = ee.Number(feature.get("cell_area"))
+    return feature.set("start_habitat_proportion", start_area.divide(cell_area).min(1))
+
+
 class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
-    """Per-cell habitat loss metric.
+    """Per-cell habitat extent and loss metrics.
 
     Reuses `get_habitat_loss_raster` from `HabitatLossAnalyzer` and scores
-    loss within each cell using a single reduceRegions pass.
+    extent and loss within each cell using a single reduceRegions pass.
     """
 
-    def calc_loss_score_per_cell(self, habitat_loss_raster, cells_fc):
-        """Score Habitat Loss within each cell as `1 - (loss_area / cell_area)`."""
+    def calc_area_scores_per_cell(
+        self, habitat_end_raster, habitat_loss_raster, habitat_start_raster, cells_fc
+    ):
+        """Set extent_score, loss_score, and start_habitat_proportion per cell, in one
+        reduceRegions pass."""
         cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        loss_area_image = cell_area_image.updateMask(habitat_loss_raster).rename(
-            "loss_area"
+        combined = ee.Image.cat(
+            [
+                cell_area_image.updateMask(habitat_end_raster).rename("habitat_area"),
+                cell_area_image.updateMask(habitat_loss_raster).rename("loss_area"),
+                cell_area_image.updateMask(habitat_start_raster).rename(
+                    "start_habitat_area"
+                ),
+                cell_area_image,
+            ]
         )
-        combined = loss_area_image.addBands(cell_area_image)
 
         with_areas = combined.reduceRegions(
             collection=cells_fc,
@@ -36,82 +75,22 @@ class RelativeHabitatLossAnalyzer(HabitatLossAnalyzer):
             scale=self.scale_m,
             crs=self.crs,
         )
-
-        def add_score(feature):
-            loss_area = ee.Number(
-                ee.Algorithms.If(feature.get("loss_area"), feature.get("loss_area"), 0)
+        return with_areas.map(
+            lambda feature: set_start_habitat_proportion(
+                set_loss_score(set_extent_score(feature))
             )
-            cell_area = ee.Number(feature.get("cell_area"))
-            loss_score = ee.Number(1).subtract(loss_area.divide(cell_area).min(1))
-            return feature.set("loss_score", loss_score)
-
-        return with_areas.map(add_score)
-
-    def calc_start_habitat_proportion_per_cell(self, habitat_start_raster, cells_fc):
-        """Proportion of each cell that was habitat at the start year."""
-        cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        start_area_image = cell_area_image.updateMask(habitat_start_raster).rename(
-            "start_habitat_area"
         )
-        combined = start_area_image.addBands(cell_area_image)
-
-        with_areas = combined.reduceRegions(
-            collection=cells_fc,
-            reducer=ee.Reducer.sum(),
-            scale=self.scale_m,
-            crs=self.crs,
-        )
-
-        def add_proportion(feature):
-            start_area = ee.Number(
-                ee.Algorithms.If(
-                    feature.get("start_habitat_area"),
-                    feature.get("start_habitat_area"),
-                    0,
-                )
-            )
-            cell_area = ee.Number(feature.get("cell_area"))
-            proportion = start_area.divide(cell_area).min(1)
-            return feature.set("start_habitat_proportion", proportion)
-
-        return with_areas.map(add_proportion)
 
 
 class RelativeHabitatConditionAnalyzer(HabitatConditionAnalyzer):
-    """Per-cell habitat extent, intactness, and overall condition metrics.
+    """Per-cell habitat intactness and overall condition metrics (extent is scored by
+    RelativeHabitatLossAnalyzer.calc_area_scores_per_cell).
 
     Reuses the raster-building methods from `HabitatConditionAnalyzer`
     (`get_habitat_binary_end`, `build_kernel`, `get_intactness_raster`) and adds
     server-side `reduceRegions`-based scoring for an entire FeatureCollection
-    of cells in a single pass per metric.
+    of cells.
     """
-
-    def calc_extent_score_per_cell(self, habitat_raster, cells_fc):
-        """Score Habitat Extent within each cell of `cells_fc`."""
-
-        # Could just set cell area to 1000000 since that's what it should be,
-        # but this might be more accurate given the projection
-
-        cell_area_image = ee.Image.pixelArea().rename("cell_area")
-        habitat_area_image = cell_area_image.updateMask(habitat_raster).rename(
-            "habitat_area"
-        )
-        combined = habitat_area_image.addBands(cell_area_image)
-
-        with_area = combined.reduceRegions(
-            collection=cells_fc,
-            reducer=ee.Reducer.sum(),
-            scale=self.scale_m,
-            crs=self.crs,
-        )
-
-        def add_score(feature):
-            habitat_area = ee.Number(feature.get("habitat_area"))
-            cell_area = ee.Number(feature.get("cell_area"))
-            extent_score = habitat_area.divide(cell_area).min(1)
-            return feature.set("extent_score", extent_score)
-
-        return with_area.map(add_score)
 
     def calc_intactness_score_per_cell(self, intactness_raster, cells_fc):
         """Score Habitat Intactness within each cell as the mean of intactness."""

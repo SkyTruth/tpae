@@ -55,16 +55,20 @@ class DataProcessor:
     def _apply_land_mask(self, image):
         return image.updateMask(self.get_land_mask())
 
-    def process_glc(self, region, start_yr, land_masked=True):
+    def process_glc(self, region, start_yr):
         """
-        Process Global Land Cover Change data for the analysis period.
+        Process Global Land Cover Change data for the analysis period, from the images
+        that overlap region (a simple geometry, e.g. from bounds_rectangle).
         """
-        glc_mosaic = self.glc_collection.filterBounds(region).mosaic()
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
         # Rename bands for clarity
         band_names = [f"b{year - 2000 + 1}" for year in analysis_years]
         new_band_names = [f"GLC_{year}" for year in analysis_years]
-        glc_selected = glc_mosaic.select(band_names, new_band_names)
+        glc_selected = (
+            self.glc_collection.filterBounds(region)
+            .select(band_names, new_band_names)
+            .mosaic()
+        )
 
         def remap_classes(band):
             """
@@ -82,9 +86,9 @@ class DataProcessor:
 
         remapped_bands = [remap_classes(band) for band in new_band_names]
         glc = ee.Image.cat(remapped_bands)
-        return self._apply_land_mask(glc) if land_masked else glc
+        return self._apply_land_mask(glc)
 
-    def process_gpw(self, start_yr, land_masked=True):
+    def process_gpw(self, start_yr):
         """
         Process Global Pasture Watch data for the analysis period.
         """
@@ -94,9 +98,9 @@ class DataProcessor:
         ).toBands()
         gpw_renamed = gpw_filtered.rename([f"GPW_{year}" for year in year_strings])
         gpw = gpw_renamed.unmask()
-        return self._apply_land_mask(gpw) if land_masked else gpw
+        return self._apply_land_mask(gpw)
 
-    def process_hgfc(self, start_yr, land_masked=True):
+    def process_hgfc(self, start_yr):
         """
         Process Hansen Global Forest Change data for the analysis period.
         """
@@ -106,11 +110,12 @@ class DataProcessor:
         )
         hgfc_masked = hgfc_selected.updateMask(analysis_mask)
         hgfc = hgfc_masked.unmask()
-        return self._apply_land_mask(hgfc) if land_masked else hgfc
+        return self._apply_land_mask(hgfc)
 
-    def process_forty(self, region, start_yr, land_masked=True):
+    def process_forty(self, region, start_yr):
         """
-        Process Forest Typology (ForTy) data for the analysis period.
+        Process Forest Typology (ForTy) data for the analysis period, from the images
+        that overlap region (a simple geometry, e.g. from bounds_rectangle).
         """
         analysis_years = list(range(start_yr, self.analysis_end_yr + 1))
         missing = [
@@ -133,4 +138,4 @@ class DataProcessor:
             )
 
         forty = ee.Image.cat([class_image(year) for year in analysis_years])
-        return self._apply_land_mask(forty) if land_masked else forty
+        return self._apply_land_mask(forty)

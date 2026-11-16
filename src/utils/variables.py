@@ -1,9 +1,9 @@
 import math
 
-PROJECT = "skytruth-tech"
-GCS_BUCKET = "code_name_capybara"
+PROJECT = "tpara-512319"
+GCS_BUCKET = "tpara"
 
-# Earth Engine asset IDs
+# Earth Engine public asset IDs
 PAS_ASSET_ID = "WCMC/WDPA/current/polygons"
 OECMS_ASSET_ID = "WCMC/WDOECM/current/polygons"
 GLC_ASSET_ID = "projects/sat-io/open-datasets/GLC-FCS30D/annual"
@@ -35,14 +35,15 @@ GLO30_ASSET_ID = "COPERNICUS/DEM/GLO30_2024_1"
 ATC_ASSET_ID = "projects/malariaatlasproject/assets/accessibility/accessibility_to_cities/2015_v1_0"
 POP_ASSET_ID = "JRC/GHSL/P2023A/GHS_POP/2000"
 
-TPAE_ASSET_FOLDER = "projects/skytruth-tech/assets/TPAE/"
-GAEZ_WHEAT_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_wheat"
-GAEZ_RICE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_dryland_rice"
-GAEZ_MAIZE_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_maize"
-GAEZ_SOYBEAN_ASSET_ID = TPAE_ASSET_FOLDER + "GAEZ_soybean"
-HUMAN_FOOTPRINT_ASSET_ID = TPAE_ASSET_FOLDER + "human_footprint_1993"
+# GCS bucket paths for input data
+INPUT_DATA_PREFIX = f"gs://{GCS_BUCKET}/input_data/"
+GAEZ_WHEAT_PATH = INPUT_DATA_PREFIX + "GAEZ_wheat.tif"
+GAEZ_RICE_PATH = INPUT_DATA_PREFIX + "GAEZ_dryland_rice.tif"
+GAEZ_MAIZE_PATH = INPUT_DATA_PREFIX + "GAEZ_maize.tif"
+GAEZ_SOYBEAN_PATH = INPUT_DATA_PREFIX + "GAEZ_soybean.tif"
+HUMAN_FOOTPRINT_PATH = INPUT_DATA_PREFIX + "human_footprint_1993.tif"
 
-# Site IDs (WDPA SITE_ID) of the selected sites (PAs and OECMs), one list per site group
+# Site IDs (WDPA SITE_ID) of the selected sites for list-based site groups
 SITE_IDS_65 = [
     555714961,
     1543,
@@ -218,17 +219,27 @@ SITE_IDS_HOLDOUT65 = [
     1631,  # ARM
 ]
 
-# Site groups, keyed by group ID. To add a group, define its list above and add it here
+# Site groups, keyed by group ID. A group is a list of SITE_IDs, or a list of
+# (column, operator, value) filters a site must all pass, with operators ==, !=, <, <=, >,
+# >=, in, not in, contains. Columns are WDPA attributes (applied to each feature), or
+# start_yr (applied to each cleaned site). clean_sites.py applies its own filters to
+# every group: sites in SITE_REALMS, not Proposed, with enough GIS_AREA for
+# MIN_TREATMENT_CELLS cells, and not designated too recently to analyze
 SITE_GROUPS = {
     "OG30": SITE_IDS_OG30,
     "65": SITE_IDS_65,
     "holdout65": SITE_IDS_HOLDOUT65,
+    "BOL": [("PRNT_ISO3", "==", "BOL")],
+    "BRA": [("PRNT_ISO3", "==", "BRA")],
 }
 # Active site group: change this one value to switch groups. The cleaned sites, treatment
 # and control cells, and experiment outputs are all tagged with it, so groups never
 # overwrite each other
-SITE_GROUP = "OG30"
-SITE_IDS = SITE_GROUPS[SITE_GROUP]
+SITE_GROUP = "BRA"
+# Tolerance (m) for simplifying cleaned site boundaries
+SITE_SIMPLIFY_M = 15
+# WDPA realms (REALM) of the features used for sites; Marine is left out
+SITE_REALMS = ["Terrestrial", "Coastal"]
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018
@@ -455,6 +466,9 @@ INTACTNESS_SCALE_M = 60  # pixel size in meters
 KERNEL_RADIUS_PIXELS = math.ceil(KERNEL_RADIUS_M / INTACTNESS_SCALE_M)
 KERNEL_SIZE_PIXELS = KERNEL_RADIUS_PIXELS * 2 + 1  # width and height of the kernel
 TILE_SCALE = 4
+# Largest width and height (km, in GPD_CRS_METERS) of the pieces a site is split into
+# for intactness, one Earth Engine request each
+INTACTNESS_CHUNK_KM = 100
 
 # Parameters for habitat loss calculations
 LOSS_OPENING_RADIUS_M = 30  # meters
@@ -477,9 +491,9 @@ COVARIATES = [
 ]
 
 # Parameters for MDM
-# GCS prefixes for MDM experiment results and report cards, one folder per site group
-MDM_EXPERIMENTS_PREFIX = f"mdm_experiments/{SITE_GROUP}/"
-REPORT_CARDS_PREFIX = f"report_cards/{SITE_GROUP}/"
+# Match diagnostics and report card for the active site group, written by MDM_match_cells.py
+MATCH_DIAGNOSTICS = f"gs://{GCS_BUCKET}/match_diagnostics/diagnostics_{SITE_GROUP}.csv"
+MATCH_REPORT_CARD = f"gs://{GCS_BUCKET}/match_diagnostics/report_card_{SITE_GROUP}.csv"
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
@@ -529,7 +543,6 @@ REPORT_NO_MAX_SMD = 0.5
 # Yes if all: enough matched treatment cells, high enough match coverage,
 # every covariate balanced, matched cells representative of the whole site,
 # few cross-border pairs
-REPORT_YES_MIN_MATCHED_TREAT = 10
 REPORT_YES_MIN_COVERAGE = 0.75
 REPORT_YES_MAX_SMD = BALANCED_SMD_THRESHOLD
 REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD = BALANCED_SMD_THRESHOLD
@@ -558,10 +571,17 @@ REPORT_CARD_COLUMNS = [
 # standard error of the site's treatment-cell mean, in units of that site's standard deviation
 TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large sites
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
+# Sites are dropped with fewer than this many land treatment cells available, kept after
+# covariate extraction, or matched
+MIN_TREATMENT_CELLS = 100
+# Smallest treatment sample: sites with fewer land cells than this take every land cell,
+# so small sites can still reach MIN_TREATMENT_CELLS matched cells
+TREATMENT_SAMPLE_FLOOR = 200
 
 # Parameters for control cell sampling
 CONTROL_INNER_BUFFER_M = 10_000  # minimum distance (m) from site
 CONTROL_OUTER_BUFFER_M = 200_000  # maximum distance (m) from site
+CONTROL_SIMPLIFY_M = 100  # tolerance (m) for simplifying site boundaries
 CONTROL_SPACING_M = 3000  # minimum distance (m) between control cells
 # number of control cells to sample for each site
 CONTROL_N_SAMPLES_MIN = 4000  # floor on control cells per site (small sites still need plenty of samples to find rare matches)
@@ -584,12 +604,24 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
-# Cleaned geometries of the active site group (SITE_IDS), written by clean_sites.py
-SITES_PREFIX = "sites/"  # stored in the GCS bucket
-SITES = f"gs://{GCS_BUCKET}/{SITES_PREFIX}sites_{SITE_GROUP}.parquet"
+# Cleaned geometries of the active site group, written by clean_sites.py, with a JSON
+# summary of the run (group, WDPA update times, counts)
+SITE_GEOMS_PREFIX = "site_geoms/"  # stored in the GCS bucket
+SITE_GEOMS = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.parquet"
+SITE_GEOMS_META = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.json"
+# Sites dropped for too few treatment cells, with the step and reason, written by
+# get_treatment_cells.py and MDM_match_cells.py
+DROPPED_SITES = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}dropped_sites_{SITE_GROUP}.csv"
 
 # Outputs:
 # ----------
+# export_covariate_stack.py: global 1 km covariate stack (Earth Engine asset), read by
+# extract_cell_covariates.py
+COVARIATE_STACK_ASSET_ID = f"projects/{PROJECT}/assets/covariates_1km"
+# GeoTIFF file name prefix the stack is exported to before ingestion into the asset
+COVARIATE_STACK_GCS_PREFIX = f"gs://{GCS_BUCKET}/covariate_stack/covariates_1km"
+# Band order of the stack
+COVARIATE_STACK_BANDS = COVARIATES + ["land_frac"]
 # Treatment and control cells for the active site group, stored in the GCS bucket
 CELLS_PREFIX = "cells/"
 # get_treatment_cells.py
@@ -603,8 +635,23 @@ CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.par
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
 # MDM_match_cells.py (optional): each site's match table and matched cells
 MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
-# Earth Engine request timeout (ms), so a stalled request fails instead of hanging
-EE_DEADLINE_MS = 300_000
+# absolute_effectiveness.py: one row of habitat condition and loss results per site
+ABSOLUTE_RESULTS = (
+    f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{SITE_GROUP}.csv"
+)
+# relative_effectiveness.py: one row of relative scores per site
+RELATIVE_RESULTS = (
+    f"gs://{GCS_BUCKET}/relative_results/relative_results_{SITE_GROUP}.csv"
+)
+# Earth Engine request timeout (ms), so a stalled request fails instead of hanging; longer
+# than Earth Engine's 5-minute limit, so a too-heavy computation fails with its own error
+EE_DEADLINE_MS = 360_000
+# Number of Earth Engine requests to run at once
+EE_N_WORKERS = 8
+# Attempts per site (or chunk of cells) for transient Earth Engine errors
+EE_MAX_ATTEMPTS = 3
+# Wait (s) before the first retry; doubles before each later one
+EE_RETRY_WAIT_S = 30
 
 # Archived:
 # ----------

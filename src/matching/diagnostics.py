@@ -12,7 +12,6 @@ from utils.variables import (
     REPORT_YES_MAX_CROSS_BORDER,
     REPORT_YES_MAX_SMD,
     REPORT_YES_MIN_COVERAGE,
-    REPORT_YES_MIN_MATCHED_TREAT,
     REPORT_YES_MAX_MATCHED_VS_ALL_TREAT_SMD,
     REPORT_CARD_COLUMNS,
     BALANCED_SMD_THRESHOLD,
@@ -364,7 +363,7 @@ def classify_site(row):
     No: results cannot be meaningful (too little of the site matched, or a covariate
     too imbalanced).
     Caution: usable, but misses a Yes criterion (covariate imbalance beyond the SMD threshold, low coverage, matched cells unrepresentative of the site,
-    cross-border pairs, or few matched cells).
+    or cross-border pairs).
     """
     coverage = row["match_coverage"]
     if pd.isna(coverage) or coverage == 0:
@@ -383,11 +382,6 @@ def classify_site(row):
         return "No", "; ".join(no_reasons)
 
     caution_reasons = []
-    n_matched = row["n_matched_treat"]
-    if n_matched < REPORT_YES_MIN_MATCHED_TREAT:
-        caution_reasons.append(
-            f"only {int(n_matched)} matched treatment cells (< {REPORT_YES_MIN_MATCHED_TREAT})"
-        )
     if coverage < REPORT_YES_MIN_COVERAGE:
         caution_reasons.append(
             f"coverage {coverage:.0%} < {REPORT_YES_MIN_COVERAGE:.0%}"
@@ -410,8 +404,11 @@ def classify_site(row):
     return "Yes", "meets all criteria"
 
 
-def build_report_card(results_df):
-    """One row per site with the key validity diagnostics and an assessable tier."""
+def build_report_card(results_df, dropped=None):
+    """One row per site with the key validity diagnostics and an assessable tier.
+
+    dropped: {site_id: reason} of sites dropped from the analysis, which are "No".
+    """
     card = results_df.copy()
     abs_smds = card[ABS_SMD_AFTER_COLS].astype(float)
     card["max_abs_smd_after"] = abs_smds.max(axis=1)
@@ -421,6 +418,9 @@ def build_report_card(results_df):
     ]
     tiers = card.apply(classify_site, axis=1, result_type="expand")
     card["assessable"], card["reason"] = tiers[0], tiers[1]
+    for site_id, reason in (dropped or {}).items():
+        is_site = card["site_id"].astype(str) == str(site_id)
+        card.loc[is_site, ["assessable", "reason"]] = ["No", f"dropped: {reason}"]
     # Nullable integers so counts print as whole numbers even when some sites are empty
     for col in ("n_matched_treat", "n_covariates_balanced"):
         card[col] = card[col].round().astype("Int64")
@@ -430,11 +430,11 @@ def build_report_card(results_df):
     return card[REPORT_CARD_COLUMNS].round(3)
 
 
-def save_report_card(results_df, output_path):
+def save_report_card(results_df, output_path, dropped=None):
     """Write the report card CSV (local or gs:// path) and print the tier counts."""
     if "://" not in output_path:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    card = build_report_card(results_df)
+    card = build_report_card(results_df, dropped)
     card.to_csv(output_path, index=False)
     counts = card["assessable"].value_counts()
     print(
