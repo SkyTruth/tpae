@@ -51,7 +51,7 @@ from absolute_effectiveness.data_processor import DataProcessor
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer
 from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
 
-# After the imports, since habitat_loss.py initializes without a project
+# Before the Earth Engine objects below are built
 ee.Initialize(project=PROJECT)
 ee.data.setDeadline(EE_DEADLINE_MS)
 

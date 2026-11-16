@@ -7,8 +7,6 @@ from utils.variables import (
 )
 from sites.site_selector import reduce_site
 
-ee.Initialize()
-
 KM2_PER_M2 = 1_000_000
 
 

@@ -58,7 +58,7 @@ from relative_effectiveness.relative_scores import (
     aggregate_site_relative_scores,
 )
 
-# After the imports, since habitat_loss.py initializes without a project
+# Before the Earth Engine objects below are built
 ee.Initialize(project=PROJECT)
 ee.data.setDeadline(EE_DEADLINE_MS)
 
