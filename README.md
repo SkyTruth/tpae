@@ -12,6 +12,7 @@ This repository contains preliminary code related to the development of a Terres
 - **src/sites/**: Select and clean analysis sites.
   - `chunker.py`: Select every eligible site from WDPA (Terrestrial and Coastal PAs that are not Proposed, with a designation year up to `ANALYSIS_END_YR - 1`, and whose `GIS_AREA` is large enough for `MIN_TREATMENT_CELLS` cells), sort them by country, split them into chunks of up to `CHUNK_SIZE` sites, and save each site's chunk to GCS.
   - `clean_sites.py`: Select the active site group (a chunk, or a group in `SITE_GROUPS`) from the eligible sites, clean geometries, and save to GCS.
+  - `unchunker.py`: Check every chunk's outputs and merge them into global tables of the kept sites, with a list of every dropped site and why.
   - `site_selector.py`: Load the cleaned sites, reduce Earth Engine images over a site, split large sites into pieces for intactness, and build rectangles for selecting input images.
   - `dropped_sites.py`: Record and read sites dropped for too few treatment cells.
 - **src/cells/**: Build treatment and control cells.
@@ -56,6 +57,7 @@ Site lists, cell files, covariates, and match outputs are stored in GCS under pr
 6. `src/matching/MDM_match_cells.py`: Match every site and, with `save_match_outputs = True`, write match tables and matched cells under `matches/{SITE_GROUP}/`. Sites with too few matched treatment cells are added to the dropped sites file. Use `notebooks/MDM_match_cells.ipynb` to inspect one site.
 7. `src/relative_effectiveness/relative_effectiveness.py`: Score matched cells and compute relative effectiveness, written to `relative_results/relative_results_{SITE_GROUP}.csv`.
 8. `src/absolute_effectiveness/absolute_effectiveness.py`: Calculate absolute effectiveness for every site in the active group, written to `absolute_results/absolute_results_{SITE_GROUP}.csv`.
+9. `src/sites/unchunker.py`: Once steps 2–8 have run for every chunk, merge each chunk's relative and absolute results, report card, and match diagnostics into `global_results/`, with one row per kept site (cleaned, not dropped, and analyzed without errors). Also writes `dropped_sites.csv` (every dropped site, with the step and reason), `site_geoms.parquet` (every cleaned site), and `summary.json`. It first checks that every chunk is complete (including no sites with errors; re-run steps 7 and 8 with `--retry-failed`), holds only its own sites, ran its steps in order, and was cleaned from the chunk table's WDPA release, and writes nothing if a check fails. Use `--allow-partial` to merge incomplete chunks while the run is in progress.
 
 Dropped sites are skipped by every later step. Steps 7 and 8 take `--retry-failed` to re-run only the sites that failed or are missing in the saved results. To time a step and log its Earth Engine compute, run it through `src/utils/timing.py` (e.g. `poetry run python src/utils/timing.py src/cells/get_control_cells.py`).
 

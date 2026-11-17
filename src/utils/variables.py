@@ -235,7 +235,7 @@ SITE_GROUPS = {
 # Active site group ("chunk_<n>" or a key of SITE_GROUPS): change this one value to
 # switch groups. The cleaned sites, treatment and control cells, and experiment outputs
 # are all tagged with it, so groups never overwrite each other
-SITE_GROUP = "MEX"
+SITE_GROUP = "chunk_0"
 # Tolerance (m) for simplifying cleaned site boundaries
 SITE_SIMPLIFY_M = 15
 # WDPA realms (REALM) of the features used for sites; Marine is left out
@@ -491,9 +491,16 @@ COVARIATES = [
 ]
 
 # Parameters for MDM
-# Match diagnostics and report card for the active site group, written by MDM_match_cells.py
-MATCH_DIAGNOSTICS = f"gs://{GCS_BUCKET}/match_diagnostics/diagnostics_{SITE_GROUP}.csv"
-MATCH_REPORT_CARD = f"gs://{GCS_BUCKET}/match_diagnostics/report_card_{SITE_GROUP}.csv"
+# Match diagnostics and report card of a site group ({group}) and of the active one,
+# written by MDM_match_cells.py
+MATCH_DIAGNOSTICS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/match_diagnostics/diagnostics_{{group}}.csv"
+)
+MATCH_REPORT_CARD_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/match_diagnostics/report_card_{{group}}.csv"
+)
+MATCH_DIAGNOSTICS = MATCH_DIAGNOSTICS_TEMPLATE.format(group=SITE_GROUP)
+MATCH_REPORT_CARD = MATCH_REPORT_CARD_TEMPLATE.format(group=SITE_GROUP)
 CALIPER_MDM = 2.0
 N_NEIGHBORS_MDM = 1  # number of control cells for every treatment cell
 # How in-caliper candidates are assigned under the reuse cap:
@@ -609,14 +616,25 @@ REPO_DATA_DIR = "data/"
 CHUNKS_PREFIX = "chunks/"  # stored in the GCS bucket
 SITE_CHUNKS = f"gs://{GCS_BUCKET}/{CHUNKS_PREFIX}site_chunks.parquet"
 CHUNKS_META = f"gs://{GCS_BUCKET}/{CHUNKS_PREFIX}chunks.json"
-# Cleaned geometries of the active site group, written by clean_sites.py, with a JSON
-# summary of the run (group, WDPA update times, counts)
+# Paths ending in _TEMPLATE take a site group's name as {group}; the same names without
+# _TEMPLATE are the paths of the active SITE_GROUP
+# Cleaned geometries of a site group, written by clean_sites.py, with a JSON summary of
+# the run (group, WDPA update times, counts)
 SITE_GEOMS_PREFIX = "site_geoms/"  # stored in the GCS bucket
-SITE_GEOMS = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.parquet"
-SITE_GEOMS_META = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{SITE_GROUP}.json"
+SITE_GEOMS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{{group}}.parquet"
+)
+SITE_GEOMS_META_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}site_geoms_{{group}}.json"
+)
+SITE_GEOMS = SITE_GEOMS_TEMPLATE.format(group=SITE_GROUP)
+SITE_GEOMS_META = SITE_GEOMS_META_TEMPLATE.format(group=SITE_GROUP)
 # Sites dropped for too few treatment cells, with the step and reason, written by
 # get_treatment_cells.py and MDM_match_cells.py
-DROPPED_SITES = f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}dropped_sites_{SITE_GROUP}.csv"
+DROPPED_SITES_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/{SITE_GEOMS_PREFIX}dropped_sites_{{group}}.csv"
+)
+DROPPED_SITES = DROPPED_SITES_TEMPLATE.format(group=SITE_GROUP)
 
 # Outputs:
 # ----------
@@ -630,24 +648,32 @@ COVARIATE_STACK_BANDS = COVARIATES + ["land_frac"]
 # Treatment and control cells for the active site group, stored in the GCS bucket
 CELLS_PREFIX = "cells/"
 # get_treatment_cells.py
-TREATMENT_CELLS = (
-    f"gs://{GCS_BUCKET}/{CELLS_PREFIX}treatment_cells_{SITE_GROUP}.parquet"
+TREATMENT_CELLS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/{CELLS_PREFIX}treatment_cells_{{group}}.parquet"
 )
+TREATMENT_CELLS = TREATMENT_CELLS_TEMPLATE.format(group=SITE_GROUP)
 # get_control_cells.py
-CONTROL_CELLS = f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{SITE_GROUP}.parquet"
+CONTROL_CELLS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/{CELLS_PREFIX}control_cells_{{group}}.parquet"
+)
+CONTROL_CELLS = CONTROL_CELLS_TEMPLATE.format(group=SITE_GROUP)
 # extract_cell_covariates.py: covariates for each site's candidate cells, one file per
 # site, read by MDM_match_cells.py
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
 # MDM_match_cells.py (optional): each site's match table and matched cells
 MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
 # absolute_effectiveness.py: one row of habitat condition and loss results per site
-ABSOLUTE_RESULTS = (
-    f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{SITE_GROUP}.csv"
+ABSOLUTE_RESULTS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{{group}}.csv"
 )
+ABSOLUTE_RESULTS = ABSOLUTE_RESULTS_TEMPLATE.format(group=SITE_GROUP)
 # relative_effectiveness.py: one row of relative scores per site
-RELATIVE_RESULTS = (
-    f"gs://{GCS_BUCKET}/relative_results/relative_results_{SITE_GROUP}.csv"
+RELATIVE_RESULTS_TEMPLATE = (
+    f"gs://{GCS_BUCKET}/relative_results/relative_results_{{group}}.csv"
 )
+RELATIVE_RESULTS = RELATIVE_RESULTS_TEMPLATE.format(group=SITE_GROUP)
+# unchunker.py: every chunk's tables merged, with a site status table and a summary
+GLOBAL_RESULTS_PREFIX = f"gs://{GCS_BUCKET}/global_results/"
 # Earth Engine request timeout (ms), so a stalled request fails instead of hanging; longer
 # than Earth Engine's 5-minute limit, so a too-heavy computation fails with its own error
 EE_DEADLINE_MS = 360_000
