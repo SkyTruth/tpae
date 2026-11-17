@@ -219,23 +219,23 @@ SITE_IDS_HOLDOUT65 = [
     1631,  # ARM
 ]
 
-# Site groups, keyed by group ID. A group is a list of SITE_IDs, or a list of
-# (column, operator, value) filters a site must all pass, with operators ==, !=, <, <=, >,
-# >=, in, not in, contains. Columns are WDPA attributes (applied to each feature), or
-# start_yr (applied to each cleaned site). clean_sites.py applies its own filters to
-# every group: sites in SITE_REALMS, not Proposed, with enough GIS_AREA for
-# MIN_TREATMENT_CELLS cells, and not designated too recently to analyze
+# Site groups, keyed by group ID, chosen from the eligible sites in SITE_CHUNKS. A group
+# is a list of SITE_IDs, or a list of (column, operator, value) filters on SITE_CHUNKS
+# columns (site_id, chunk, ISO3, gis_area_km2) a site must all pass, with operators
+# ==, !=, <, <=, >, >=, in, not in, contains. Chunk n of SITE_CHUNKS is the group
+# "chunk_<n>", with no entry here
 SITE_GROUPS = {
     "OG30": SITE_IDS_OG30,
     "65": SITE_IDS_65,
     "holdout65": SITE_IDS_HOLDOUT65,
-    "BOL": [("PRNT_ISO3", "==", "BOL")],
-    "BRA": [("PRNT_ISO3", "==", "BRA")],
+    "BOL": [("ISO3", "==", "BOL")],
+    "BRA": [("ISO3", "==", "BRA")],
+    "MEX": [("ISO3", "==", "MEX")],
 }
-# Active site group: change this one value to switch groups. The cleaned sites, treatment
-# and control cells, and experiment outputs are all tagged with it, so groups never
-# overwrite each other
-SITE_GROUP = "BRA"
+# Active site group ("chunk_<n>" or a key of SITE_GROUPS): change this one value to
+# switch groups. The cleaned sites, treatment and control cells, and experiment outputs
+# are all tagged with it, so groups never overwrite each other
+SITE_GROUP = "MEX"
 # Tolerance (m) for simplifying cleaned site boundaries
 SITE_SIMPLIFY_M = 15
 # WDPA realms (REALM) of the features used for sites; Marine is left out
@@ -604,6 +604,11 @@ REPO_DATA_DIR = "data/"
 
 # Inputs:
 # ----------
+# Every eligible site and its chunk, and the index of the last chunk (chunks are numbered
+# from 0), written by chunker.py
+CHUNKS_PREFIX = "chunks/"  # stored in the GCS bucket
+SITE_CHUNKS = f"gs://{GCS_BUCKET}/{CHUNKS_PREFIX}site_chunks.parquet"
+CHUNKS_META = f"gs://{GCS_BUCKET}/{CHUNKS_PREFIX}chunks.json"
 # Cleaned geometries of the active site group, written by clean_sites.py, with a JSON
 # summary of the run (group, WDPA update times, counts)
 SITE_GEOMS_PREFIX = "site_geoms/"  # stored in the GCS bucket

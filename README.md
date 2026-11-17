@@ -10,7 +10,8 @@ This repository contains preliminary code related to the development of a Terres
   - `run_relative_effectiveness.ipynb`: Per-cell scores and site-level relative effectiveness for one site.
   - `archive/`: Retired PSM notebooks.
 - **src/sites/**: Select and clean analysis sites.
-  - `clean_sites.py`: Select the active site group from WDPA (Terrestrial and Coastal PAs that are not Proposed and whose `GIS_AREA` is large enough for `MIN_TREATMENT_CELLS` cells), clean geometries, and save to GCS.
+  - `chunker.py`: Select every eligible site from WDPA (Terrestrial and Coastal PAs that are not Proposed, with a designation year up to `ANALYSIS_END_YR - 1`, and whose `GIS_AREA` is large enough for `MIN_TREATMENT_CELLS` cells), sort them by country, split them into chunks of up to `CHUNK_SIZE` sites, and save each site's chunk to GCS.
+  - `clean_sites.py`: Select the active site group (a chunk, or a group in `SITE_GROUPS`) from the eligible sites, clean geometries, and save to GCS.
   - `site_selector.py`: Load the cleaned sites, reduce Earth Engine images over a site, split large sites into pieces for intactness, and build rectangles for selecting input images.
   - `dropped_sites.py`: Record and read sites dropped for too few treatment cells.
 - **src/cells/**: Build treatment and control cells.
@@ -42,20 +43,21 @@ This repository contains preliminary code related to the development of a Terres
 - **src/archive/**: Retired scripts.
 - **src/disturbance/**: DIST-ALERT helpers (separate from the main pipeline).
 
-Site lists, cell files, covariates, and match outputs are stored in GCS under prefixes tagged with `SITE_GROUP` (set in `src/utils/variables.py`). Change that one value to switch groups without overwriting another group's files.
+Site lists, cell files, covariates, and match outputs are stored in GCS under prefixes tagged with `SITE_GROUP` (set in `src/utils/variables.py`): `chunk_<n>` for chunk n of the eligible sites, or a group in `SITE_GROUPS`. Change that one value to switch groups without overwriting another group's files.
 
 ## Script Order
 
 0. `src/covariates/export_covariate_stack.py`: Write the global covariate stack to the `covariates_1km` Earth Engine asset (once for all site groups; re-run only after changing a covariate).
-1. `src/sites/clean_sites.py`: Write `site_geoms/site_geoms_{SITE_GROUP}.parquet`, with a summary of the run in `site_geoms/site_geoms_{SITE_GROUP}.json`.
-2. `src/cells/get_treatment_cells.py`: Write `cells/treatment_cells_{SITE_GROUP}.parquet`. Sites with too few land cells are recorded in `site_geoms/dropped_sites_{SITE_GROUP}.csv`.
-3. `src/cells/get_control_cells.py`: Write `cells/control_cells_{SITE_GROUP}.parquet`.
-4. `src/covariates/extract_cell_covariates.py`: Write one covariate file per site under `cell_covariates/{SITE_GROUP}/`. Sites that are already up to date are skipped; use `--overwrite` to redo every site.
-5. `src/matching/MDM_match_cells.py`: Match every site and, with `save_match_outputs = True`, write match tables and matched cells under `matches/{SITE_GROUP}/`. Sites with too few matched treatment cells are added to the dropped sites file. Use `notebooks/MDM_match_cells.ipynb` to inspect one site.
-6. `src/relative_effectiveness/relative_effectiveness.py`: Score matched cells and compute relative effectiveness, written to `relative_results/relative_results_{SITE_GROUP}.csv`.
-7. `src/absolute_effectiveness/absolute_effectiveness.py`: Calculate absolute effectiveness for every site in the active group, written to `absolute_results/absolute_results_{SITE_GROUP}.csv`.
+1. `src/sites/chunker.py`: Write `chunks/site_chunks.parquet` (each eligible site's chunk) and `chunks/chunks.json` (`last_chunk_index`; chunks are numbered from 0). Run once, before any group is cleaned: every group is chosen from this table, and re-running after a WDPA update moves chunk boundaries.
+2. `src/sites/clean_sites.py`: Write `site_geoms/site_geoms_{SITE_GROUP}.parquet`, with a summary of the run in `site_geoms/site_geoms_{SITE_GROUP}.json`.
+3. `src/cells/get_treatment_cells.py`: Write `cells/treatment_cells_{SITE_GROUP}.parquet`. Sites with too few land cells are recorded in `site_geoms/dropped_sites_{SITE_GROUP}.csv`.
+4. `src/cells/get_control_cells.py`: Write `cells/control_cells_{SITE_GROUP}.parquet`.
+5. `src/covariates/extract_cell_covariates.py`: Write one covariate file per site under `cell_covariates/{SITE_GROUP}/`. Sites that are already up to date are skipped; use `--overwrite` to redo every site.
+6. `src/matching/MDM_match_cells.py`: Match every site and, with `save_match_outputs = True`, write match tables and matched cells under `matches/{SITE_GROUP}/`. Sites with too few matched treatment cells are added to the dropped sites file. Use `notebooks/MDM_match_cells.ipynb` to inspect one site.
+7. `src/relative_effectiveness/relative_effectiveness.py`: Score matched cells and compute relative effectiveness, written to `relative_results/relative_results_{SITE_GROUP}.csv`.
+8. `src/absolute_effectiveness/absolute_effectiveness.py`: Calculate absolute effectiveness for every site in the active group, written to `absolute_results/absolute_results_{SITE_GROUP}.csv`.
 
-Dropped sites are skipped by every later step. Steps 6 and 7 take `--retry-failed` to re-run only the sites that failed or are missing in the saved results. To time a step and log its Earth Engine compute, run it through `src/utils/timing.py` (e.g. `poetry run python src/utils/timing.py src/cells/get_control_cells.py`).
+Dropped sites are skipped by every later step. Steps 7 and 8 take `--retry-failed` to re-run only the sites that failed or are missing in the saved results. To time a step and log its Earth Engine compute, run it through `src/utils/timing.py` (e.g. `poetry run python src/utils/timing.py src/cells/get_control_cells.py`).
 
 ## Working in this Repository
 
