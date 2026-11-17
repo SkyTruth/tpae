@@ -20,7 +20,7 @@ TRANSIENT_ERRORS = (
     "connection",
 )
 # Substrings (lower case) of errors that fail the same way on every attempt
-PERMANENT_ERRORS = ("computation timed out",)
+PERMANENT_ERRORS = ("computation timed out", "read timed out")
 
 
 def is_transient(exc):
