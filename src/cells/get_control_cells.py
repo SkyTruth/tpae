@@ -1,6 +1,8 @@
 """
 Creates a set of control cells for each site.
 Control cells are 1km x 1km cells that fall within a given distance range around the site.
+Sites with no control cells, or that fail with an error, are dropped (recorded in
+DROPPED_SITES).
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -38,6 +40,7 @@ from utils.variables import (
     OECMS_ASSET_ID,
     EE_N_WORKERS,
 )
+from sites.dropped_sites import failed_reason, record_dropped
 from utils.retries import report_failures, with_retries
 
 
@@ -263,13 +266,20 @@ def get_control_cells(
                 f"(requested {n_samples_site}) [{n_done}/{len(site_jobs)}]"
             )
             if n_cells == 0:
-                print(f"Warning: site {site_id}: no control cells")
+                print(f"Dropped site {site_id}: no control cells")
     finally:
         # Stop unstarted sites if interrupted
         executor.shutdown(cancel_futures=True)
     report_failures(failed, len(site_jobs))
     if failed:
         print("Re-run to retry them")
+    dropped = {}
+    for site_id, _, _ in site_jobs:
+        if site_id in failed:
+            dropped[site_id] = failed_reason(failed[site_id])
+        elif len(site_cells[site_id]) == 0:
+            dropped[site_id] = "no control cells"
+    record_dropped("control_cells", dropped)
 
     # Combine in site order, so the output does not depend on which site finished first
     all_cells = [

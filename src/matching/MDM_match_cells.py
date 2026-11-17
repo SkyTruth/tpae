@@ -6,9 +6,9 @@ each), and, optionally, writes one site-level diagnostics CSV (and report card),
 each site's match table and matched cells.
 
 Reads each site's cell covariates from GCS, so run extract_cell_covariates.py first.
-Sites dropped by get_treatment_cells.py are skipped, and sites with fewer than
-MIN_TREATMENT_CELLS treatment cells kept after covariate extraction, or matched, are
-dropped (recorded in DROPPED_SITES); dropped sites' saved match outputs are deleted.
+Sites dropped at earlier steps are skipped. Sites with fewer than MIN_TREATMENT_CELLS
+treatment cells kept after covariate extraction, or matched, or that fail with an error,
+are dropped (recorded in DROPPED_SITES); dropped sites' saved match outputs are deleted.
 """
 
 # Save the diagnostics CSV and report card to GCS; otherwise only print the summary
@@ -48,7 +48,7 @@ from utils.variables import (
 
 from covariates.extract_cell_covariates import cell_covariates_path
 from sites.site_selector import load_site_ids
-from sites.dropped_sites import load_dropped, record_dropped
+from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
 from cells.load_all_cells import build_all_site_cells
 from matching.match_cells import (
     match_output_paths,
@@ -108,13 +108,15 @@ def match_site(site_id, site_cells):
         except Exception as exc:
             print(f"FAILED: {exc}")
             row = {"site_id": site_id, "error": str(exc)}
+            dropped = failed_reason(exc)
     return row, dropped, log.getvalue()
 
 
 def main():
     site_ids = load_site_ids()
     # Sites dropped before matching, and those dropped here
-    dropped_before = load_dropped(steps=["treatment_cells"])
+    dropped_before = load_dropped_before("matching")
+    dropped_before = {s: dropped_before[s] for s in site_ids if s in dropped_before}
     dropped = {}
     # Cell geometries for the saved matched cells (cell_IDs are rebuilt from these files)
     cells_by_site = {}
@@ -127,7 +129,7 @@ def main():
     # Apply MDM to each site and record diagnostic results
     rows = {site_id: {"site_id": site_id} for site_id in dropped_before}
     for site_id, reason in dropped_before.items():
-        print(f"Skipping site {site_id}: dropped at treatment cells ({reason})")
+        print(f"Skipping site {site_id}: dropped at an earlier step ({reason})")
     to_match = [site_id for site_id in site_ids if site_id not in dropped_before]
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {
@@ -138,7 +140,12 @@ def main():
         }
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
-            rows[site_id], reason, log = future.result()
+            try:
+                rows[site_id], reason, log = future.result()
+            except Exception as exc:
+                # The site's process failed, e.g. ran out of memory
+                rows[site_id] = {"site_id": site_id, "error": str(exc)}
+                reason, log = failed_reason(exc), f"FAILED: {exc}\n"
             if reason:
                 dropped[site_id] = reason
             print(f"\n{'=' * 70}\nSite {site_id} ({i}/{len(to_match)})\n{'=' * 70}")

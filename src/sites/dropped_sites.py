@@ -1,9 +1,10 @@
 """
-Record and read sites dropped from the analysis for too few treatment cells
-(DROPPED_SITES, one row per site with the step that dropped it and why).
+Record and read sites dropped from the analysis (DROPPED_SITES, one row per site with
+the step that dropped it and why). A step drops sites that fail one of its rules (e.g.
+too few treatment cells) and sites that failed with an error (reason "failed: <error>").
 
-Recording a step clears the records of later steps, which are out of date until those
-steps re-run.
+Each step skips the sites dropped at earlier steps. Recording a step clears the records
+of later steps, which are out of date until those steps re-run.
 """
 
 import pandas as pd
@@ -12,7 +13,22 @@ from utils.variables import DROPPED_SITES
 
 COLUMNS = ["site_id", "step", "reason"]
 # Steps that drop sites, in pipeline order
-STEPS = ["treatment_cells", "matching"]
+STEPS = [
+    "clean_sites",
+    "treatment_cells",
+    "control_cells",
+    "covariates",
+    "matching",
+    "relative_effectiveness",
+    "absolute_effectiveness",
+]
+# Start of the reason of a site that failed with an error
+FAILED_PREFIX = "failed: "
+
+
+def failed_reason(error):
+    """Drop reason of a site that failed with error."""
+    return f"{FAILED_PREFIX}{error}"
 
 
 def load_dropped(steps=None, path=DROPPED_SITES):
@@ -25,6 +41,11 @@ def load_dropped(steps=None, path=DROPPED_SITES):
     if steps is not None:
         dropped = dropped[dropped["step"].isin(steps)]
     return dict(zip(dropped["site_id"].astype(int), dropped["reason"]))
+
+
+def load_dropped_before(step, path=DROPPED_SITES):
+    """{site_id: reason} of the sites dropped at steps before step."""
+    return load_dropped(STEPS[: STEPS.index(step)], path)
 
 
 def record_dropped(step, reasons, path=DROPPED_SITES):

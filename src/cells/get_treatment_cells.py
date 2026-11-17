@@ -4,8 +4,9 @@ Treatment cells are 1km x 1km cells that are fully within the site's geometry, o
 covariate stack's 1 km pixel grid, and mostly land (land_frac >= MIN_LAND_FRACTION).
 Each site gets a simple random sample of its land cells, sized so that every site's
 treatment-cell mean has the same standard error.
-Sites with fewer than MIN_TREATMENT_CELLS land cells are dropped (recorded in
-DROPPED_SITES), and small sites' samples are raised to TREATMENT_SAMPLE_FLOOR cells.
+Sites with fewer than MIN_TREATMENT_CELLS land cells, or that fail with an error, are
+dropped (recorded in DROPPED_SITES), and small sites' samples are raised to
+TREATMENT_SAMPLE_FLOOR cells.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -37,7 +38,7 @@ from utils.variables import (
     EE_N_WORKERS,
 )
 from covariates.export_covariate_stack import load_covariate_stack
-from sites.dropped_sites import record_dropped
+from sites.dropped_sites import failed_reason, record_dropped
 from utils.retries import report_failures, with_retries
 
 # Largest tile (pixels a side) of the land mask fetched per request
@@ -176,6 +177,7 @@ def get_treatment_cells(
         if isinstance(result, Exception):
             print(f"FAILED: site {site_id}: {result}")
             failed[site_id] = str(result)
+            dropped[site_id] = failed_reason(result)
         elif isinstance(result, str):
             print(f"Dropped site {site_id}: {result}")
             dropped[site_id] = result

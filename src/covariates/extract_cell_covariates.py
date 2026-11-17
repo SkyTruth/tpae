@@ -15,6 +15,9 @@ saved once all of its cells are extracted.
 A site is skipped if its file is newer than the treatment and control cell files and the
 covariate stack, so re-running picks up where a stalled or failed run left off, and regenerated cells are
 re-extracted automatically. Use --overwrite to re-extract every site.
+
+Sites dropped at earlier steps are skipped, and sites that fail with an error are
+dropped (recorded in DROPPED_SITES).
 """
 
 import argparse
@@ -61,11 +64,13 @@ def is_up_to_date(fs, path, inputs_modified):
 def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKERS):
     """Extract and save each site's cell covariates; return the sites that failed.
 
-    site_ids: sites to extract (default: every site in SITE_GEOMS).
+    site_ids: sites to extract (default: every site in SITE_GEOMS), except those dropped
+    at earlier steps.
     """
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
     from cells.load_all_cells import build_all_site_cells
+    from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
     from sites.site_selector import load_site_ids
     from utils.retries import report_failures, with_retries
     from covariates.export_covariate_stack import (
@@ -86,6 +91,11 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
 
     if site_ids is None:
         site_ids = load_site_ids()
+    dropped_before = load_dropped_before("covariates")
+    n_sites = len(site_ids)
+    site_ids = [s for s in site_ids if int(s) not in dropped_before]
+    if len(site_ids) < n_sites:
+        print(f"Skipping {n_sites - len(site_ids)} site(s) dropped at earlier steps")
     image, country_names = covariate_image(load_covariate_stack())
 
     fs = gcsfs.GCSFileSystem()
@@ -166,7 +176,8 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
         print(f"Saved {len(cells_df)} cells to {path}")
 
     chunk_results = {}
-    failed_chunks = set()
+    # {chunk: error} of failed chunks
+    failed_chunks = {}
     remaining = {s: set(chunks) for s, chunks in site_chunks.items()}
     # Sites not yet saved for each chunk, so a chunk's results are freed once unused
     chunk_users = {c: len(sites) for c, sites in chunk_sites.items()}
@@ -181,15 +192,19 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
                 print(f"Chunk {chunk} done [{n_done}/{n_chunks}]")
             except Exception as exc:
                 print(f"FAILED: chunk {chunk}: {exc}")
-                failed_chunks.add(chunk)
+                failed_chunks[chunk] = str(exc)
             # Save each site whose chunks are now all done
             for site_id in chunk_sites[chunk]:
                 remaining[site_id].discard(chunk)
                 if remaining[site_id]:
                     continue
                 try:
-                    if site_chunks[site_id] & failed_chunks:
-                        raise RuntimeError("a chunk with its cells failed")
+                    bad = sorted(site_chunks[site_id].intersection(failed_chunks))
+                    if bad:
+                        raise RuntimeError(
+                            f"chunk {bad[0]} with its cells failed: "
+                            f"{failed_chunks[bad[0]]}"
+                        )
                     save_site(site_id)
                 except Exception as exc:
                     print(f"FAILED: site {site_id}: {exc}")
@@ -207,6 +222,9 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     report_failures(failed, len(site_ids))
     if failed:
         print("Re-run to retry them")
+    # Keep the earlier records if no site needed extracting
+    if todo:
+        record_dropped("covariates", {s: failed_reason(e) for s, e in failed.items()})
     return list(failed)
 
 

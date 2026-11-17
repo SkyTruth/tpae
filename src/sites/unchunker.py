@@ -2,15 +2,16 @@
 Merge the outputs of every chunk (0 to last_chunk_index in CHUNKS_META) into global
 files in GLOBAL_RESULTS_PREFIX, each table with a chunk column:
 - relative and absolute results, report card, and match diagnostics, with one row per
-  kept site (cleaned, not dropped, and analyzed without errors);
-- dropped_sites.csv: every dropped site, with the step that dropped it and why
-  (clean_sites for sites no longer in WDPA or without polygons);
+  kept site (cleaned and not dropped at any step);
+- dropped_sites.csv: every dropped site, with the step that dropped it and why (reason
+  "failed: <error>" for sites that failed with an error);
 - site_geoms.parquet: every cleaned site's geometry;
 - summary.json: chunks merged, site counts, and run time.
 
 Before writing, checks that every chunk:
-- is complete: it has every file, and every cleaned site that was not dropped has a row
-  in each of RESULT_TABLES, without errors;
+- is complete: it has every file, every site was cleaned or dropped at clean_sites, and
+  every site not dropped has a row in each of RESULT_TABLES, without errors (an error
+  not recorded as a drop means a step was interrupted, or an earlier step re-ran);
 - holds only its own sites, each once;
 - has each file newer than the files it was built from (INPUT_FILES);
 - was cleaned from the chunk table's WDPA release.
@@ -35,6 +36,7 @@ import geopandas as gpd
 import pandas as pd
 
 from sites.clean_sites import CHUNK_GROUP_PREFIX
+from sites.dropped_sites import COLUMNS as DROPPED_COLUMNS, FAILED_PREFIX
 from utils.timing import TIMING_LOG
 from utils.variables import (
     SITE_CHUNKS,
@@ -68,9 +70,9 @@ INPUT_FILES = {
     "treatment_cells": ["site_geoms"],
     "control_cells": ["treatment_cells"],
     "diagnostics": ["control_cells"],
-    "report_card": ["diagnostics", "dropped_sites"],
+    "report_card": ["diagnostics"],
     "relative_results": ["report_card"],
-    "absolute_results": ["site_geoms", "dropped_sites"],
+    "absolute_results": ["site_geoms"],
 }
 # Tables with one row per site, merged for kept sites into GLOBAL_RESULTS_PREFIX
 RESULT_TABLES = ["relative_results", "absolute_results", "report_card", "diagnostics"]
@@ -151,33 +153,25 @@ def membership_problems(tables, chunk_sites):
     return problems
 
 
-def sort_sites(tables, meta, chunk_sites):
+def sort_sites(tables, chunk_sites):
     """A chunk's kept site_ids, its dropped sites (site_id, step, reason), and what is
-    missing for the rest (rows in RESULT_TABLES, or rows with errors).
+    missing for the rest (sites neither cleaned nor dropped, rows in RESULT_TABLES, or
+    rows with errors).
 
-    tables: the chunk's tables, with site_geoms; meta: its site_geoms summary, or None.
+    tables: the chunk's tables, with site_geoms.
     """
+    dropped = tables.get("dropped_sites", pd.DataFrame(columns=DROPPED_COLUMNS))
+    dropped = dropped[DROPPED_COLUMNS].astype({"site_id": "int64"})
     cleaned = set(tables["site_geoms"]["site_id"])
-    gone = set((meta or {}).get("missing_site_ids", []))
-    not_cleaned = sorted(chunk_sites - cleaned)
-    dropped = [
-        pd.DataFrame(
-            {
-                "site_id": pd.Series(not_cleaned, dtype="int64"),
-                "step": "clean_sites",
-                "reason": [
-                    "no longer in WDPA" if site in gone else "no polygon parts"
-                    for site in not_cleaned
-                ],
-            }
+    missing = []
+    n_unrecorded = len(chunk_sites - cleaned - set(dropped["site_id"]))
+    if n_unrecorded:
+        missing.append(
+            f"{n_unrecorded} site(s) neither cleaned nor dropped (re-run clean_sites)"
         )
-    ]
-    if "dropped_sites" in tables:
-        dropped.append(tables["dropped_sites"][["site_id", "step", "reason"]])
-    dropped = pd.concat(dropped, ignore_index=True)
 
     to_analyze = cleaned - set(dropped["site_id"])
-    kept, missing = set(to_analyze), []
+    kept = set(to_analyze)
     for name in RESULT_TABLES:
         if name not in tables:
             kept = set()
@@ -260,7 +254,7 @@ def unchunk(
 
         missing = [f"no {name}" for name, path in paths.items() if times[path] is None]
         if "site_geoms" in tables:
-            kept, dropped, unanalyzed = sort_sites(tables, meta, chunk_sites)
+            kept, dropped, unanalyzed = sort_sites(tables, chunk_sites)
             missing += unanalyzed
             chunk_frames = {
                 "site_geoms": tables["site_geoms"],
@@ -309,6 +303,7 @@ def unchunk(
         site_geoms.to_parquet(f"{output_prefix}site_geoms.parquet")
 
     n_kept = len(merged["relative_results"])
+    failed = dropped[dropped["reason"].astype(str).str.startswith(FAILED_PREFIX)]
     report_card = merged["report_card"]
     tiers = report_card["assessable"] if "assessable" in report_card else pd.Series()
     summary = {
@@ -322,7 +317,8 @@ def unchunk(
         "n_dropped_sites": {
             k: int(n) for k, n in dropped["step"].value_counts().items()
         },
-        # Failed, or in steps that have not run yet
+        "n_failed_sites": {k: int(n) for k, n in failed["step"].value_counts().items()},
+        # In steps that have not run yet, or were interrupted
         "n_not_merged_sites": len(chunks) - n_kept - len(dropped),
         "assessable_counts": {k: int(n) for k, n in tiers.value_counts().items()},
         **run_info,
@@ -331,7 +327,7 @@ def unchunk(
         json.dump(summary, f, indent=2)
 
     print(
-        f"\n{n_kept} kept, {len(dropped)} dropped and "
+        f"\n{n_kept} kept, {len(dropped)} dropped ({len(failed)} failed) and "
         f"{summary['n_not_merged_sites']} not merged of {len(chunks)} sites"
     )
     print(f"Report card tiers of kept sites: {summary['assessable_counts']}")

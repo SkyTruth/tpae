@@ -10,7 +10,8 @@ which a site must pass. get_treatment_cells.py drops any site with too few land 
 Each site's features are fetched with chunker.wdpa_features, the same features
 chunker.py counted. Cleaning keeps only polygonal parts, repairs invalid geometries,
 renames SITE_ID to site_id, dissolves multi-part sites into one row per site, and
-simplifies boundaries by SITE_SIMPLIFY_M.
+simplifies boundaries by SITE_SIMPLIFY_M. Sites no longer in WDPA, or with no polygon
+parts, are recorded as dropped in DROPPED_SITES, which clears every later step's records.
 """
 
 from datetime import datetime, timezone
@@ -29,6 +30,7 @@ from shapely.ops import unary_union
 
 from cells.get_control_cells import init_ee
 from sites.chunker import wdpa_features
+from sites.dropped_sites import record_dropped
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
@@ -37,6 +39,7 @@ from utils.variables import (
     SITE_CHUNKS,
     SITE_GEOMS,
     SITE_GEOMS_META,
+    DROPPED_SITES,
     SITE_SIMPLIFY_M,
     ANALYSIS_START_YR,
     GPD_CRS_METERS,
@@ -116,9 +119,13 @@ def clean_sites(sites, simplify_m=SITE_SIMPLIFY_M):
 
 
 def save_sites(
-    group_name=SITE_GROUP, output_path=SITE_GEOMS, meta_path=SITE_GEOMS_META
+    group_name=SITE_GROUP,
+    output_path=SITE_GEOMS,
+    meta_path=SITE_GEOMS_META,
+    dropped_path=DROPPED_SITES,
 ):
-    """Clean and save the sites of a group, with a summary of the run."""
+    """Clean and save the sites of a group, with a summary of the run, and record the
+    sites dropped."""
     init_ee(PROJECT)
     chunks = pd.read_parquet(SITE_CHUNKS)
     group_sites, not_eligible = select_sites(chunks, group_name)
@@ -178,6 +185,11 @@ def save_sites(
     with fsspec.open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
     print(f"Saved {len(sites)} site(s) to {output_path} and summary to {meta_path}")
+
+    no_parts = set(features["SITE_ID"].astype(int)) - set(sites["site_id"].astype(int))
+    dropped = {site_id: "no longer in WDPA" for site_id in missing}
+    dropped |= {site_id: "no polygon parts" for site_id in sorted(no_parts)}
+    record_dropped("clean_sites", dropped, path=dropped_path)
     return sites
 
 
