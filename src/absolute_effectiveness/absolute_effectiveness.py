@@ -69,7 +69,7 @@ GROUP_BASE = 10
 # Number of sites analyzed at once
 N_WORKERS = 24
 # Earth Engine requests in flight at once, under the project limit of 40
-MAX_EE_REQUESTS = 36
+MAX_EE_REQUESTS = 30
 EE_REQUESTS = threading.BoundedSemaphore(MAX_EE_REQUESTS)
 
 COLUMNS = (
