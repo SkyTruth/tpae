@@ -672,17 +672,20 @@ RELATIVE_RESULTS_TEMPLATE = (
     f"gs://{GCS_BUCKET}/relative_results/relative_results_{{group}}.csv"
 )
 RELATIVE_RESULTS = RELATIVE_RESULTS_TEMPLATE.format(group=SITE_GROUP)
-# unchunker.py: every chunk's tables merged, with a site status table and a summary
+# unchunker.py: every chunk's tables merged, with dropped sites and a summary
 GLOBAL_RESULTS_PREFIX = f"gs://{GCS_BUCKET}/global_results/"
-# Earth Engine request timeout (ms), so a stalled request fails instead of hanging; longer
-# than Earth Engine's 5-minute limit, so a too-heavy computation fails with its own error
+# Earth Engine request timeout (ms); a request with no response by then is not retried
 EE_DEADLINE_MS = 360_000
 # Number of Earth Engine requests to run at once
 EE_N_WORKERS = 8
-# Attempts per site (or chunk of cells) for transient Earth Engine errors
-EE_MAX_ATTEMPTS = 3
-# Wait (s) before the first retry; doubles before each later one
+# Attempts per site (or chunk of cells) for transient Earth Engine errors other than
+# rate limits
+EE_MAX_ATTEMPTS = 5
+# Wait (s) before the first retry; doubles before each later one, up to EE_MAX_RETRY_WAIT_S
 EE_RETRY_WAIT_S = 30
+EE_MAX_RETRY_WAIT_S = 300
+# Total wait (s) for a rate-limited site (or chunk of cells) before it fails
+EE_RATE_LIMIT_MAX_WAIT_S = 3600
 
 # Archived:
 # ----------

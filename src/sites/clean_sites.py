@@ -31,6 +31,7 @@ from shapely.ops import unary_union
 from cells.get_control_cells import init_ee
 from sites.chunker import wdpa_features
 from sites.dropped_sites import record_dropped
+from utils.retries import with_retries
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
@@ -87,8 +88,10 @@ def fetch_sites(site_ids):
     """Every polygon in wdpa_features of the given sites (GeoDataFrame)."""
     sites_fc = wdpa_features().filter(ee.Filter.inList("SITE_ID", site_ids))
     # computeFeatures pages through results, so it is not limited to 5000 features
-    return ee.data.computeFeatures(
-        {"expression": sites_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"}
+    return with_retries(
+        ee.data.computeFeatures,
+        {"expression": sites_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"},
+        label="WDPA features",
     ).set_crs("EPSG:4326")
 
 
@@ -137,7 +140,8 @@ def save_sites(
     if group_sites.empty:
         raise RuntimeError(f"No eligible sites in group {group_name}")
 
-    wdpa_update_time = ee.data.getAsset(PAS_ASSET_ID)["updateTime"]
+    wdpa = with_retries(ee.data.getAsset, PAS_ASSET_ID, label="WDPA asset")
+    wdpa_update_time = wdpa["updateTime"]
     chunks_wdpa_update_time = chunks["wdpa_update_time"].iloc[0]
     if wdpa_update_time != chunks_wdpa_update_time:
         print(

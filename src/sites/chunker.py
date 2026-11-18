@@ -24,6 +24,7 @@ import ee
 import fsspec
 
 from cells.get_control_cells import init_ee
+from utils.retries import with_retries
 from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
@@ -64,8 +65,10 @@ def site_areas():
     gis_area_km2 (the sum of its features' GIS_AREA)."""
     features = wdpa_features().select(WDPA_COLUMNS, None, False)
     # computeFeatures pages through results, so it is not limited to 5000 features
-    features = ee.data.computeFeatures(
-        {"expression": features, "fileFormat": "PANDAS_DATAFRAME"}
+    features = with_retries(
+        ee.data.computeFeatures,
+        {"expression": features, "fileFormat": "PANDAS_DATAFRAME"},
+        label="WDPA features",
     )[WDPA_COLUMNS]
     sites = (
         features.groupby("SITE_ID", as_index=False)
@@ -100,7 +103,8 @@ def save_chunks(chunks_path=SITE_CHUNKS, meta_path=CHUNKS_META):
     """Assign every eligible site to a chunk, and save the table and the last chunk
     index."""
     init_ee(PROJECT)
-    wdpa_update_time = ee.data.getAsset(PAS_ASSET_ID)["updateTime"]
+    wdpa = with_retries(ee.data.getAsset, PAS_ASSET_ID, label="WDPA asset")
+    wdpa_update_time = wdpa["updateTime"]
     sites = site_areas()
     small = sites["gis_area_km2"] < MIN_GIS_AREA_KM2
     print(f"Left out {small.sum()} site(s): GIS_AREA below {MIN_GIS_AREA_KM2:g} km²")

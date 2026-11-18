@@ -46,7 +46,6 @@ from utils.variables import (
     CELL_COVARIATES_PREFIX,
     TREATMENT_CELLS,
     CONTROL_CELLS,
-    EE_DEADLINE_MS,
     EE_N_WORKERS,
 )
 
@@ -72,7 +71,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     from cells.load_all_cells import build_all_site_cells
     from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
     from sites.site_selector import load_site_ids
-    from utils.retries import report_failures, with_retries
+    from utils.retries import report_failures, set_request_limits, with_retries
     from covariates.export_covariate_stack import (
         covariate_stack_updated,
         load_covariate_stack,
@@ -87,7 +86,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
 
     ee.Authenticate()
     ee.Initialize(project=PROJECT)
-    ee.data.setDeadline(EE_DEADLINE_MS)
+    set_request_limits()
 
     if site_ids is None:
         site_ids = load_site_ids()
@@ -96,13 +95,15 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     site_ids = [s for s in site_ids if int(s) not in dropped_before]
     if len(site_ids) < n_sites:
         print(f"Skipping {n_sites - len(site_ids)} site(s) dropped at earlier steps")
-    image, country_names = covariate_image(load_covariate_stack())
+    image, country_names = with_retries(
+        covariate_image, load_covariate_stack(), label="Country names"
+    )
 
     fs = gcsfs.GCSFileSystem()
     inputs_modified = max(
         fs.modified(TREATMENT_CELLS),
         fs.modified(CONTROL_CELLS),
-        covariate_stack_updated(),
+        with_retries(covariate_stack_updated, label="Covariate stack asset"),
     )
     todo = [
         str(site_id)

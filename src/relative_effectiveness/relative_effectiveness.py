@@ -29,7 +29,6 @@ import pandas as pd
 
 from utils.variables import (
     PROJECT,
-    EE_DEADLINE_MS,
     ANALYSIS_END_YR,
     RELATIVE_RESULTS,
     DROPPED_SITES,
@@ -42,6 +41,7 @@ from utils.retries import (
     has_error,
     load_succeeded_rows,
     report_failures,
+    set_request_limits,
     with_retries,
 )
 from absolute_effectiveness.data_processor import DataProcessor
@@ -60,7 +60,7 @@ from relative_effectiveness.relative_scores import (
 
 # Before the Earth Engine objects below are built
 ee.Initialize(project=PROJECT)
-ee.data.setDeadline(EE_DEADLINE_MS)
+set_request_limits()
 
 SCORE_NAMES = ["extent", "intactness", "condition", "loss"]
 COLUMNS = (
