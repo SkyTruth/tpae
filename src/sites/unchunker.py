@@ -11,7 +11,8 @@ files in GLOBAL_RESULTS_PREFIX, each table with a chunk column:
 Before writing, checks that every chunk:
 - is complete: it has every file, every site was cleaned or dropped at clean_sites, and
   every site not dropped has a row in each of RESULT_TABLES, without errors (an error
-  not recorded as a drop means a step was interrupted, or an earlier step re-ran);
+  not recorded as a drop means a step was interrupted, or an earlier step re-ran), and
+  a scored-pairs file from relative_effectiveness.py;
 - holds only its own sites, each once;
 - has each file newer than the files it was built from (INPUT_FILES);
 - was cleaned from the chunk table's WDPA release.
@@ -35,10 +36,13 @@ import fsspec
 import geopandas as gpd
 import pandas as pd
 
+from matching.match_cells import scored_pairs_path
 from sites.clean_sites import CHUNK_GROUP_PREFIX
 from sites.dropped_sites import COLUMNS as DROPPED_COLUMNS, FAILED_PREFIX
 from utils.timing import TIMING_LOG
 from utils.variables import (
+    GCS_BUCKET,
+    MATCHES_PREFIX_TEMPLATE,
     SITE_CHUNKS,
     CHUNKS_META,
     SITE_GEOMS_TEMPLATE,
@@ -190,6 +194,18 @@ def sort_sites(tables, chunk_sites):
     return kept, dropped, missing
 
 
+def sites_without_scored_pairs(site_ids, group):
+    """site_ids of a group with no scored-pairs file (scored_pairs_path), from one
+    listing of the group's matches folder."""
+    folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX_TEMPLATE.format(group=group)}"
+    fs, fs_folder = fsspec.core.url_to_fs(folder)
+    try:
+        names = {path.rsplit("/", 1)[-1] for path in fs.ls(fs_folder, detail=False)}
+    except FileNotFoundError:
+        names = set()
+    return {s for s in site_ids if scored_pairs_path(s).rsplit("/", 1)[-1] not in names}
+
+
 def merge(frames):
     """Tables stacked, or an empty table with site_id and chunk if there are none."""
     if not frames:
@@ -255,6 +271,10 @@ def unchunk(
         missing = [f"no {name}" for name, path in paths.items() if times[path] is None]
         if "site_geoms" in tables:
             kept, dropped, unanalyzed = sort_sites(tables, chunk_sites)
+            no_pairs = sites_without_scored_pairs(kept, f"{CHUNK_GROUP_PREFIX}{chunk}")
+            if no_pairs:
+                unanalyzed.append(f"{len(no_pairs)} site(s) without scored pairs")
+                kept -= no_pairs
             missing += unanalyzed
             chunk_frames = {
                 "site_geoms": tables["site_geoms"],

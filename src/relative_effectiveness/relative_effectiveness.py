@@ -3,8 +3,9 @@ Relative Effectiveness
 -------------------------------------------
 Scores each site's matched treatment and control cells and compares them, for every
 site in the active SITE_GROUP, n_workers sites at a time, and writes one row of
-site-level relative scores per site to a CSV in GCS (relative_results/). Same analysis
-as notebooks/run_relative_effectiveness.ipynb.
+site-level relative scores per site to a CSV in GCS (relative_results/), and each
+site's scored matched pairs next to its match outputs (scored_pairs_path). Same
+analysis as notebooks/run_relative_effectiveness.ipynb.
 
 Reads each site's match outputs from GCS, so run MDM_match_cells.py with
 save_match_outputs = True first. Transient Earth Engine errors are retried. Sites that
@@ -44,7 +45,7 @@ from utils.retries import (
     with_retries,
 )
 from absolute_effectiveness.data_processor import DataProcessor
-from matching.match_cells import match_output_paths
+from matching.match_cells import match_output_paths, scored_pairs_path
 from relative_effectiveness.metrics_per_cell import (
     RelativeHabitatConditionAnalyzer,
     RelativeHabitatLossAnalyzer,
@@ -160,6 +161,8 @@ def fill_site_row(row, site_id, START_YR):
     # Covariates for each matched cell come from the saved matched cells
     match_df = regression_adjust_score_diffs(match_df, matched_cells_gdf)
     row["regression_adjusted"] = match_df.attrs["regression_adjusted"]
+    # Save each pair's scores and differences
+    match_df.to_parquet(scored_pairs_path(site_id), index=False)
 
     _, site_scores = aggregate_site_relative_scores(match_df)
     for name in SCORE_NAMES:

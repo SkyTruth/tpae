@@ -559,6 +559,13 @@ def match_output_paths(site_id, match_method: str = "mdm"):
     )
 
 
+def scored_pairs_path(site_id, match_method: str = "mdm"):
+    """GCS path of a site's scored matched pairs, written by relative_effectiveness.py
+    (active site group)."""
+    folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX}"
+    return f"{folder}scored_pairs_{match_method}_{site_id}.parquet"
+
+
 def save_matching_outputs(
     site_cells, cells_df, match_df, site_id, match_method: str = "mdm"
 ):

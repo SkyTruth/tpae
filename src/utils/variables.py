@@ -663,8 +663,10 @@ CONTROL_CELLS = CONTROL_CELLS_TEMPLATE.format(group=SITE_GROUP)
 # extract_cell_covariates.py: covariates for each site's candidate cells, one file per
 # site, read by MDM_match_cells.py
 CELL_COVARIATES_PREFIX = f"cell_covariates/{SITE_GROUP}/"
-# MDM_match_cells.py (optional): each site's match table and matched cells
-MATCHES_PREFIX = f"matches/{SITE_GROUP}/"
+# MDM_match_cells.py (optional): each site's match table and matched cells;
+# relative_effectiveness.py: each site's scored pairs
+MATCHES_PREFIX_TEMPLATE = "matches/{group}/"
+MATCHES_PREFIX = MATCHES_PREFIX_TEMPLATE.format(group=SITE_GROUP)
 # absolute_effectiveness.py: one row of habitat condition and loss results per site
 ABSOLUTE_RESULTS_TEMPLATE = (
     f"gs://{GCS_BUCKET}/absolute_results/absolute_results_{{group}}.csv"
