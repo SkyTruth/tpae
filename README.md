@@ -10,7 +10,7 @@ This repository contains preliminary code related to the development of a Terres
   - `run_relative_effectiveness.ipynb`: Per-cell scores and site-level relative effectiveness for one site.
   - `archive/`: Retired PSM notebooks.
 - **src/sites/**: Select and clean analysis sites.
-  - `chunker.py`: Select every eligible site from WDPA (Terrestrial and Coastal PAs that are not Proposed, with a designation year up to `ANALYSIS_END_YR - 1`, and whose `GIS_AREA` is large enough for `MIN_TREATMENT_CELLS` cells), sort them by country, split them into chunks of up to `CHUNK_SIZE` sites, and save each site's chunk to GCS.
+  - `chunker.py`: Select every eligible site from WDPA (Terrestrial and Coastal PAs that are not Proposed, with a designation year up to `ANALYSIS_END_YR - 1`, and whose `GIS_AREA` is at least `MIN_GIS_AREA_KM2`), sort them by country, split them into chunks of up to `CHUNK_SIZE` sites, and save each site's chunk to GCS.
   - `clean_sites.py`: Select the active site group (a chunk, or a group in `SITE_GROUPS`) from the eligible sites, clean geometries, and save to GCS.
   - `unchunker.py`: Check every chunk's outputs and merge them into global tables of the kept sites, with a list of every dropped site and why.
   - `site_selector.py`: Load the cleaned sites, reduce Earth Engine images over a site, split large sites into pieces for intactness, and build rectangles for selecting input images.

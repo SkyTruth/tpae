@@ -240,6 +240,8 @@ SITE_GROUP = "chunk_0"
 SITE_SIMPLIFY_M = 15
 # WDPA realms (REALM) of the features used for sites; Marine is left out
 SITE_REALMS = ["Terrestrial", "Coastal"]
+# Smallest GIS_AREA sum (km2) of a site's features
+MIN_GIS_AREA_KM2 = 100
 
 # Habitat loss analysis period
 ANALYSIS_START_YR = 2018
@@ -580,9 +582,8 @@ TREATMENT_SE_TARGET = 0.05  # e; n0 = 400 cells for very large sites
 MIN_LAND_FRACTION = 0.5  # drop treatment (and control) cells that are mostly water
 # Sites are dropped with fewer than this many land treatment cells available, kept after
 # covariate extraction, or matched
-MIN_TREATMENT_CELLS = 100
-# Smallest treatment sample: sites with fewer land cells than this take every land cell,
-# so small sites can still reach MIN_TREATMENT_CELLS matched cells
+MIN_TREATMENT_CELLS = 1
+# Smallest treatment sample: sites with fewer land cells than this take every land cell
 TREATMENT_SAMPLE_FLOOR = 200
 
 # Parameters for control cell sampling

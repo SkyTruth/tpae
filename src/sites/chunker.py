@@ -30,16 +30,11 @@ from utils.variables import (
     PAS_ASSET_ID,
     SITE_REALMS,
     ANALYSIS_END_YR,
-    CELL_SIZE_M,
-    MIN_TREATMENT_CELLS,
+    MIN_GIS_AREA_KM2,
     SITE_CHUNKS,
     CHUNKS_META,
 )
 
-M2_PER_KM2 = 1_000_000
-# Smallest GIS_AREA sum (km2) of a site's features: 90% of the area MIN_TREATMENT_CELLS
-# cells need, allowing for differences between WDPA's areas and the cleaned geometries
-MIN_GIS_AREA_KM2 = 0.9 * MIN_TREATMENT_CELLS * CELL_SIZE_M**2 / M2_PER_KM2
 # Most sites in a chunk
 CHUNK_SIZE = 700
 # Fewest sites in a chunk that ends early at a country boundary
