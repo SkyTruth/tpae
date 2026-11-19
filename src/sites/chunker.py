@@ -3,8 +3,9 @@ Split every eligible WDPA site into chunks of at most CHUNK_SIZE sites, and save
 site's chunk to SITE_CHUNKS (Parquet in GCS) and the index of the last chunk to
 CHUNKS_META (JSON). Chunks are numbered from 0.
 
-Eligible sites have features in wdpa_features (Terrestrial and Coastal PAs that are not
-Proposed, designated from 1 to ANALYSIS_END_YR - 1) whose GIS_AREA sums to at least
+Eligible sites have features in wdpa_features (Terrestrial and Coastal PAs that are
+Inscribed, Adopted, Designated or Established, not UNESCO-MAB Biosphere Reserves,
+designated from 1 to ANALYSIS_END_YR - 1) whose GIS_AREA sums to at least
 MIN_GIS_AREA_KM2. get_treatment_cells.py drops any remaining site with too few land cells.
 
 Sites are sorted by country or territory (ISO3), then site_id. A chunk ends early at a
@@ -29,6 +30,7 @@ from utils.variables import (
     PROJECT,
     PAS_ASSET_ID,
     SITE_REALMS,
+    MAB_DESIGNATION,
     ANALYSIS_END_YR,
     MIN_GIS_AREA_KM2,
     SITE_CHUNKS,
@@ -41,15 +43,19 @@ CHUNK_SIZE = 700
 MIN_CHUNK_SIZE = round(0.85 * CHUNK_SIZE)
 # WDPA attributes downloaded for each feature
 WDPA_COLUMNS = ["SITE_ID", "GIS_AREA", "ISO3"]
+# STATUS values of eligible features
+SITE_STATUSES = ["Inscribed", "Adopted", "Designated", "Established"]
 
 
 def wdpa_features():
-    """WDPA polygons in SITE_REALMS that are not Proposed, designated from 1 to
-    ANALYSIS_END_YR - 1 (STATUS_YR 0 means unknown) (server side)."""
+    """WDPA polygons in SITE_REALMS with a STATUS in SITE_STATUSES, not UNESCO-MAB
+    Biosphere Reserves, designated from 1 to ANALYSIS_END_YR - 1 (STATUS_YR 0 means
+    unknown) (server side)."""
     return (
         ee.FeatureCollection(PAS_ASSET_ID)
         .filter(ee.Filter.inList("REALM", SITE_REALMS))
-        .filter(ee.Filter.neq("STATUS", "Proposed"))
+        .filter(ee.Filter.inList("STATUS", SITE_STATUSES))
+        .filter(ee.Filter.eq("DESIG_ENG", MAB_DESIGNATION).Not())
         .filter(ee.Filter.gte("STATUS_YR", 1))
         .filter(ee.Filter.lte("STATUS_YR", ANALYSIS_END_YR - 1))
     )

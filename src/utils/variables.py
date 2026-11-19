@@ -240,6 +240,8 @@ SITE_GROUP = "chunk_0"
 SITE_SIMPLIFY_M = 15
 # WDPA realms (REALM) of the features used for sites; Marine is left out
 SITE_REALMS = ["Terrestrial", "Coastal"]
+# DESIG_ENG of PAs left out of sites and the control-cell mask
+MAB_DESIGNATION = "UNESCO-MAB Biosphere Reserve"
 # Smallest GIS_AREA sum (km2) of a site's features
 MIN_GIS_AREA_KM2 = 100
 

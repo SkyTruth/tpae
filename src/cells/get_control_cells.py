@@ -37,6 +37,7 @@ from utils.variables import (
     HGFC_ASSET_ID,
     PAS_ASSET_ID,
     OECMS_ASSET_ID,
+    MAB_DESIGNATION,
     EE_N_WORKERS,
 )
 from sites.dropped_sites import failed_reason, record_dropped
@@ -198,10 +199,17 @@ def get_control_cells(
         .simplify(CONTROL_SIMPLIFY_M)
         .to_crs(sites_gdf.crs)
     )
-    # Every PA and OECM, in all realms
-    all_pas = ee.FeatureCollection(
-        [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
-    ).flatten()
+    # Every PA and OECM in all realms, except UNESCO-MAB Biosphere Reserve PAs
+    mab_pas = ee.Filter.And(
+        ee.Filter.eq("DESIG_ENG", MAB_DESIGNATION), ee.Filter.eq("SITE_TYPE", "PA")
+    )
+    all_pas = (
+        ee.FeatureCollection(
+            [ee.FeatureCollection(PAS_ASSET_ID), ee.FeatureCollection(OECMS_ASSET_ID)]
+        )
+        .flatten()
+        .filter(mab_pas.Not())
+    )
     try:
         treat_counts = load_treatment_cell_counts(treatment_cells_path)
     except FileNotFoundError as exc:
