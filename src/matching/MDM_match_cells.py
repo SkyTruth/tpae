@@ -128,9 +128,11 @@ def main():
 
     # Apply MDM to each site and record diagnostic results
     rows = {site_id: {"site_id": site_id} for site_id in dropped_before}
-    for site_id, reason in dropped_before.items():
-        print(f"Skipping site {site_id}: dropped at an earlier step ({reason})")
     to_match = [site_id for site_id in site_ids if site_id not in dropped_before]
+    print(
+        f"Skipping {len(dropped_before)} site(s) dropped at earlier steps; "
+        f"matching {len(to_match)}"
+    )
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {
             executor.submit(
@@ -171,15 +173,15 @@ def main():
         card = save_report_card(results_df, MATCH_REPORT_CARD, all_dropped)
     else:
         card = build_report_card(results_df, all_dropped)
-    tiers = card["assessable"].value_counts()
     # Summary statistics over the sites kept for analysis
     results_df = results_df[~results_df["site_id"].isin(all_dropped)]
+    tiers = card.loc[~card["site_id"].isin(all_dropped), "assessable"].value_counts()
 
-    print("\nExperiment summary")
-    print(f"  Sites: {len(results_df)} kept, {len(all_dropped)} dropped")
-    for site_id, reason in all_dropped.items():
-        print(f"    dropped {site_id}: {reason}")
-    print("  " + ", ".join(f"{t}: {tiers.get(t, 0)}" for t in ("Yes", "Caution", "No")))
+    print(f"\nExperiment summary ({len(results_df)} kept sites)")
+    print(
+        "  Report card: "
+        + ", ".join(f"{t}: {tiers.get(t, 0)}" for t in ("Yes", "Caution", "No"))
+    )
     print(f"  Mean match coverage: {results_df['match_coverage'].mean():.1%}")
     print(f"  Mean |SMD| after: {results_df['avg_abs_smd_after'].mean():.3f}")
     print(

@@ -216,12 +216,15 @@ def get_control_cells(
         site_id = int(row["site_id"])
         n_treat = treat_counts.get(str(site_id), 0)
         if n_treat == 0:
-            print(f"Skipping site: {site_id} (0 treatment cells)")
             continue
         n_samples_site = (
             n_samples if n_samples is not None else calc_n_control_samples(n_treat)
         )
         site_jobs.append((site_id, row.geometry, n_samples_site))
+    print(
+        f"Skipping {len(sites_gdf) - len(site_jobs)} site(s) with no treatment cells "
+        "(dropped at earlier steps)"
+    )
     print(
         f"Sampling control cells for {len(site_jobs)} sites, {n_workers} at a time "
         f"(min={CONTROL_N_SAMPLES_MIN}, max={CONTROL_N_SAMPLES_MAX}, "

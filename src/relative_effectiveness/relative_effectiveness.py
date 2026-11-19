@@ -31,7 +31,6 @@ from utils.variables import (
     PROJECT,
     ANALYSIS_END_YR,
     RELATIVE_RESULTS,
-    DROPPED_SITES,
     KERNEL_RADIUS_M,
 )
 
@@ -184,12 +183,17 @@ def main(n_workers=N_WORKERS, retry_failed=False):
                 "end_year": ANALYSIS_END_YR,
                 "error": f"dropped: {dropped[site_id]}",
             }
+    n_dropped = sum(site_id in dropped for site_id in site_ids)
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         futures = {
             executor.submit(analyze_site, site_id, start_yr): site_id
             for site_id, start_yr in start_yrs.items()
             if site_id not in rows
         }
+        print(
+            f"Skipping {n_dropped} site(s) dropped at earlier steps; "
+            f"analyzing {len(futures)}"
+        )
         for i, future in enumerate(as_completed(futures), start=1):
             site_id = futures[future]
             rows[site_id] = future.result()
@@ -205,9 +209,10 @@ def main(n_workers=N_WORKERS, retry_failed=False):
 
     done = [rows[s] for s in site_ids if s in rows]
     pd.DataFrame(done).reindex(columns=COLUMNS).to_csv(RELATIVE_RESULTS, index=False)
-    print(f"\nSaved {len(rows)} sites to {RELATIVE_RESULTS}")
-    n_dropped = sum(site_id in dropped for site_id in site_ids)
-    print(f"{n_dropped} site(s) dropped at earlier steps ({DROPPED_SITES})")
+    print(
+        f"\nSaved {len(rows)} rows ({len(rows) - n_dropped} analyzed sites, "
+        f"{n_dropped} dropped at earlier steps) to {RELATIVE_RESULTS}"
+    )
     errors = {
         s: rows[s]["error"]
         for s in site_ids

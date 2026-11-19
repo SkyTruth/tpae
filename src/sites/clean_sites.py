@@ -193,7 +193,7 @@ def save_sites(
     no_parts = set(features["SITE_ID"].astype(int)) - set(sites["site_id"].astype(int))
     dropped = {site_id: "no longer in WDPA" for site_id in missing}
     dropped |= {site_id: "no polygon parts" for site_id in sorted(no_parts)}
-    record_dropped("clean_sites", dropped, path=dropped_path)
+    record_dropped("clean_sites", dropped, path=dropped_path, sites_path=output_path)
     return sites
 
 

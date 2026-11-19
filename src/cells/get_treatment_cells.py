@@ -184,10 +184,10 @@ def get_treatment_cells(
         else:
             all_cells.append(result)
 
-    record_dropped("treatment_cells", dropped)
     report_failures(failed, len(sites_gdf))
     if failed:
         print("Re-run to retry them")
+    record_dropped("treatment_cells", dropped)
     if not all_cells:
         raise RuntimeError("No treatment cells generated for any site.")
 

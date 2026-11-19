@@ -69,7 +69,12 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
     from cells.load_all_cells import build_all_site_cells
-    from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
+    from sites.dropped_sites import (
+        failed_reason,
+        load_dropped_before,
+        record_dropped,
+        report_dropped,
+    )
     from sites.site_selector import load_site_ids
     from utils.retries import report_failures, set_request_limits, with_retries
     from covariates.export_covariate_stack import (
@@ -226,6 +231,8 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     # Keep the earlier records if no site needed extracting
     if todo:
         record_dropped("covariates", {s: failed_reason(e) for s, e in failed.items()})
+    else:
+        report_dropped("covariates")
     return list(failed)
 
 
