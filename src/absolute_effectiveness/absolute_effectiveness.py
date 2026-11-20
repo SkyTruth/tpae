@@ -34,7 +34,7 @@ from utils.variables import (
 
 from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
 from sites.site_selector import (
-    bounds_rectangle,
+    bounds_region,
     load_sites,
     site_chunks,
     site_region,
@@ -128,7 +128,7 @@ def fill_site_row(row, START_YR, geometry):
     site = site_region(geometry)
     chunks = site_chunks(geometry)
     # Input images are read within the site and the intactness kernel's reach
-    inputs_region = bounds_rectangle(geometry.bounds, KERNEL_RADIUS_M)
+    inputs_region = bounds_region(geometry, KERNEL_RADIUS_M)
 
     # Process input datasets
     GLC_processed = processor.process_glc(inputs_region, START_YR)

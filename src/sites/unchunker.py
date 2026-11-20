@@ -6,19 +6,19 @@ files in GLOBAL_RESULTS_PREFIX, each table with a chunk column:
 - dropped_sites.csv: every dropped site, with the step that dropped it and why (reason
   "failed: <error>" for sites that failed with an error);
 - site_geoms.parquet: every cleaned site's geometry;
-- summary.json: chunks merged, site counts, and run time.
+- summary.json: chunks merged and site counts.
 
 Before writing, checks that every chunk:
 - is complete: it has every file, every site was cleaned or dropped at clean_sites, and
   every site not dropped has a row in each of RESULT_TABLES, without errors (an error
-  not recorded as a drop means a step was interrupted, or an earlier step re-ran);
+  not recorded as a drop means a step was interrupted, or an earlier step re-ran), and
+  a scored-pairs file from relative_effectiveness.py;
 - holds only its own sites, each once;
 - has each file newer than the files it was built from (INPUT_FILES);
 - was cleaned from the chunk table's WDPA release.
 Nothing is written if a check fails. With --allow-partial, incomplete chunks are merged
 anyway, leaving out sites without results, so the global files can be checked while the
-run is in progress. A warning is printed if chunk steps run through timing.py were run
-at more than one commit.
+run is in progress.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -35,10 +35,12 @@ import fsspec
 import geopandas as gpd
 import pandas as pd
 
+from matching.match_cells import scored_pairs_path
 from sites.clean_sites import CHUNK_GROUP_PREFIX
 from sites.dropped_sites import COLUMNS as DROPPED_COLUMNS, FAILED_PREFIX
-from utils.timing import TIMING_LOG
 from utils.variables import (
+    GCS_BUCKET,
+    MATCHES_PREFIX_TEMPLATE,
     SITE_CHUNKS,
     CHUNKS_META,
     SITE_GEOMS_TEMPLATE,
@@ -190,6 +192,18 @@ def sort_sites(tables, chunk_sites):
     return kept, dropped, missing
 
 
+def sites_without_scored_pairs(site_ids, group):
+    """site_ids of a group with no scored-pairs file (scored_pairs_path), from one
+    listing of the group's matches folder."""
+    folder = f"gs://{GCS_BUCKET}/{MATCHES_PREFIX_TEMPLATE.format(group=group)}"
+    fs, fs_folder = fsspec.core.url_to_fs(folder)
+    try:
+        names = {path.rsplit("/", 1)[-1] for path in fs.ls(fs_folder, detail=False)}
+    except FileNotFoundError:
+        names = set()
+    return {s for s in site_ids if scored_pairs_path(s).rsplit("/", 1)[-1] not in names}
+
+
 def merge(frames):
     """Tables stacked, or an empty table with site_id and chunk if there are none."""
     if not frames:
@@ -197,30 +211,6 @@ def merge(frames):
             {"site_id": pd.Series(dtype="int64"), "chunk": pd.Series(dtype="int64")}
         )
     return pd.concat(frames, ignore_index=True)
-
-
-def timing_info(groups):
-    """Commits, run time and EECUs of the latest successful run of each script for each
-    chunk in TIMING_LOG (runs through timing.py only)."""
-    try:
-        log = pd.read_csv(TIMING_LOG)
-        runs = log[log["site_group"].isin(groups) & (log["status"] == "success")]
-    except FileNotFoundError:
-        runs = pd.DataFrame()
-    if runs.empty:
-        return {
-            "n_timed_runs": 0,
-            "git_commits": [],
-            "elapsed_hours": 0.0,
-            "eecu_hours": 0.0,
-        }
-    runs = runs.sort_values("started_utc").groupby(["site_group", "script"]).tail(1)
-    return {
-        "n_timed_runs": len(runs),
-        "git_commits": sorted(runs["git_commit"].dropna().astype(str).unique()),
-        "elapsed_hours": round(float(runs["elapsed_seconds"].sum()) / 3600, 2),
-        "eecu_hours": round(float(runs["eecu_seconds"].sum()) / 3600, 2),
-    }
 
 
 def unchunk(
@@ -255,6 +245,10 @@ def unchunk(
         missing = [f"no {name}" for name, path in paths.items() if times[path] is None]
         if "site_geoms" in tables:
             kept, dropped, unanalyzed = sort_sites(tables, chunk_sites)
+            no_pairs = sites_without_scored_pairs(kept, f"{CHUNK_GROUP_PREFIX}{chunk}")
+            if no_pairs:
+                unanalyzed.append(f"{len(no_pairs)} site(s) without scored pairs")
+                kept -= no_pairs
             missing += unanalyzed
             chunk_frames = {
                 "site_geoms": tables["site_geoms"],
@@ -277,9 +271,6 @@ def unchunk(
             f"{len(incomplete)} incomplete chunk(s): {sorted(incomplete)}; use "
             "--allow-partial to merge them anyway"
         )
-    run_info = timing_info([f"{CHUNK_GROUP_PREFIX}{c}" for c in files])
-    if len(run_info["git_commits"]) > 1:
-        print(f"Warning: chunks were run at commits {run_info['git_commits']}")
     if errors:
         print("\n".join(errors))
         raise RuntimeError(
@@ -321,7 +312,6 @@ def unchunk(
         # In steps that have not run yet, or were interrupted
         "n_not_merged_sites": len(chunks) - n_kept - len(dropped),
         "assessable_counts": {k: int(n) for k, n in tiers.value_counts().items()},
-        **run_info,
     }
     with fsspec.open(f"{output_prefix}summary.json", "w") as f:
         json.dump(summary, f, indent=2)

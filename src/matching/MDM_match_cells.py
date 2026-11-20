@@ -54,6 +54,7 @@ from matching.match_cells import (
     match_output_paths,
     match_treatment_control_mdm,
     save_matching_outputs,
+    scored_pairs_path,
 )
 from matching.diagnostics import (
     DIAGNOSTIC_COLUMNS,
@@ -163,7 +164,7 @@ def main():
     # Delete dropped sites' match outputs from earlier runs, so they are not used
     fs = gcsfs.GCSFileSystem()
     for site_id in all_dropped:
-        for path in match_output_paths(site_id):
+        for path in (*match_output_paths(site_id), scored_pairs_path(site_id)):
             if fs.exists(path):
                 fs.rm(path)
 
