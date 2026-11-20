@@ -46,6 +46,8 @@ from utils.variables import (
     GPD_CRS_METERS,
 )
 
+PAGE_SIZE = 25
+
 # Groups named CHUNK_GROUP_PREFIX + n are chunk n of SITE_CHUNKS
 CHUNK_GROUP_PREFIX = "chunk_"
 SITE_FILTERS = {
@@ -90,7 +92,11 @@ def fetch_sites(site_ids):
     # computeFeatures pages through results, so it is not limited to 5000 features
     return with_retries(
         ee.data.computeFeatures,
-        {"expression": sites_fc, "fileFormat": "GEOPANDAS_GEODATAFRAME"},
+        {
+            "expression": sites_fc,
+            "fileFormat": "GEOPANDAS_GEODATAFRAME",
+            "pageSize": PAGE_SIZE,
+        },
         label="WDPA features",
     ).set_crs("EPSG:4326")
 
