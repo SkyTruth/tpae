@@ -16,7 +16,7 @@ from absolute_effectiveness.absolute_effectiveness import (
 from absolute_effectiveness.data_processor import DataProcessor
 from absolute_effectiveness.habitat_condition import HabitatConditionAnalyzer
 from absolute_effectiveness.habitat_loss import HabitatLossAnalyzer
-from sites.site_selector import bounds_rectangle, site_chunks
+from sites.site_selector import bounds_region, site_chunks
 from utils.retries import with_retries
 from utils.variables import ANALYSIS_END_YR, GLC_LABELS, KERNEL_RADIUS_M
 
@@ -154,7 +154,7 @@ def analyze_country(country, start_yr, country_shape, pas, n_workers=MAX_EE_REQU
     row = {"country": country, "start_year": start_yr, "end_year": ANALYSIS_END_YR}
     pieces = site_chunks(country_shape)
     # Input images are read within the country and the intactness kernel's reach
-    inputs_region = bounds_rectangle(country_shape.bounds, KERNEL_RADIUS_M)
+    inputs_region = bounds_region(country_shape, KERNEL_RADIUS_M)
     rasters = country_rasters(inputs_region, start_yr)
     masks = {name: rasters[name] for name in AREA_NAMES}
 

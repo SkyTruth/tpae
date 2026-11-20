@@ -23,7 +23,7 @@ from covariates.cell_features import (
 )
 from covariates.export_covariate_stack import load_covariate_stack
 from sites.chunker import wdpa_features
-from sites.site_selector import bounds_rectangle
+from sites.site_selector import bounds_region
 from utils.retries import with_retries
 from utils.variables import (
     ANALYSIS_START_YR,
@@ -173,13 +173,13 @@ def sample_treatment_cells(country, country_geom, interior):
     return cells, n_interior
 
 
-def control_land_image(country_bounds):
+def control_land_image(country_shape):
     """1 on land at least CONTROL_INNER_BUFFER_M from any PA or OECM (except UNESCO-MAB
     Biosphere Reserve PAs), masked elsewhere, as in get_control_cells.sample_points
     (server side).
 
-    country_bounds: (min lon, min lat, max lon, max lat); PAs and OECMs within
-    CONTROL_INNER_BUFFER_M of these bounds are masked.
+    country_shape: the country's shapely geometry (EPSG:4326); PAs and OECMs within
+    CONTROL_INNER_BUFFER_M of its bounds (bounds_region) are masked.
     """
     # Every PA and OECM in all realms, except UNESCO-MAB Biosphere Reserve PAs
     mab_pas = ee.Filter.And(
@@ -193,7 +193,7 @@ def control_land_image(country_bounds):
         .filter(mab_pas.Not())
     )
     nearby_pas = all_pas.filterBounds(
-        bounds_rectangle(country_bounds, CONTROL_INNER_BUFFER_M)
+        bounds_region(country_shape, CONTROL_INNER_BUFFER_M)
     )
     protected_img = (
         ee.Image(0)
@@ -208,11 +208,11 @@ def control_land_image(country_bounds):
     return protected_img.eq(0).selfMask().updateMask(land).rename("control_land")
 
 
-def sample_control_cells(country, country_geom, country_bounds, n_treat):
+def sample_control_cells(country, country_geom, country_shape, n_treat):
     """Control cells sampled anywhere in the country, calc_n_control_samples(n_treat)
     of them, CONTROL_SPACING_M apart."""
     points = sample_points_in(
-        control_land_image(country_bounds),
+        control_land_image(country_shape),
         country_geom,
         calc_n_control_samples(n_treat),
         CONTROL_SPACING_M,
