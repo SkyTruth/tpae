@@ -36,7 +36,7 @@ from utils.variables import (
 )
 
 from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
-from sites.site_selector import bounds_rectangle, load_start_yrs
+from sites.site_selector import bounds_region, load_start_yrs
 from utils.retries import (
     has_error,
     load_succeeded_rows,
@@ -106,7 +106,7 @@ def fill_site_row(row, site_id, START_YR):
         ) from None
     matched_cells = geemap.geopandas_to_ee(matched_cells_gdf)
     # Input images are read within the cells and the intactness kernel's reach
-    inputs_region = bounds_rectangle(matched_cells_gdf.total_bounds, KERNEL_RADIUS_M)
+    inputs_region = bounds_region(matched_cells_gdf.geometry.values, KERNEL_RADIUS_M)
 
     # Process input datasets
     GLC_processed = processor.process_glc(inputs_region, START_YR)

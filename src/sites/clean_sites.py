@@ -8,10 +8,11 @@ of SITE_IDs or a list of (column, operator, value) filters on SITE_CHUNKS column
 which a site must pass. get_treatment_cells.py drops any site with too few land cells.
 
 Each site's features are fetched with chunker.wdpa_features, the same features
-chunker.py counted. Cleaning keeps only polygonal parts, repairs invalid geometries,
-renames SITE_ID to site_id, dissolves multi-part sites into one row per site, and
-simplifies boundaries by SITE_SIMPLIFY_M. Sites no longer in WDPA, or with no polygon
-parts, are recorded as dropped in DROPPED_SITES, which clears every later step's records.
+chunker.py counted. Cleaning clamps longitudes to [-180, 180], keeps only polygonal
+parts, repairs invalid geometries, renames SITE_ID to site_id, dissolves multi-part
+sites into one row per site, and simplifies boundaries by SITE_SIMPLIFY_M. Sites no
+longer in WDPA, or with no polygon parts, are recorded as dropped in DROPPED_SITES,
+which clears every later step's records.
 """
 
 from datetime import datetime, timezone
@@ -24,8 +25,9 @@ sys.path.insert(0, str(_SRC))
 
 import ee
 import fsspec
+import numpy as np
 import pandas as pd
-from shapely import make_valid
+from shapely import make_valid, transform
 from shapely.ops import unary_union
 
 from cells.get_control_cells import init_ee
@@ -101,9 +103,18 @@ def fetch_sites(site_ids):
     ).set_crs("EPSG:4326")
 
 
+def clamp_longitudes(geom):
+    """A geometry with longitudes clamped to [-180, 180] (vertices just past ±180 would
+    wrap to the other side when projected to GPD_CRS_METERS)."""
+    return transform(
+        geom, lambda xy: np.column_stack([xy[:, 0].clip(-180, 180), xy[:, 1]])
+    )
+
+
 def polygonal_part(geom):
-    """Repair a geometry and keep only its polygon parts (drop stray lines/points)."""
-    geom = make_valid(geom)
+    """Clamp longitudes, repair a geometry and keep only its polygon parts (drop stray
+    lines/points)."""
+    geom = make_valid(clamp_longitudes(geom))
     parts = [
         g
         for g in getattr(geom, "geoms", [geom])

@@ -50,28 +50,58 @@ def ee_geometry(geom):
     return ee.Geometry(geom.__geo_interface__)
 
 
-def bounds_rectangle(bounds, margin_m=0):
-    """Earth Engine rectangle around bounds (min lon, min lat, max lon, max lat), at
-    least margin_m wider on each side."""
-    min_lon, min_lat, max_lon, max_lat = bounds
+def padded_bounds(bounds, margin_m=0):
+    """[min lon, min lat, max lon, max lat] of bounds, at least margin_m wider on each
+    side, within ±180° longitude and ±90° latitude."""
+    min_lon, min_lat, max_lon, max_lat = (float(b) for b in bounds)
     pad_lat = margin_m / M_PER_DEGREE
     lat_lo, lat_hi = max(min_lat - pad_lat, -90), min(max_lat + pad_lat, 90)
     max_abs_lat = min(max(abs(lat_lo), abs(lat_hi)), 89)
     pad_lon = margin_m / (M_PER_DEGREE * math.cos(math.radians(max_abs_lat)))
+    return [max(min_lon - pad_lon, -180), lat_lo, min(max_lon + pad_lon, 180), lat_hi]
+
+
+def bounds_rectangle(bounds, margin_m=0):
+    """Earth Engine rectangle around bounds (min lon, min lat, max lon, max lat), at
+    least margin_m wider on each side."""
     return ee.Geometry.Rectangle(
-        [max(min_lon - pad_lon, -180), lat_lo, min(max_lon + pad_lon, 180), lat_hi],
-        proj="EPSG:4326",
-        geodesic=False,
+        padded_bounds(bounds, margin_m), proj="EPSG:4326", geodesic=False
     )
+
+
+def side_bounds(geoms):
+    """Bounds of shapely geometries (EPSG:4326) as a list: their total bounds, or, if
+    they span more than 180° of longitude, the bounds of the parts centered west of 0°
+    and of those east of it."""
+    parts = shapely.get_parts(geoms)
+    total = shapely.total_bounds(parts)
+    if total[2] - total[0] <= 180:
+        return [total]
+    bounds = shapely.bounds(parts)
+    west = bounds[:, 0] + bounds[:, 2] < 0
+    return [shapely.total_bounds(parts[side]) for side in (west, ~west) if side.any()]
+
+
+def bounds_region(geoms, margin_m=0):
+    """bounds_rectangle around shapely geometries (EPSG:4326), or a multipolygon of one
+    rectangle on each side of the antimeridian if they span more than 180° of
+    longitude."""
+    sides = side_bounds(geoms)
+    if len(sides) == 1:
+        return bounds_rectangle(sides[0], margin_m)
+    polygons = []
+    for bounds in sides:
+        w, s, e, n = padded_bounds(bounds, margin_m)
+        polygons.append([[[w, s], [e, s], [e, n], [w, n], [w, s]]])
+    return ee.Geometry.MultiPolygon(polygons, proj="EPSG:4326", geodesic=False)
 
 
 def site_region(geom):
     """A site for reduce_site: its polygons as an Earth Engine FeatureCollection, and
-    its bounding box."""
+    its bounding box from bounds_region."""
     parts = getattr(geom, "geoms", [geom])
     site_fc = ee.FeatureCollection([ee.Feature(ee_geometry(p)) for p in parts])
-    bbox = ee.Geometry.Rectangle(list(geom.bounds), proj="EPSG:4326", geodesic=False)
-    return site_fc, bbox
+    return site_fc, bounds_region(geom)
 
 
 def reduce_site(image, reducer, site, **kwargs):

@@ -48,19 +48,38 @@ LAND_TILE_PX = 4096
 def draw_grid(site_geom, cell_size_m):
     """
     Create a grid of all cells fully within a site geometry, with edges on multiples of
-    cell_size_m (the covariate stack's pixel edges).
+    cell_size_m (the covariate stack's pixel edges), indexed and ordered by position in
+    the grid over the site's bounding box. Candidate cells come from each polygon's
+    bounding box when those hold fewer cells in total (e.g. sites with parts on both
+    sides of the antimeridian).
     """
-    # Draw a grid from the site's bounding box, snapped to the pixel grid
+    # Grid over the site's bounding box, snapped to the pixel grid
     minx, miny, maxx, maxy = site_geom.bounds
     minx = np.floor(minx / cell_size_m) * cell_size_m
     miny = np.floor(miny / cell_size_m) * cell_size_m
+    n_x = len(np.arange(minx, maxx, cell_size_m))
+    n_y = len(np.arange(miny, maxy, cell_size_m))
 
-    xs, ys = np.meshgrid(
-        np.arange(minx, maxx, cell_size_m),
-        np.arange(miny, maxy, cell_size_m),
-        indexing="ij",
-    )
-    xs, ys = xs.ravel(), ys.ravel()
+    # Column and row ranges of the cells over each polygon's bounding box
+    part_ranges = []
+    for px0, py0, px1, py1 in shapely.bounds(shapely.get_parts(site_geom)):
+        px = np.arange(np.floor(px0 / cell_size_m) * cell_size_m, px1, cell_size_m)
+        py = np.arange(np.floor(py0 / cell_size_m) * cell_size_m, py1, cell_size_m)
+        part_ranges.append(
+            (
+                np.round((px - minx) / cell_size_m).astype(np.int64),
+                np.round((py - miny) / cell_size_m).astype(np.int64),
+            )
+        )
+    # Positions (column * n_y + row) of the candidate cells, in grid order
+    if sum(len(i) * len(j) for i, j in part_ranges) < n_x * n_y:
+        positions = np.unique(
+            np.concatenate([(i[:, None] * n_y + j).ravel() for i, j in part_ranges])
+        )
+    else:
+        positions = np.arange(n_x * n_y)
+    xs = minx + positions // n_y * cell_size_m
+    ys = miny + positions % n_y * cell_size_m
     cells = shapely.box(xs, ys, xs + cell_size_m, ys + cell_size_m)
 
     # Keep cells fully within the site
@@ -72,7 +91,7 @@ def draw_grid(site_geom, cell_size_m):
     )
 
     return gpd.GeoDataFrame(
-        geometry=cells[keep], index=np.flatnonzero(keep), crs=GPD_CRS_METERS
+        geometry=cells[keep], index=positions[keep], crs=GPD_CRS_METERS
     )
 
 
