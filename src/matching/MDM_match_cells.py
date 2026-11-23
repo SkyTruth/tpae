@@ -9,6 +9,7 @@ Reads each site's cell covariates from GCS, so run extract_cell_covariates.py fi
 Sites dropped at earlier steps are skipped. Sites with fewer than MIN_TREATMENT_CELLS
 treatment cells kept after covariate extraction, or matched, or that fail with an error,
 are dropped (recorded in DROPPED_SITES); dropped sites' saved match outputs are deleted.
+Use --sites to re-match only some sites, keeping the others' saved results.
 """
 
 # Save the diagnostics CSV and report card to GCS; otherwise only print the summary
@@ -20,6 +21,7 @@ n_workers = None
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import redirect_stdout
+import argparse
 from io import StringIO
 from pathlib import Path
 import sys
@@ -48,7 +50,12 @@ from utils.variables import (
 
 from covariates.extract_cell_covariates import cell_covariates_path
 from sites.site_selector import load_site_ids
-from sites.dropped_sites import failed_reason, load_dropped_before, record_dropped
+from sites.dropped_sites import (
+    failed_reason,
+    load_dropped,
+    load_dropped_before,
+    record_dropped,
+)
 from cells.load_all_cells import build_all_site_cells
 from matching.match_cells import (
     match_output_paths,
@@ -113,23 +120,44 @@ def match_site(site_id, site_cells):
     return row, dropped, log.getvalue()
 
 
-def main():
+def main(listed=None):
+    """Match every site, or only the listed sites (keeping the others' saved results)."""
     site_ids = load_site_ids()
     # Sites dropped before matching, and those dropped here
     dropped_before = load_dropped_before("matching")
     dropped_before = {s: dropped_before[s] for s in site_ids if s in dropped_before}
     dropped = {}
+    rows = {site_id: {"site_id": site_id} for site_id in dropped_before}
+    to_match = [site_id for site_id in site_ids if site_id not in dropped_before]
+    # Other sites' saved diagnostics and matching drops
+    others_dropped = {}
+    if listed is not None:
+        saved = pd.read_csv(MATCH_DIAGNOSTICS).to_dict("records")
+        rows.update(
+            {
+                int(row["site_id"]): row
+                for row in saved
+                if int(row["site_id"]) not in listed
+                and int(row["site_id"]) not in dropped_before
+            }
+        )
+        others_dropped = {
+            s: reason
+            for s, reason in load_dropped(["matching"]).items()
+            if s not in listed
+        }
+        to_match = [site_id for site_id in to_match if site_id in listed]
     # Cell geometries for the saved matched cells (cell_IDs are rebuilt from these files)
     cells_by_site = {}
     if save_match_outputs:
         cells = build_all_site_cells(
-            site_ids, gpd.read_parquet(TREATMENT_CELLS), gpd.read_parquet(CONTROL_CELLS)
+            site_ids if listed is None else to_match,
+            gpd.read_parquet(TREATMENT_CELLS),
+            gpd.read_parquet(CONTROL_CELLS),
         )
         cells_by_site = dict(tuple(cells.groupby("site_id")))
 
     # Apply MDM to each site and record diagnostic results
-    rows = {site_id: {"site_id": site_id} for site_id in dropped_before}
-    to_match = [site_id for site_id in site_ids if site_id not in dropped_before]
     print(
         f"Skipping {len(dropped_before)} site(s) dropped at earlier steps; "
         f"matching {len(to_match)}"
@@ -159,11 +187,13 @@ def main():
                 done = [rows[s] for s in site_ids if s in rows]
                 save_experiment_diagnostics(done, MATCH_DIAGNOSTICS)
 
-    record_dropped("matching", dropped)
-    all_dropped = {**dropped_before, **dropped}
+    record_dropped("matching", dropped, sites=listed)
+    all_dropped = {**dropped_before, **others_dropped, **dropped}
     # Delete dropped sites' match outputs from earlier runs, so they are not used
     fs = gcsfs.GCSFileSystem()
     for site_id in all_dropped:
+        if listed is not None and site_id not in listed:
+            continue
         for path in (*match_output_paths(site_id), scored_pairs_path(site_id)):
             if fs.exists(path):
                 fs.rm(path)
@@ -197,4 +227,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--sites",
+        nargs="+",
+        type=int,
+        metavar="SITE_ID",
+        help="re-match only these sites, keeping the other sites' saved results",
+    )
+    main(listed=parser.parse_args().sites)

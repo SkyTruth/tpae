@@ -4,11 +4,12 @@ Control cells are 1km x 1km cells that fall within a given distance range around
 Sites whose range reaches ±180° longitude (the edges of EASE-Grid) are sampled over a
 rectangle on each side of it, masked to the range.
 Sites with no control cells, or that fail with an error, are dropped (recorded in
-DROPPED_SITES).
+DROPPED_SITES). Use --sites to re-sample only some sites, keeping the others' saved cells.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import argparse
 import sys
 
 _SRC = Path(__file__).resolve().parent.parent
@@ -257,9 +258,12 @@ def get_control_cells(
     inner_buffer_m: int = CONTROL_INNER_BUFFER_M,
     outer_buffer_m: int = CONTROL_OUTER_BUFFER_M,
     n_workers: int = EE_N_WORKERS,
+    site_ids: list[int] | None = None,
 ):
     """
     Extract control cells for each site, n_workers sites at a time.
+
+    site_ids: only these sites, replacing their saved cells and dropped records.
     """
     init_ee(PROJECT)
     sites_gdf = gpd.read_parquet(sites_path)
@@ -303,6 +307,9 @@ def get_control_cells(
         f"Skipping {len(sites_gdf) - len(site_jobs)} site(s) with no treatment cells "
         "(dropped at earlier steps)"
     )
+    if site_ids is not None:
+        site_jobs = [job for job in site_jobs if job[0] in site_ids]
+        print(f"Sampling only the listed sites ({len(site_jobs)} with treatment cells)")
     print(
         f"Sampling control cells for {len(site_jobs)} sites, {n_workers} at a time "
         f"(min={CONTROL_N_SAMPLES_MIN}, max={CONTROL_N_SAMPLES_MAX}, "
@@ -364,7 +371,7 @@ def get_control_cells(
             dropped[site_id] = failed_reason(failed[site_id])
         elif len(site_cells[site_id]) == 0:
             dropped[site_id] = "no control cells"
-    record_dropped("control_cells", dropped)
+    record_dropped("control_cells", dropped, sites=site_ids)
 
     # Combine in site order, so the output does not depend on which site finished first
     all_cells = [
@@ -373,19 +380,33 @@ def get_control_cells(
         if job[0] in site_cells and len(site_cells[job[0]]) > 0
     ]
 
-    if not all_cells:
+    if all_cells:
+        print("Concatenating cells for all sites")
+        all_cells = gpd.GeoDataFrame(
+            pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
+        )
+        # A cell can be a control for more than one site, so only drop duplicates within a site
+        all_cells = all_cells.drop_duplicates(subset=["site_id", "geometry"])
+        all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
+    elif site_ids is None:
         raise RuntimeError("No control cells generated for any site.")
-
-    print("Concatenating cells for all sites")
-    all_cells = gpd.GeoDataFrame(
-        pd.concat(all_cells, ignore_index=True), crs=GPD_CRS_METERS
-    )
-    # A cell can be a control for more than one site, so only drop duplicates within a site
-    all_cells = all_cells.drop_duplicates(subset=["site_id", "geometry"])
-    all_cells = all_cells.to_crs(GPD_CRS_PARQUET)
+    if site_ids is not None:
+        # Replace the listed sites' saved cells
+        saved = gpd.read_parquet(output_parquet)
+        saved = saved[~saved["site_id"].astype(int).isin(site_ids)]
+        new = [all_cells] if len(all_cells) else []
+        all_cells = pd.concat([saved, *new], ignore_index=True)
     print("Saving cells to parquet: ", output_parquet)
     all_cells.to_parquet(output_parquet)
 
 
 if __name__ == "__main__":
-    get_control_cells(SITE_GEOMS)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--sites",
+        nargs="+",
+        type=int,
+        metavar="SITE_ID",
+        help="re-sample only these sites, keeping the other sites' saved cells",
+    )
+    get_control_cells(SITE_GEOMS, site_ids=parser.parse_args().sites)

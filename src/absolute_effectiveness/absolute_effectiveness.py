@@ -8,7 +8,8 @@ n_workers sites at a time, and writes one row per site to a CSV in GCS
 Transient Earth Engine errors are retried. Sites that still fail keep the columns
 computed before the failure, with the reason in error, and are dropped (recorded in
 DROPPED_SITES). Use --retry-failed to re-run only the sites that failed (or are missing)
-in the saved CSV. Sites dropped at earlier steps are not analyzed; their error says why.
+in the saved CSV, or --sites to re-run only some sites. Sites dropped at earlier steps
+are not analyzed; their error says why.
 Independent of relative_effectiveness.py: neither skips the other's dropped sites, and
 either can run first, but not both at once.
 """
@@ -258,11 +259,16 @@ def fill_site_row(row, START_YR, geometry):
         )
 
 
-def main(n_workers=N_WORKERS, retry_failed=False):
-    """Analyze every site, or with retry_failed only those without saved results."""
+def main(n_workers=N_WORKERS, retry_failed=False, listed=None):
+    """Analyze every site, with retry_failed only those without saved results, or with
+    listed only those sites (keeping the others' saved rows)."""
     sites = load_sites()
     site_ids = [int(site_id) for site_id in sites["site_id"]]
     rows = load_succeeded_rows(ABSOLUTE_RESULTS, site_ids) if retry_failed else {}
+    if listed is not None:
+        saved = pd.read_csv(ABSOLUTE_RESULTS).to_dict("records")
+        rows = {int(row["site_id"]): row for row in saved}
+        rows = {s: row for s, row in rows.items() if s in site_ids and s not in listed}
     # Sites dropped at earlier steps are not analyzed
     dropped = load_dropped_before("absolute_effectiveness")
     for site_id, start_yr in zip(site_ids, sites["start_yr"]):
@@ -318,9 +324,18 @@ def main(n_workers=N_WORKERS, retry_failed=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    which = parser.add_mutually_exclusive_group()
+    which.add_argument(
         "--retry-failed",
         action="store_true",
         help="re-run only the sites that failed (or are missing) in the saved CSV",
     )
-    main(retry_failed=parser.parse_args().retry_failed)
+    which.add_argument(
+        "--sites",
+        nargs="+",
+        type=int,
+        metavar="SITE_ID",
+        help="re-run only these sites, keeping the other sites' saved rows",
+    )
+    args = parser.parse_args()
+    main(retry_failed=args.retry_failed, listed=args.sites)

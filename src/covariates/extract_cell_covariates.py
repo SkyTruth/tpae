@@ -14,7 +14,8 @@ saved once all of its cells are extracted.
 
 A site is skipped if its file is newer than the treatment and control cell files and the
 covariate stack, so re-running picks up where a stalled or failed run left off, and regenerated cells are
-re-extracted automatically. Use --overwrite to re-extract every site.
+re-extracted automatically. Use --overwrite to re-extract every site, or --sites to
+re-extract only some.
 
 Sites dropped at earlier steps are skipped, and sites that fail with an error are
 dropped (recorded in DROPPED_SITES).
@@ -64,7 +65,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     """Extract and save each site's cell covariates; return the sites that failed.
 
     site_ids: sites to extract (default: every site in SITE_GEOMS), except those dropped
-    at earlier steps.
+    at earlier steps; if given, only their dropped records are replaced.
     """
     # Imported here so the module can be imported (e.g. for cell_covariates_path)
     # without loading the Earth Engine pipeline
@@ -93,6 +94,7 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
     ee.Initialize(project=PROJECT)
     set_request_limits()
 
+    listed = site_ids
     if site_ids is None:
         site_ids = load_site_ids()
     dropped_before = load_dropped_before("covariates")
@@ -230,7 +232,11 @@ def extract_site_covariates(site_ids=None, overwrite=False, n_workers=EE_N_WORKE
         print("Re-run to retry them")
     # Keep the earlier records if no site needed extracting
     if todo:
-        record_dropped("covariates", {s: failed_reason(e) for s, e in failed.items()})
+        record_dropped(
+            "covariates",
+            {s: failed_reason(e) for s, e in failed.items()},
+            sites=listed,
+        )
     else:
         report_dropped("covariates")
     return list(failed)
@@ -241,4 +247,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--overwrite", action="store_true", help="re-extract every site"
     )
-    extract_site_covariates(overwrite=parser.parse_args().overwrite)
+    parser.add_argument(
+        "--sites",
+        nargs="+",
+        type=int,
+        metavar="SITE_ID",
+        help="re-extract only these sites",
+    )
+    args = parser.parse_args()
+    extract_site_covariates(
+        site_ids=args.sites, overwrite=args.overwrite or args.sites is not None
+    )

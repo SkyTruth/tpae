@@ -107,12 +107,19 @@ def report_dropped(step, path=DROPPED_SITES, sites_path=SITE_GEOMS):
     print("\n".join(lines))
 
 
-def record_dropped(step, reasons, path=DROPPED_SITES, sites_path=SITE_GEOMS):
+def record_dropped(
+    step, reasons, path=DROPPED_SITES, sites_path=SITE_GEOMS, sites=None
+):
     """Replace the sites dropped at step with reasons ({site_id: reason}), clear those
-    dropped in later rungs, and print how many remain (report_dropped)."""
+    dropped in later rungs, and print how many remain (report_dropped). With sites (site
+    IDs), only those sites' records are replaced and cleared."""
     dropped = read_dropped(path)
     later = steps_after(step)
-    stale = dropped["step"].isin(later)
+    # Records that this call replaces or clears
+    in_scope = pd.Series(True, index=dropped.index)
+    if sites is not None:
+        in_scope = dropped["site_id"].astype(int).isin([int(s) for s in sites])
+    stale = in_scope & dropped["step"].isin(later)
     if stale.any():
         print(
             f"Cleared {stale.sum()} site(s) dropped at {', '.join(later)}; "
@@ -125,7 +132,7 @@ def record_dropped(step, reasons, path=DROPPED_SITES, sites_path=SITE_GEOMS):
             "reason": list(reasons.values()),
         }
     )
-    keep = ~dropped["step"].isin([step, *later])
+    keep = ~(in_scope & dropped["step"].isin([step, *later]))
     dropped = pd.concat([dropped[keep], new], ignore_index=True)
     dropped.reindex(columns=COLUMNS).to_csv(path, index=False)
     report_dropped(step, path, sites_path)
