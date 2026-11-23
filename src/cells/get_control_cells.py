@@ -1,6 +1,8 @@
 """
 Creates a set of control cells for each site.
 Control cells are 1km x 1km cells that fall within a given distance range around the site.
+Sites whose range reaches ±180° longitude (the edges of EASE-Grid) are sampled over a
+rectangle on each side of it, masked to the range.
 Sites with no control cells, or that fail with an error, are dropped (recorded in
 DROPPED_SITES).
 """
@@ -13,8 +15,10 @@ _SRC = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_SRC))
 
 import ee
+import numpy as np
 import pandas as pd
 import geopandas as gpd
+import shapely
 from shapely.geometry import box
 
 from utils.variables import (
@@ -41,7 +45,15 @@ from utils.variables import (
     EE_N_WORKERS,
 )
 from sites.dropped_sites import failed_reason, record_dropped
+from sites.site_selector import M_PER_DEGREE
 from utils.retries import report_failures, set_request_limits, with_retries
+
+# Mean Earth radius (m)
+EARTH_RADIUS_M = 6_371_000
+# Longitude ranges of the two sides of the antimeridian, ending just short of ±180
+SIDES = [(-180 + 1e-6, 0), (0, 180 - 1e-6)]
+# Ranges within this factor of the outer buffer of ±180 are split at it
+ANTIMERIDIAN_MARGIN = 1.1
 
 
 def init_ee(project):
@@ -76,6 +88,41 @@ def calc_n_control_samples(
     return min(maximum, max(minimum, per_treat * n_treat))
 
 
+def near_antimeridian(geom, distance_m):
+    """Whether a shapely geometry (EPSG:4326) comes within distance_m of ±180°."""
+    lon, lat = shapely.get_coordinates(shapely.segmentize(geom, 0.05)).T
+    gap, lat = np.radians(180 - np.abs(lon)), np.radians(np.abs(lat))
+    # Distance to the ±180° meridian, or to the nearest pole if over 90° away from it
+    dist = np.where(
+        gap < np.pi / 2, np.arcsin(np.sin(gap) * np.cos(lat)), np.pi / 2 - lat
+    )
+    return dist.min() * EARTH_RADIUS_M < distance_m
+
+
+def side_rectangles(geom, margin_m):
+    """[west, south, east, north] rectangles covering a shapely geometry (EPSG:4326)
+    padded by margin_m, one on each side of the antimeridian that the padding reaches."""
+    bounds = shapely.bounds(shapely.get_parts(geom))
+    pad_lat = margin_m / M_PER_DEGREE
+    south = np.maximum(bounds[:, 1] - pad_lat, -90)
+    north = np.minimum(bounds[:, 3] + pad_lat, 90)
+    max_lat = np.minimum(np.maximum(np.abs(south), np.abs(north)), 89)
+    pad_lon = margin_m / (M_PER_DEGREE * np.cos(np.radians(max_lat)))
+    west, east = bounds[:, 0] - pad_lon, bounds[:, 2] + pad_lon
+    rectangles = []
+    for lo, hi in SIDES:
+        # Each part's padded extent on this side, including padding past ±180°
+        extents = []
+        for shift in (-360, 0, 360):
+            w, e = np.maximum(west + shift, lo), np.minimum(east + shift, hi)
+            on_side = w < e
+            extents.append((w[on_side], south[on_side], e[on_side], north[on_side]))
+        w, s, e, n = (np.concatenate(col) for col in zip(*extents))
+        if len(w):
+            rectangles.append([w.min(), s.min(), e.max(), n.max()])
+    return rectangles
+
+
 def sample_points(
     all_pas: ee.FeatureCollection,
     site_geom: ee.Geometry,
@@ -86,17 +133,38 @@ def sample_points(
     seed: int,
     inner_buffer_m: int,
     outer_buffer_m: int,
+    side_rects=None,
 ):
     """
     Randomly sample unprotected points within a site's buffer zone.
+
+    side_rects: for a buffer zone reaching ±180°, rectangles from side_rectangles to
+    sample over instead, masked to the buffer zone cut at ±180°.
     """
     # Create a donut-shaped buffer zone around the site
     buffer_outer = site_geom.buffer(outer_buffer_m)
     buffer_inner = site_geom.buffer(inner_buffer_m)
     donut = buffer_outer.difference(buffer_inner)
+    region, donut_mask = donut, None
+    if side_rects:
+        region = ee.Geometry.MultiPolygon(
+            [[[[w, s], [e, s], [e, n], [w, n], [w, s]]] for w, s, e, n in side_rects],
+            proj="EPSG:4326",
+            geodesic=False,
+        )
+        # Paint the donut, cut at ±180°, as a mask
+        halves = [
+            ee.Feature(
+                donut.intersection(
+                    ee.Geometry.Rectangle([lo, -90, hi, 90], None, False), 1
+                )
+            )
+            for lo, hi in SIDES
+        ]
+        donut_mask = ee.Image(0).byte().paint(ee.FeatureCollection(halves), 1)
 
     # Mask any protected areas in the donut
-    donut_pas = all_pas.filterBounds(donut)
+    donut_pas = all_pas.filterBounds(region)
     protected_img = (
         ee.Image(0)
         .byte()
@@ -115,6 +183,8 @@ def sample_points(
         .eq(1)  # 1 = land, 2 = permanent water/ocean, 0 = no data
     )
     unprotected_mask = unprotected_mask.updateMask(land_mask)
+    if donut_mask is not None:
+        unprotected_mask = unprotected_mask.updateMask(donut_mask)
 
     # Sample random unprotected points within the donut
     points = (
@@ -124,7 +194,7 @@ def sample_points(
         .stratifiedSample(
             numPoints=n_samples,
             classBand="stratum",
-            region=donut,
+            region=region,
             scale=control_spacing_m,
             projection=EE_CRS_METERS,
             seed=seed,
@@ -240,6 +310,10 @@ def get_control_cells(
     )
 
     def sample_site(site_id, geom, n_samples_site):
+        # Split buffer zones reaching ±180° into a rectangle on each side
+        side_rects = None
+        if near_antimeridian(geom, outer_buffer_m * ANTIMERIDIAN_MARGIN):
+            side_rects = side_rectangles(geom, outer_buffer_m)
         # Use the cleaned site geometry (same one used for treatment cells)
         points_fc = sample_points(
             all_pas,
@@ -250,6 +324,7 @@ def get_control_cells(
             seed=seed,
             inner_buffer_m=inner_buffer_m,
             outer_buffer_m=outer_buffer_m,
+            side_rects=side_rects,
         )
         return points_to_cells(points_fc)
 
