@@ -8,8 +8,9 @@ n_workers sites at a time, and writes one row per site to a CSV in GCS
 Transient Earth Engine errors are retried. Sites that still fail keep the columns
 computed before the failure, with the reason in error, and are dropped (recorded in
 DROPPED_SITES). Use --retry-failed to re-run only the sites that failed (or are missing)
-in the saved CSV. Sites dropped at earlier steps, including relative_effectiveness.py,
-are not analyzed; their error says why.
+in the saved CSV. Sites dropped at earlier steps are not analyzed; their error says why.
+Independent of relative_effectiveness.py: neither skips the other's dropped sites, and
+either can run first, but not both at once.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed

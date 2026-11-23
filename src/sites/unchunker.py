@@ -4,7 +4,8 @@ files in GLOBAL_RESULTS_PREFIX, each table with a chunk column:
 - relative and absolute results, report card, and match diagnostics, with one row per
   kept site (cleaned and not dropped at any step);
 - dropped_sites.csv: every dropped site, with the step that dropped it and why (reason
-  "failed: <error>" for sites that failed with an error);
+  "failed: <error>" for sites that failed with an error), one row per step for sites
+  dropped at both steps of a rung (e.g. relative and absolute effectiveness);
 - site_geoms.parquet: every cleaned site's geometry;
 - summary.json: chunks merged and site counts.
 
@@ -13,7 +14,7 @@ Before writing, checks that every chunk:
   every site not dropped has a row in each of RESULT_TABLES, without errors (an error
   not recorded as a drop means a step was interrupted, or an earlier step re-ran), and
   a scored-pairs file from relative_effectiveness.py;
-- holds only its own sites, each once;
+- holds only its own sites, each once (in dropped_sites, once per step);
 - has each file newer than the files it was built from (INPUT_FILES);
 - was cleaned from the chunk table's WDPA release.
 Nothing is written if a check fails. With --allow-partial, incomplete chunks are merged
@@ -142,7 +143,8 @@ def read_tables(files, times):
 
 
 def membership_problems(tables, chunk_sites):
-    """Problems with tables holding sites of other chunks, or a site more than once."""
+    """Problems with tables holding sites of other chunks, or a site more than once (in
+    dropped_sites, more than once at a step)."""
     problems = []
     for name, table in tables.items():
         outside = sorted(set(table["site_id"]) - chunk_sites)
@@ -150,7 +152,8 @@ def membership_problems(tables, chunk_sites):
             problems.append(
                 f"{name} has {len(outside)} site(s) not in this chunk: {outside[:10]}"
             )
-        if table["site_id"].duplicated().any():
+        keys = ["site_id", "step"] if name == "dropped_sites" else ["site_id"]
+        if table.duplicated(keys).any():
             problems.append(f"{name} has a site more than once")
     return problems
 
@@ -295,6 +298,9 @@ def unchunk(
 
     n_kept = len(merged["relative_results"])
     failed = dropped[dropped["reason"].astype(str).str.startswith(FAILED_PREFIX)]
+    # Sites, not rows: a site can be dropped at both steps of a rung
+    n_dropped = dropped["site_id"].nunique()
+    n_failed = failed["site_id"].nunique()
     report_card = merged["report_card"]
     tiers = report_card["assessable"] if "assessable" in report_card else pd.Series()
     summary = {
@@ -310,14 +316,14 @@ def unchunk(
         },
         "n_failed_sites": {k: int(n) for k, n in failed["step"].value_counts().items()},
         # In steps that have not run yet, or were interrupted
-        "n_not_merged_sites": len(chunks) - n_kept - len(dropped),
+        "n_not_merged_sites": len(chunks) - n_kept - n_dropped,
         "assessable_counts": {k: int(n) for k, n in tiers.value_counts().items()},
     }
     with fsspec.open(f"{output_prefix}summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print(
-        f"\n{n_kept} kept, {len(dropped)} dropped ({len(failed)} failed) and "
+        f"\n{n_kept} kept, {n_dropped} dropped ({n_failed} failed) and "
         f"{summary['n_not_merged_sites']} not merged of {len(chunks)} sites"
     )
     print(f"Report card tiers of kept sites: {summary['assessable_counts']}")

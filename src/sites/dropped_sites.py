@@ -1,11 +1,14 @@
 """
-Record and read sites dropped from the analysis (DROPPED_SITES, one row per site with
-the step that dropped it and why). A step drops sites that fail one of its rules (e.g.
+Record and read sites dropped from the analysis (DROPPED_SITES, one row per site and
+step that dropped it, with why). A step drops sites that fail one of its rules (e.g.
 too few treatment cells) and sites that failed with an error (reason "failed: <error>").
 
-Each step skips the sites dropped at earlier steps. Recording a step clears the records
-of later steps, which are out of date until those steps re-run, and prints how many of
-the group's sites were dropped before and at the step, and how many remain.
+Steps are grouped into rungs (RUNGS). Each step skips the sites dropped in earlier
+rungs. Recording a step clears the records of later rungs, which are out of date until
+those steps re-run, and prints how many of the group's sites were dropped before and at
+the step, and how many remain. Steps in the same rung are independent: neither skips
+nor clears the other's dropped sites, so a site can be dropped at both. They can run in
+either order, but not at once, since they share DROPPED_SITES.
 """
 
 import re
@@ -15,16 +18,16 @@ import pandas as pd
 from utils.variables import DROPPED_SITES, SITE_GEOMS
 
 COLUMNS = ["site_id", "step", "reason"]
-# Steps that drop sites, in pipeline order
-STEPS = [
-    "clean_sites",
-    "treatment_cells",
-    "control_cells",
-    "covariates",
-    "matching",
-    "relative_effectiveness",
-    "absolute_effectiveness",
+# Steps that drop sites, in pipeline order, in rungs of independent steps
+RUNGS = [
+    ["clean_sites"],
+    ["treatment_cells"],
+    ["control_cells"],
+    ["covariates"],
+    ["matching"],
+    ["relative_effectiveness", "absolute_effectiveness"],
 ]
+STEPS = [step for rung in RUNGS for step in rung]
 # Start of the reason of a site that failed with an error
 FAILED_PREFIX = "failed: "
 
@@ -51,9 +54,24 @@ def load_dropped(steps=None, path=DROPPED_SITES):
     return dict(zip(dropped["site_id"].astype(int), dropped["reason"]))
 
 
+def rung_index(step):
+    """Index of step's rung in RUNGS."""
+    return next(i for i, rung in enumerate(RUNGS) if step in rung)
+
+
+def steps_before(step):
+    """Steps in the rungs before step's."""
+    return [s for rung in RUNGS[: rung_index(step)] for s in rung]
+
+
+def steps_after(step):
+    """Steps in the rungs after step's."""
+    return [s for rung in RUNGS[rung_index(step) + 1 :] for s in rung]
+
+
 def load_dropped_before(step, path=DROPPED_SITES):
-    """{site_id: reason} of the sites dropped at steps before step."""
-    return load_dropped(STEPS[: STEPS.index(step)], path)
+    """{site_id: reason} of the sites dropped in the rungs before step's."""
+    return load_dropped(steps_before(step), path)
 
 
 def reason_kind(reason):
@@ -69,7 +87,7 @@ def report_dropped(step, path=DROPPED_SITES, sites_path=SITE_GEOMS):
     dropped = read_dropped(path)
     n_cleaned = len(pd.read_parquet(sites_path, columns=["site_id"]))
     n_total = n_cleaned + int((dropped["step"] == "clean_sites").sum())
-    earlier = dropped[dropped["step"].isin(STEPS[: STEPS.index(step)])]
+    earlier = dropped[dropped["step"].isin(steps_before(step))]
     here = dropped[dropped["step"] == step]
     n_remain = n_total - len(earlier) - len(here)
     by_step = ", ".join(
@@ -91,9 +109,9 @@ def report_dropped(step, path=DROPPED_SITES, sites_path=SITE_GEOMS):
 
 def record_dropped(step, reasons, path=DROPPED_SITES, sites_path=SITE_GEOMS):
     """Replace the sites dropped at step with reasons ({site_id: reason}), clear those
-    dropped at later steps, and print how many remain (report_dropped)."""
+    dropped in later rungs, and print how many remain (report_dropped)."""
     dropped = read_dropped(path)
-    later = STEPS[STEPS.index(step) + 1 :]
+    later = steps_after(step)
     stale = dropped["step"].isin(later)
     if stale.any():
         print(
